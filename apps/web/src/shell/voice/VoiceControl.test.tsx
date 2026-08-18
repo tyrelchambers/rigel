@@ -67,10 +67,12 @@ vi.mock("@livekit/components-react", () => ({
   useLocalParticipant: () => ({ microphoneTrack: undefined, localParticipant: undefined }),
 }));
 
+import { useCluster } from "@/store/cluster";
 import { notReadyMessage, VoiceControl } from "./VoiceControl";
 import { useVoiceRoom } from "./useVoiceRoom";
 
 beforeEach(() => {
+  useCluster.setState({ activeContext: null, resources: {} });
   h.rooms.length = 0;
   h.fetchVoiceToken.mockClear();
   h.agent.state = "listening";
@@ -208,6 +210,50 @@ test("agent lines and user lines land on opposite sides of the transcript", asyn
   await userEvent.click(screen.getByLabelText("Voice assistant"));
   expect((await screen.findByText("scale the api")).className).toContain("self-end");
   expect(screen.getByText("scaled to three").className).toContain("self-start");
+});
+
+test("a resource the user named shows up as a pill and its summary reaches the worker", async () => {
+  h.status.data = { enabled: true, configured: true };
+  useCluster.setState({
+    resources: {
+      deployments: {
+        "default/cert-manager": {
+          metadata: { uid: "u-cm", name: "cert-manager", namespace: "default" },
+          spec: { replicas: 2 },
+          status: { readyReplicas: 2 },
+        },
+      },
+    },
+  });
+  h.transcriptions = [{ text: "restart cert manager", participantInfo: { identity: "rigel-desktop" } }];
+  render(<VoiceControl />);
+  await userEvent.click(screen.getByLabelText("Voice assistant"));
+
+  expect(await screen.findByText("DEPLOY")).toBeTruthy();
+  expect(screen.getByText("cert-manager")).toBeTruthy();
+  const published = h.rooms[0]!.localParticipant.publishData.mock.calls.map(
+    ([payload]) => JSON.parse(new TextDecoder().decode(payload as Uint8Array)),
+  );
+  expect(published).toContainEqual({ id: "dep-u-cm", context: "Deployment cert-manager in default: 2/2 ready, image —" });
+});
+
+test("pills outlive the popover closing", async () => {
+  h.status.data = { enabled: true, configured: true };
+  useCluster.setState({
+    resources: {
+      nodes: { "k3s-slave": { metadata: { uid: "u-node", name: "k3s-slave" }, status: { conditions: [] } } },
+    },
+  });
+  h.transcriptions = [{ text: "cordon k3s slave", participantInfo: { identity: "rigel-desktop" } }];
+  render(<VoiceControl />);
+  const button = screen.getByLabelText("Voice assistant");
+  await userEvent.click(button);
+  expect(await screen.findByText("NODE")).toBeTruthy();
+
+  await userEvent.click(button);
+  await waitFor(() => expect(screen.queryByText("NODE")).toBeNull());
+  await userEvent.click(button);
+  expect(await screen.findByText("NODE")).toBeTruthy();
 });
 
 test("two connect() calls fired before the token resolves only produce one Room", async () => {

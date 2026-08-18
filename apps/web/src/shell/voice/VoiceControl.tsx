@@ -8,6 +8,7 @@ import { useState } from "react";
 import { RoomAudioRenderer, RoomContext, useTrackVolume, useVoiceAssistant } from "@livekit/components-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useVoiceStatus } from "@/lib/api";
+import type { MentionCandidate } from "@/panels/chat/mentions";
 import { VoiceMark, visualStateFor } from "./VoiceMark";
 import { VoicePopoverBody } from "./VoicePopoverBody";
 import { useMicTrackRef, useVoiceRoom, type VoiceConnection } from "./useVoiceRoom";
@@ -31,6 +32,7 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
   const { data } = useVoiceStatus();
   const { room, status, connect, disconnect } = useVoiceRoom();
   const [open, setOpen] = useState(false);
+  const [pills, setPills] = useState<MentionCandidate[]>([]);
   if (!data?.enabled) return null;
 
   return (
@@ -38,7 +40,7 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
       {room && (
         <RoomContext.Provider value={room}>
           <RoomAudioRenderer />
-          <VoiceSessionEffects room={room} />
+          <VoiceSessionEffects room={room} onPills={setPills} />
         </RoomContext.Provider>
       )}
       <Popover
@@ -68,6 +70,7 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
           {room ? (
             <RoomContext.Provider value={room}>
               <VoicePopoverBody
+                pills={pills}
                 onEnd={() => {
                   disconnect();
                   setOpen(false);

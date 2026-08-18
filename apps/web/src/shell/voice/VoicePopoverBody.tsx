@@ -1,6 +1,7 @@
 /**
  * Popover contents, top to bottom: state line, live waveform, rolling
- * transcript. Must be rendered inside a RoomContext.Provider.
+ * transcript, and the resources the session has pinned. Must be rendered
+ * inside a RoomContext.Provider.
  */
 import {
   useMultibandTrackVolume,
@@ -8,7 +9,9 @@ import {
   useVoiceAssistant,
   type AgentState,
 } from "@livekit/components-react";
+import { MENTION_KIND_LABEL, type MentionCandidate } from "@/panels/chat/mentions";
 import { useMicTrackRef } from "./useVoiceRoom";
+import { AGENT_IDENTITY_PREFIX } from "./VoiceSessionEffects";
 
 // Exhaustive on purpose: a new AgentState in a future SDK should break the
 // build rather than silently render the wrong label.
@@ -23,9 +26,6 @@ const STATE_LABEL: Record<AgentState, string> = {
   thinking: "Thinking",
   speaking: "Speaking",
 };
-
-/** The agent's identity, minted by the server in voiceRoutes.identityFor. */
-const AGENT_IDENTITY_PREFIX = "rigel-agent";
 
 function Waveform() {
   const { state, audioTrack } = useVoiceAssistant();
@@ -79,7 +79,25 @@ function Transcript() {
   );
 }
 
-export function VoicePopoverBody({ onEnd }: { onEnd: () => void }) {
+function Pills({ pills }: { pills: MentionCandidate[] }) {
+  if (pills.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5 border-t px-3.5 py-2.5" style={{ borderColor: "var(--border-subtle)" }}>
+      {pills.map((p) => (
+        <span
+          key={p.id}
+          className="inline-flex items-center gap-1.5 rounded px-2 py-0.5 font-mono text-3xs"
+          style={{ background: "var(--surface-sunken)", color: "var(--fg-secondary)" }}
+        >
+          <span style={{ color: "var(--accent-primary)", fontWeight: 600, letterSpacing: 0.5 }}>{MENTION_KIND_LABEL[p.kind]}</span>
+          {p.name}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+export function VoicePopoverBody({ onEnd, pills }: { onEnd: () => void; pills: MentionCandidate[] }) {
   const { state } = useVoiceAssistant();
   return (
     <>
@@ -100,6 +118,7 @@ export function VoicePopoverBody({ onEnd }: { onEnd: () => void }) {
       </div>
       <Waveform />
       <Transcript />
+      <Pills pills={pills} />
     </>
   );
 }

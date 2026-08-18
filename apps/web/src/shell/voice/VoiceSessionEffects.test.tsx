@@ -3,6 +3,10 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import type { Room } from "livekit-client";
 import { useCluster } from "@/store/cluster";
+
+const h = vi.hoisted(() => ({ transcriptions: [] as { text: string; participantInfo?: { identity: string } }[] }));
+vi.mock("@livekit/components-react", () => ({ useTranscriptions: () => h.transcriptions }));
+
 import { publishJson, VoiceSessionEffects } from "./VoiceSessionEffects";
 
 function fakeRoom() {
@@ -14,8 +18,25 @@ function decode(call: unknown[]) {
   return { body: JSON.parse(new TextDecoder().decode(payload)), topic: options.topic };
 }
 
+function frames(room: Room, topic: string) {
+  const publishData = room.localParticipant.publishData as ReturnType<typeof vi.fn>;
+  return publishData.mock.calls.map(decode).filter((f) => f.topic === topic).map((f) => f.body);
+}
+
+/** Two deployments and one of web's pods, shaped the way the watch store holds them. */
+const RESOURCES = {
+  deployments: {
+    "default/web": { metadata: { uid: "u-web", name: "web", namespace: "default" }, spec: { replicas: 3 }, status: { readyReplicas: 1 } },
+    "default/cert-manager": { metadata: { uid: "u-cm", name: "cert-manager", namespace: "default" }, spec: { replicas: 1 }, status: { readyReplicas: 1 } },
+  },
+  pods: {
+    "default/web-7f9b64c8d-x2x4p": { metadata: { uid: "u-pod", name: "web-7f9b64c8d-x2x4p", namespace: "default" }, status: { phase: "Running" } },
+  },
+};
+
 beforeEach(() => {
-  useCluster.setState({ activeContext: null });
+  useCluster.setState({ activeContext: null, resources: {} });
+  h.transcriptions = [];
 });
 afterEach(cleanup);
 
@@ -33,7 +54,7 @@ test("publishJson sends a reliable frame on the given topic", () => {
 test("publishes the active context once on mount", () => {
   useCluster.setState({ activeContext: "prod" });
   const room = fakeRoom();
-  render(<VoiceSessionEffects room={room} />);
+  render(<VoiceSessionEffects room={room} onPills={() => {}} />);
   const publishData = room.localParticipant.publishData as ReturnType<typeof vi.fn>;
   expect(publishData).toHaveBeenCalledTimes(1);
   const { body, topic } = decode(publishData.mock.calls[0]!);
@@ -43,7 +64,7 @@ test("publishes the active context once on mount", () => {
 
 test("publishes again when the active context changes", () => {
   const room = fakeRoom();
-  render(<VoiceSessionEffects room={room} />);
+  render(<VoiceSessionEffects room={room} onPills={() => {}} />);
   const publishData = room.localParticipant.publishData as ReturnType<typeof vi.fn>;
   expect(publishData).toHaveBeenCalledTimes(1);
 
@@ -55,7 +76,7 @@ test("publishes again when the active context changes", () => {
 
 test("does not republish when an unrelated store field changes", () => {
   const room = fakeRoom();
-  render(<VoiceSessionEffects room={room} />);
+  render(<VoiceSessionEffects room={room} onPills={() => {}} />);
   const publishData = room.localParticipant.publishData as ReturnType<typeof vi.fn>;
   expect(publishData).toHaveBeenCalledTimes(1);
 
@@ -65,7 +86,7 @@ test("does not republish when an unrelated store field changes", () => {
 
 test("stops publishing after unmount", () => {
   const room = fakeRoom();
-  const { unmount } = render(<VoiceSessionEffects room={room} />);
+  const { unmount } = render(<VoiceSessionEffects room={room} onPills={() => {}} />);
   const publishData = room.localParticipant.publishData as ReturnType<typeof vi.fn>;
   unmount();
 
@@ -75,6 +96,67 @@ test("stops publishing after unmount", () => {
 
 test("renders nothing", () => {
   const room = fakeRoom();
-  const { container } = render(<VoiceSessionEffects room={room} />);
+  const { container } = render(<VoiceSessionEffects room={room} onPills={() => {}} />);
   expect(container.innerHTML).toBe("");
+});
+
+test("a spoken resource name publishes its summary and becomes a pill", () => {
+  useCluster.setState({ resources: RESOURCES });
+  h.transcriptions = [{ text: "what's up with cert manager", participantInfo: { identity: "rigel-desktop" } }];
+  const room = fakeRoom();
+  const onPills = vi.fn();
+
+  render(<VoiceSessionEffects room={room} onPills={onPills} />);
+
+  expect(frames(room, "rigel.context")).toEqual([
+    { id: "dep-u-cm", context: "Deployment cert-manager in default: 1/1 ready, image —" },
+  ]);
+  expect(onPills).toHaveBeenCalledTimes(1);
+  expect(onPills.mock.calls[0]![0].map((p: { name: string }) => p.name)).toEqual(["cert-manager"]);
+});
+
+test("the same resource named again in a later turn is not republished", () => {
+  useCluster.setState({ resources: RESOURCES });
+  h.transcriptions = [{ text: "check certmanager", participantInfo: { identity: "rigel-desktop" } }];
+  const room = fakeRoom();
+  const onPills = vi.fn();
+  const { rerender } = render(<VoiceSessionEffects room={room} onPills={onPills} />);
+  expect(frames(room, "rigel.context")).toHaveLength(1);
+
+  h.transcriptions = [...h.transcriptions, { text: "and cert manager again", participantInfo: { identity: "rigel-desktop" } }];
+  rerender(<VoiceSessionEffects room={room} onPills={onPills} />);
+
+  expect(frames(room, "rigel.context")).toHaveLength(1);
+  expect(onPills).toHaveBeenCalledTimes(1);
+});
+
+test("what the agent says back never pins a resource", () => {
+  useCluster.setState({ resources: RESOURCES });
+  h.transcriptions = [{ text: "cert manager is healthy", participantInfo: { identity: "rigel-agent-1" } }];
+  const room = fakeRoom();
+  const onPills = vi.fn();
+
+  render(<VoiceSessionEffects room={room} onPills={onPills} />);
+
+  expect(frames(room, "rigel.context")).toEqual([]);
+  expect(onPills).not.toHaveBeenCalled();
+});
+
+test("pills are capped at six, keeping the most recent", () => {
+  const deployments: Record<string, unknown> = {};
+  for (let i = 0; i < 8; i++) {
+    deployments[`default/svc-${i}`] = { metadata: { uid: `u-${i}`, name: `svc-${i}`, namespace: "default" } };
+  }
+  useCluster.setState({ resources: { deployments } });
+  h.transcriptions = [
+    { text: "svc-0 svc-1 svc-2 svc-3 svc-4 svc-5 svc-6 svc-7", participantInfo: { identity: "rigel-desktop" } },
+  ];
+  const room = fakeRoom();
+  const onPills = vi.fn();
+
+  render(<VoiceSessionEffects room={room} onPills={onPills} />);
+
+  expect(frames(room, "rigel.context")).toHaveLength(8);
+  const last = onPills.mock.calls[onPills.mock.calls.length - 1]![0] as { name: string }[];
+  expect(last.map((p) => p.name)).toEqual(["svc-2", "svc-3", "svc-4", "svc-5", "svc-6", "svc-7"]);
 });
