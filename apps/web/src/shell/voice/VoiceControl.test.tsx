@@ -5,14 +5,18 @@ import userEvent from "@testing-library/user-event";
 
 const h = vi.hoisted(() => {
   const rooms: FakeRoom[] = [];
-  const behavior = { failConnect: false, failMic: false };
+  const behavior = { failConnect: false, failMic: false, failPublish: false };
   class FakeRoom {
     handlers = new Map<string, () => void>();
     localParticipant = {
       setMicrophoneEnabled: vi.fn(async () => {
         if (behavior.failMic) throw new Error("mic failed");
       }),
-      publishData: vi.fn(),
+      publishData: vi.fn(async (_payload: Uint8Array, options: { topic: string }) => {
+        if (behavior.failPublish && options.topic === "rigel.action.result") {
+          throw new Error("data packet is too big");
+        }
+      }),
     };
     connect = vi.fn(async () => {
       if (behavior.failConnect) throw new Error("connect failed");
@@ -45,6 +49,8 @@ const h = vi.hoisted(() => {
     fetchVoiceToken: vi.fn(async () => ({ url: "wss://example", token: "jwt" })),
     agent: { state: "listening" },
     transcriptions: [] as { text: string; participantInfo: { identity: string } }[],
+    channels: [] as { topic: string; cb?: (msg: unknown) => void }[],
+    actionResult: { code: 0, stdout: "", stderr: "" },
   };
 });
 
@@ -65,10 +71,31 @@ vi.mock("@livekit/components-react", () => ({
   useTrackVolume: () => 0,
   useMultibandTrackVolume: () => [],
   useLocalParticipant: () => ({ microphoneTrack: undefined, localParticipant: undefined }),
+  useDataChannel: (topic: string, cb?: (msg: unknown) => void) => {
+    h.channels.push({ topic, cb });
+    return { isSending: false, send: async () => {}, message: undefined };
+  },
+}));
+vi.mock("@/components/ConfirmSheet", () => ({
+  ConfirmSheet: ({
+    action,
+    open,
+    onResult,
+  }: {
+    action: unknown;
+    open: boolean;
+    onResult?: (info: { action: unknown; result: typeof h.actionResult; commandString: string }) => void;
+  }) =>
+    open ? (
+      <div>
+        <span data-testid="confirm-action">{JSON.stringify(action)}</span>
+        <button onClick={() => onResult?.({ action, result: h.actionResult, commandString: "cmd" })}>fake-run</button>
+      </div>
+    ) : null,
 }));
 
 import { useCluster } from "@/store/cluster";
-import { notReadyMessage, VoiceControl } from "./VoiceControl";
+import { notReadyMessage, resultSummary, VoiceControl } from "./VoiceControl";
 import { useVoiceRoom } from "./useVoiceRoom";
 
 beforeEach(() => {
@@ -79,6 +106,9 @@ beforeEach(() => {
   h.transcriptions = [];
   h.behavior.failConnect = false;
   h.behavior.failMic = false;
+  h.behavior.failPublish = false;
+  h.channels.length = 0;
+  h.actionResult = { code: 0, stdout: "", stderr: "" };
 });
 afterEach(cleanup);
 
@@ -294,4 +324,165 @@ test("notReadyMessage distinguishes unconfigured, failed and in-flight", () => {
   expect(notReadyMessage(true, "error")).toMatch(/Could not connect/);
   expect(notReadyMessage(true, "connecting")).toBe("Connecting…");
   expect(notReadyMessage(true, "idle")).toBe("Connecting…");
+});
+
+const AGENT = "rigel-agent";
+
+/** A click-tier proposal shaped exactly the way apps/voice/src/agent.ts sends it. */
+const CLICK_FRAME = {
+  id: "call-1",
+  tier: "click",
+  action: { kind: "deleteResource", label: "Delete pod web-1", name: "web-1", namespace: "default" },
+  command: "kubectl delete pod web-1 -n default",
+};
+
+/** Hands one frame to the live handler for that topic, as the room would. */
+function deliver(topic: string, body: unknown, identity: string) {
+  const msg = {
+    payload: new TextEncoder().encode(JSON.stringify(body)),
+    topic,
+    from: { identity },
+  };
+  const forTopic = h.channels.filter((c) => c.topic === topic);
+  const live = forTopic[forTopic.length - 1];
+  act(() => live?.cb?.(msg));
+}
+
+function publishedOn(topic: string) {
+  return h.rooms[0]!.localParticipant.publishData.mock.calls
+    .filter(([, options]) => (options as { topic: string }).topic === topic)
+    .map(([payload]) => JSON.parse(new TextDecoder().decode(payload as Uint8Array)));
+}
+
+/** Opens the popover on a live session with one click-tier proposal pending. */
+async function openWithClickProposal() {
+  h.status.data = { enabled: true, configured: true };
+  render(<VoiceControl />);
+  await userEvent.click(screen.getByLabelText("Voice assistant"));
+  await screen.findByText("End session");
+  deliver("rigel.action", CLICK_FRAME, AGENT);
+}
+
+test("a click-tier proposal renders its command and a button labelled by the action", async () => {
+  await openWithClickProposal();
+
+  expect(await screen.findByText("kubectl delete pod web-1 -n default")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Delete pod web-1" })).toBeTruthy();
+});
+
+test("a voice-tier proposal renders the spoken-confirm hint instead of a button", async () => {
+  h.status.data = { enabled: true, configured: true };
+  render(<VoiceControl />);
+  await userEvent.click(screen.getByLabelText("Voice assistant"));
+  await screen.findByText("End session");
+  deliver("rigel.action", { ...CLICK_FRAME, tier: "voice", action: { kind: "restart", label: "Restart web" } }, AGENT);
+
+  expect(await screen.findByText(/Say "confirm" to run/)).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Restart web" })).toBeNull();
+});
+
+test("a proposal carrying no command renders its target rather than an empty command", async () => {
+  h.status.data = { enabled: true, configured: true };
+  render(<VoiceControl />);
+  await userEvent.click(screen.getByLabelText("Voice assistant"));
+  await screen.findByText("End session");
+  deliver(
+    "rigel.action",
+    { id: "call-2", tier: "click", action: { kind: "purge", label: "Remove memos", name: "memos", namespace: "default" }, command: null },
+    AGENT,
+  );
+
+  expect(await screen.findByText("purge memos in default")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Remove memos" })).toBeTruthy();
+});
+
+test("a rigel.action frame from a non-agent identity never reaches the popover", async () => {
+  h.status.data = { enabled: true, configured: true };
+  render(<VoiceControl />);
+  await userEvent.click(screen.getByLabelText("Voice assistant"));
+  await screen.findByText("End session");
+
+  deliver("rigel.action", CLICK_FRAME, "rigel-phone-abc");
+
+  expect(screen.queryByText("kubectl delete pod web-1 -n default")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Delete pod web-1" })).toBeNull();
+});
+
+test("clicking the button opens the ConfirmSheet on the exact action block", async () => {
+  await openWithClickProposal();
+  await userEvent.click(await screen.findByRole("button", { name: "Delete pod web-1" }));
+
+  expect(JSON.parse(screen.getByTestId("confirm-action").textContent!)).toEqual(CLICK_FRAME.action);
+});
+
+test("a successful run is published back to the worker and marked on the row", async () => {
+  await openWithClickProposal();
+  await userEvent.click(await screen.findByRole("button", { name: "Delete pod web-1" }));
+  await userEvent.click(screen.getByRole("button", { name: "fake-run" }));
+
+  await waitFor(() => expect(publishedOn("rigel.action.result")).toEqual([{ id: "call-1", ok: true, summary: "ran" }]));
+  // Opening the confirm dialog dismisses the popover, which is why the sheet is
+  // mounted outside it; the row is still there when the popover comes back.
+  await userEvent.click(screen.getByLabelText("Voice assistant"));
+  expect(await screen.findByText("Ran")).toBeTruthy();
+});
+
+test("a failed run reports the first stderr line rather than a generic failure", async () => {
+  h.actionResult = { code: 1, stdout: "", stderr: "\nError from server (NotFound): pods \"web-1\" not found\nmore" };
+  await openWithClickProposal();
+  await userEvent.click(await screen.findByRole("button", { name: "Delete pod web-1" }));
+  await userEvent.click(screen.getByRole("button", { name: "fake-run" }));
+
+  await waitFor(() =>
+    expect(publishedOn("rigel.action.result")).toEqual([
+      { id: "call-1", ok: false, summary: 'Error from server (NotFound): pods "web-1" not found' },
+    ]),
+  );
+  await userEvent.click(screen.getByLabelText("Voice assistant"));
+  expect(await screen.findByText('Error from server (NotFound): pods "web-1" not found')).toBeTruthy();
+});
+
+test("a result publish that fails surfaces on the row instead of being swallowed", async () => {
+  h.behavior.failPublish = true;
+  const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+  await openWithClickProposal();
+  await userEvent.click(await screen.findByRole("button", { name: "Delete pod web-1" }));
+  await userEvent.click(screen.getByRole("button", { name: "fake-run" }));
+
+  await userEvent.click(screen.getByLabelText("Voice assistant"));
+  expect(await screen.findByText("Ran, but the assistant was not told.")).toBeTruthy();
+  expect(consoleError).toHaveBeenCalled();
+  consoleError.mockRestore();
+});
+
+test("a rigel.action.result from the worker marks a voice-tier proposal done", async () => {
+  h.status.data = { enabled: true, configured: true };
+  render(<VoiceControl />);
+  await userEvent.click(screen.getByLabelText("Voice assistant"));
+  await screen.findByText("End session");
+  deliver("rigel.action", { ...CLICK_FRAME, tier: "voice" }, AGENT);
+  expect(await screen.findByText(/Say "confirm" to run/)).toBeTruthy();
+
+  deliver("rigel.action.result", { id: "call-1", ok: true, summary: "ran" }, AGENT);
+
+  expect(await screen.findByText("Ran")).toBeTruthy();
+  expect(screen.queryByText(/Say "confirm" to run/)).toBeNull();
+});
+
+test("a new session starts with no proposals from the last one", async () => {
+  await openWithClickProposal();
+  expect(await screen.findByText("kubectl delete pod web-1 -n default")).toBeTruthy();
+
+  await userEvent.click(screen.getByText("End session"));
+  await userEvent.click(screen.getByLabelText("Voice assistant"));
+
+  await waitFor(() => expect(h.rooms).toHaveLength(2));
+  expect(await screen.findByText("End session")).toBeTruthy();
+  expect(screen.queryByText("kubectl delete pod web-1 -n default")).toBeNull();
+});
+
+test("resultSummary caps a runaway stderr line so the packet cannot blow the 64KB ceiling", () => {
+  const { ok, summary } = resultSummary({ code: 1, stdout: "", stderr: "x".repeat(5000) });
+  expect(ok).toBe(false);
+  expect(summary).toHaveLength(400);
 });

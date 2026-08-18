@@ -1,7 +1,7 @@
 /**
  * Popover contents, top to bottom: state line, live waveform, rolling
- * transcript, and the resources the session has pinned. Must be rendered
- * inside a RoomContext.Provider.
+ * transcript, the mutations the worker has proposed, and the resources the
+ * session has pinned. Must be rendered inside a RoomContext.Provider.
  */
 import {
   useMultibandTrackVolume,
@@ -11,7 +11,7 @@ import {
 } from "@livekit/components-react";
 import { MENTION_KIND_LABEL, type MentionCandidate } from "@/panels/chat/mentions";
 import { useMicTrackRef } from "./useVoiceRoom";
-import { AGENT_IDENTITY_PREFIX } from "./VoiceSessionEffects";
+import { AGENT_IDENTITY_PREFIX, type VoiceAction } from "./VoiceSessionEffects";
 
 // Exhaustive on purpose: a new AgentState in a future SDK should break the
 // build rather than silently render the wrong label.
@@ -79,6 +79,61 @@ function Transcript() {
   );
 }
 
+/** What a click-tier proposal targets, for the frames that carry no command. */
+function actionTarget(action: VoiceAction["action"]): string {
+  const name = action.name ?? action.deployment ?? action.pod ?? action.node;
+  return [action.kind, name, action.namespace && `in ${action.namespace}`].filter(Boolean).join(" ");
+}
+
+function Actions({ actions, onRunClick }: { actions: VoiceAction[]; onRunClick: (a: VoiceAction) => void }) {
+  if (actions.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-2 border-t px-3.5 py-2.5" style={{ borderColor: "var(--border-subtle)" }}>
+      {actions.map((a) => (
+        <div key={a.id} className="flex flex-col gap-1.5">
+          {a.command ? (
+            <code
+              className="rounded px-2 py-1 font-mono text-3xs break-all"
+              style={{ background: "var(--surface-sunken)", color: "var(--fg-secondary)" }}
+            >
+              {a.command}
+            </code>
+          ) : (
+            <span className="text-2xs" style={{ color: "var(--fg-secondary)" }}>
+              {actionTarget(a.action)}
+            </span>
+          )}
+          {a.done ? (
+            <span
+              className="text-2xs font-semibold"
+              style={{ color: a.done.ok ? "var(--status-running)" : "var(--status-failed)" }}
+            >
+              {a.done.ok ? "Ran" : a.done.summary || "Failed"}
+            </span>
+          ) : a.tier === "voice" ? (
+            <span className="text-2xs" style={{ color: "var(--fg-tertiary)" }}>
+              Say "confirm" to run, or "cancel".
+            </span>
+          ) : (
+            <button
+              onClick={() => onRunClick(a)}
+              className="self-start cursor-pointer rounded border px-2.5 py-1 text-2xs font-semibold transition-opacity hover:opacity-90"
+              style={{ borderColor: "var(--border-subtle)", color: "var(--fg-primary)", background: "var(--surface-sunken)" }}
+            >
+              {a.action.label ?? "Review and run"}
+            </button>
+          )}
+          {a.unreported && (
+            <span className="text-2xs" style={{ color: "var(--status-pending)" }}>
+              {a.unreported}
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Pills({ pills }: { pills: MentionCandidate[] }) {
   if (pills.length === 0) return null;
   return (
@@ -97,7 +152,17 @@ function Pills({ pills }: { pills: MentionCandidate[] }) {
   );
 }
 
-export function VoicePopoverBody({ onEnd, pills }: { onEnd: () => void; pills: MentionCandidate[] }) {
+export function VoicePopoverBody({
+  onEnd,
+  pills,
+  actions,
+  onRunClick,
+}: {
+  onEnd: () => void;
+  pills: MentionCandidate[];
+  actions: VoiceAction[];
+  onRunClick: (a: VoiceAction) => void;
+}) {
   const { state } = useVoiceAssistant();
   return (
     <>
@@ -118,6 +183,7 @@ export function VoicePopoverBody({ onEnd, pills }: { onEnd: () => void; pills: M
       </div>
       <Waveform />
       <Transcript />
+      <Actions actions={actions} onRunClick={onRunClick} />
       <Pills pills={pills} />
     </>
   );

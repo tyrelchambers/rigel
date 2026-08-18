@@ -2,12 +2,14 @@
  * Headless, room-scoped effects that must outlive the popover: publish the
  * active context, prime the worker's STT with the cluster's resource names,
  * resolve spoken resource names against the live store and publish each new
- * match's one-line summary to the worker, and record turns into chat history
- * (Task 11). Mounted next to RoomAudioRenderer.
+ * match's one-line summary to the worker, record turns into chat history, and
+ * hand the worker's proposed mutations up to VoiceControl. Mounted next to
+ * RoomAudioRenderer.
  */
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { Room } from "livekit-client";
-import { useTranscriptions } from "@livekit/components-react";
+import { useDataChannel, useTranscriptions } from "@livekit/components-react";
+import type { ActionBlock } from "@/lib/api";
 import { useCluster } from "@/store/cluster";
 import { buildMentions, type MentionCandidate } from "@/panels/chat/mentions";
 import { upsertSession } from "@/panels/chat/chatHistory";
@@ -18,21 +20,88 @@ import { toHistoryEntry, type VoiceSegment } from "./voiceHistory";
 /** The agent's identity, minted by the server in voiceRoutes.identityFor. */
 export const AGENT_IDENTITY_PREFIX = "rigel-agent";
 
+export const ACTION_TOPIC = "rigel.action";
+export const ACTION_RESULT_TOPIC = "rigel.action.result";
+
 const MAX_PILLS = 6;
 
-export function publishJson(room: Room, topic: string, payload: unknown): void {
-  void room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify(payload)), {
+/** A mutation the worker proposed, exactly as it arrives on `rigel.action`. */
+export interface VoiceActionFrame {
+  id: string;
+  tier: "voice" | "click";
+  action: ActionBlock;
+  /**
+   * Null for purge, applyManifest and proposeRepoFix: /api/action cannot
+   * preview those three, so the worker skips the preview and the ConfirmSheet
+   * rebuilds the command from the action block itself.
+   */
+  command: string | null;
+  done?: { ok: boolean; summary: string };
+}
+
+/** A frame plus renderer-only state. `unreported` never crosses the wire. */
+export interface VoiceAction extends VoiceActionFrame {
+  unreported?: string;
+}
+
+/**
+ * The slice of `@livekit/components-core`'s ReceivedDataMessage this file uses.
+ * That package is only a transitive dependency, so the shape is restated rather
+ * than imported.
+ */
+interface VoiceDataMessage {
+  payload: Uint8Array;
+  topic?: string;
+  from?: { identity: string };
+}
+
+/**
+ * Returns the promise so a caller that must not lose the frame can await it.
+ * publishData rejects on an oversize packet (64,000 bytes for the whole
+ * packet), which is silent otherwise.
+ */
+export function publishJson(room: Room, topic: string, payload: unknown): Promise<void> {
+  return room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify(payload)), {
     reliable: true,
     topic,
   });
 }
 
+/** Validates a decoded worker frame into something the popover can render. */
+export function toVoiceActionFrame(topic: string | undefined, body: unknown): VoiceActionFrame | null {
+  if (!body || typeof body !== "object") return null;
+  const m = body as Record<string, unknown>;
+  if (typeof m.id !== "string") return null;
+  if (topic === ACTION_RESULT_TOPIC) {
+    return {
+      id: m.id,
+      tier: "voice",
+      action: { kind: "" },
+      command: null,
+      done: { ok: m.ok === true, summary: typeof m.summary === "string" ? m.summary : "" },
+    };
+  }
+  if (topic !== ACTION_TOPIC) return null;
+  if (m.tier !== "voice" && m.tier !== "click") return null;
+  if (!m.action || typeof m.action !== "object") return null;
+  const action = m.action as ActionBlock;
+  if (typeof action.kind !== "string") return null;
+  return {
+    id: m.id,
+    tier: m.tier,
+    action,
+    command: typeof m.command === "string" ? m.command : null,
+  };
+}
+
 export function VoiceSessionEffects({
   room,
   onPills,
+  onAction,
 }: {
   room: Room;
   onPills: (pills: MentionCandidate[]) => void;
+  onAction: (frame: VoiceActionFrame) => void;
 }) {
   const transcriptions = useTranscriptions();
   const publishedIds = useRef(new Set<string>());
@@ -52,7 +121,7 @@ export function VoiceSessionEffects({
   }, [room, onPills]);
 
   useEffect(() => {
-    const publish = () => publishJson(room, "rigel.state", { activeContext: useCluster.getState().activeContext });
+    const publish = () => void publishJson(room, "rigel.state", { activeContext: useCluster.getState().activeContext });
     publish();
     return useCluster.subscribe((s, prev) => {
       if (s.activeContext !== prev.activeContext) publish();
@@ -66,13 +135,35 @@ export function VoiceSessionEffects({
       const signature = names.join("\u0000");
       if (signature === keytermsRef.current) return;
       keytermsRef.current = signature;
-      publishJson(room, "rigel.keyterms", { names });
+      void publishJson(room, "rigel.keyterms", { names });
     };
     publish();
     return useCluster.subscribe((s, prev) => {
       if (s.resources !== prev.resources) publish();
     });
   }, [room]);
+
+  const handleFrame = useCallback(
+    (msg: VoiceDataMessage) => {
+      // Only the worker may drive this popover. Holding a room token is not
+      // authorization: any other participant able to publish data could
+      // otherwise raise a ConfirmSheet on the operator's desktop, pre-filled
+      // with an action of their choosing. An unresolved sender arrives as
+      // undefined rather than a raw wire identity, so this fails closed.
+      if (!(msg.from?.identity ?? "").startsWith(AGENT_IDENTITY_PREFIX)) return;
+      let body: unknown;
+      try {
+        body = JSON.parse(new TextDecoder().decode(msg.payload));
+      } catch {
+        return;
+      }
+      const frame = toVoiceActionFrame(msg.topic, body);
+      if (frame) onAction(frame);
+    },
+    [onAction],
+  );
+  useDataChannel(ACTION_TOPIC, handleFrame);
+  useDataChannel(ACTION_RESULT_TOPIC, handleFrame);
 
   useEffect(() => {
     const candidates = buildMentions(useCluster.getState().resources);
@@ -84,7 +175,7 @@ export function VoiceSessionEffects({
       for (const m of matchTranscript(t.text, candidates)) {
         if (publishedIds.current.has(m.id)) continue;
         publishedIds.current.add(m.id);
-        publishJson(room, "rigel.context", { id: m.id, context: m.context });
+        void publishJson(room, "rigel.context", { id: m.id, context: m.context });
         pillsRef.current = [...pillsRef.current, m].slice(-MAX_PILLS);
         changed = true;
       }

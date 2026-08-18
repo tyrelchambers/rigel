@@ -4,15 +4,34 @@
  * Phase 2) session effects survive the popover closing. Renders nothing unless
  * the server reports the voice flag enabled.
  */
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { RoomAudioRenderer, RoomContext, useTrackVolume, useVoiceAssistant } from "@livekit/components-react";
+import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useVoiceStatus } from "@/lib/api";
+import { useVoiceStatus, type ActionResult } from "@/lib/api";
 import type { MentionCandidate } from "@/panels/chat/mentions";
 import { VoiceMark, visualStateFor } from "./VoiceMark";
 import { VoicePopoverBody } from "./VoicePopoverBody";
 import { useMicTrackRef, useVoiceRoom, type VoiceConnection } from "./useVoiceRoom";
-import { VoiceSessionEffects } from "./VoiceSessionEffects";
+import {
+  ACTION_RESULT_TOPIC,
+  publishJson,
+  VoiceSessionEffects,
+  type VoiceAction,
+  type VoiceActionFrame,
+} from "./VoiceSessionEffects";
+
+const MAX_ACTIONS = 5;
+
+/** publishData rejects the whole packet over 64,000 bytes, and stderr is the
+ *  only field here without a natural bound. */
+const MAX_SUMMARY = 400;
+
+export function resultSummary(result: ActionResult): { ok: boolean; summary: string } {
+  const ok = result.code === 0;
+  const summary = ok ? "ran" : (result.stderr.split("\n").find(Boolean) ?? "failed");
+  return { ok, summary: summary.slice(0, MAX_SUMMARY) };
+}
 
 function LiveVoiceMark() {
   const { state, audioTrack } = useVoiceAssistant();
@@ -33,6 +52,41 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
   const { room, status, connect, disconnect } = useVoiceRoom();
   const [open, setOpen] = useState(false);
   const [pills, setPills] = useState<MentionCandidate[]>([]);
+  const [actions, setActions] = useState<VoiceAction[]>([]);
+  const [confirmAction, setConfirmAction] = useState<VoiceAction | null>(null);
+
+  // Proposals belong to a session. Pills are dropped by VoiceSessionEffects
+  // remounting; actions are held here, so they are dropped here.
+  useEffect(() => {
+    setActions([]);
+    setConfirmAction(null);
+  }, [room]);
+
+  const onAction = useCallback((frame: VoiceActionFrame) => {
+    setActions((prev) => {
+      if (frame.done) return prev.map((a) => (a.id === frame.id ? { ...a, done: frame.done } : a));
+      return [...prev.filter((a) => a.id !== frame.id), frame].slice(-MAX_ACTIONS);
+    });
+  }, []);
+
+  const reportResult = useCallback(
+    async (frame: VoiceAction, ok: boolean, summary: string) => {
+      onAction({ ...frame, done: { ok, summary } });
+      if (!room) return;
+      try {
+        await publishJson(room, ACTION_RESULT_TOPIC, { id: frame.id, ok, summary });
+      } catch (err) {
+        // The change already happened. A dropped result means the worker never
+        // learns it, so the agent would go on to misreport the outcome.
+        console.error("[voice] publishing the action result failed:", err);
+        setActions((prev) =>
+          prev.map((a) => (a.id === frame.id ? { ...a, unreported: "Ran, but the assistant was not told." } : a)),
+        );
+      }
+    },
+    [room, onAction],
+  );
+
   if (!data?.enabled) return null;
 
   return (
@@ -40,7 +94,23 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
       {room && (
         <RoomContext.Provider value={room}>
           <RoomAudioRenderer />
-          <VoiceSessionEffects room={room} onPills={setPills} />
+          <VoiceSessionEffects room={room} onPills={setPills} onAction={onAction} />
+          <ConfirmSheet
+            action={confirmAction?.action ?? null}
+            open={confirmAction != null}
+            onClose={() => setConfirmAction(null)}
+            onPurge={() => {
+              if (confirmAction) {
+                void reportResult(confirmAction, false, "purge needs the typed-name confirmation in the app");
+              }
+            }}
+            fromChat
+            onResult={(info) => {
+              if (!confirmAction) return;
+              const { ok, summary } = resultSummary(info.result);
+              void reportResult(confirmAction, ok, summary);
+            }}
+          />
         </RoomContext.Provider>
       )}
       <Popover
@@ -71,6 +141,8 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
             <RoomContext.Provider value={room}>
               <VoicePopoverBody
                 pills={pills}
+                actions={actions}
+                onRunClick={setConfirmAction}
                 onEnd={() => {
                   disconnect();
                   setOpen(false);
