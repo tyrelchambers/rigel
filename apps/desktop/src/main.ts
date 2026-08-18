@@ -359,6 +359,23 @@ function forkServer(port: number): UtilityProcess {
 // Dev-only, flag-gated: forks the desktop-bundled voice.mjs (see build.mjs)
 // alongside the server when RIGEL_VOICE=1. Packaging (resourcesPath layout,
 // crash-restart, etc.) is a later task — a packaged app never forks this.
+//
+// utilityProcess.fork relaunches the SAME Electron helper binary with
+// --type=utility, so this child still links Electron Framework (which
+// embeds its own copy of Chromium's libwebrtc/ObjC layer) even though it
+// only runs our Node code. @livekit/rtc-node embeds a second, independently
+// built copy of the same upstream webrtc for its native audio pipeline, so
+// macOS logs ~9 "Class X is implemented in both ... Electron Framework and
+// ... rtc-node.darwin-arm64.node" warnings at this child's startup — dyld
+// keeps whichever definition loaded first and the loser's code becomes
+// unreachable for that class name. Electron's own webrtc classes and
+// rtc-node's are never handed objects by each other here (two unrelated
+// call graphs), and a live session has run clean on this pairing, but the
+// warning is real and Apple's docs are right that it's a latent
+// crash/UB class of bug in general — there's no fix available from this
+// repo short of running the voice worker under a real, separate Node
+// binary instead of Electron's own executable, which is a bigger call
+// than a log-noise cleanup.
 function forkVoiceWorker(port: number): UtilityProcess | null {
   if (process.env.RIGEL_VOICE !== "1" || app.isPackaged) return null;
   const env: NodeJS.ProcessEnv = {

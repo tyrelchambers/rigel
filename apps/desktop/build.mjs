@@ -127,6 +127,18 @@ const stubSharpPlugin = {
 //     to THIS output file, so it must be an apps/desktop dependency. When it
 //     can't be resolved the SDK does not throw: the VAD silently becomes a
 //     no-op stream and end-of-turn prediction degrades to always-true.
+//
+// @livekit/agents' audio.ts calls configureFfmpeg() at import time
+// unconditionally, which logs "no bundled ffmpeg binary for darwin-arm64;
+// using ffmpeg from PATH" because @livekit/av-darwin-arm64 (its dynamic
+// require.resolve(`@livekit/av-${platform}/package.json`) target) is bundled
+// rather than external, so it isn't at the resolvable path once flattened
+// into this output file. This is harmless noise for us: ffmpeg is only ever
+// invoked by audioFramesFromFile/loopAudioFramesFromFile (decoding a local
+// audio file) and RecorderIO (session recording), and this pipeline is a
+// live mic-in/agent-out loop through LiveKit Inference that uses neither.
+// Not worth externalizing @livekit/av-darwin-arm64 for: that would only
+// silence a warning for a binary this worker never calls.
 const voiceBundle = build({
   entryPoints: ["../voice/src/index.ts"],
   outfile: "dist/voice.mjs",
