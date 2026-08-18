@@ -25,17 +25,24 @@ export function emptySessionState(): SessionState {
  * valid room token, so possession alone cannot authorize a control frame: a
  * forged rigel.state would repoint every subsequent read and mutation at a
  * different cluster.
+ *
+ * Returns true when the frame moved `activeContext`, which the caller uses to
+ * re-issue the agent's instructions.
  */
-export function applyDataFrame(state: SessionState, identity: string | undefined, topic: string | undefined, raw: string): void {
-  if (identity !== DESKTOP_IDENTITY) return;
+export function applyDataFrame(state: SessionState, identity: string | undefined, topic: string | undefined, raw: string): boolean {
+  if (identity !== DESKTOP_IDENTITY) return false;
   try {
     const msg = JSON.parse(raw);
     if (topic === "rigel.state" && (typeof msg.activeContext === "string" || msg.activeContext === null)) {
+      if (state.activeContext === msg.activeContext) return false;
       state.activeContext = msg.activeContext;
-    } else if (topic === "rigel.context" && typeof msg.context === "string") {
+      return true;
+    }
+    if (topic === "rigel.context" && typeof msg.context === "string") {
       if (!state.contextLines.includes(msg.context)) state.contextLines.push(msg.context);
     }
   } catch {
     /* ignore malformed frames */
   }
+  return false;
 }

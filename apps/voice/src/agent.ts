@@ -44,3 +44,13 @@ export function buildAgent(state: SessionState): voice.Agent {
     }
   })();
 }
+
+/**
+ * The desktop publishes rigel.state only after the room is up, so the prompt
+ * baked in at construction almost always says no context is selected. Re-issue
+ * it whenever the context moves, or the model hedges about which cluster it is
+ * on while the tools silently read the right one.
+ */
+export async function refreshInstructions(agent: voice.Agent, state: SessionState): Promise<void> {
+  await agent.updateInstructions(voiceSystemPrompt(state.activeContext));
+}

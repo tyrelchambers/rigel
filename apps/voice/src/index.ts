@@ -7,7 +7,7 @@ import * as deepgram from "@livekit/agents-plugin-deepgram";
 import * as cartesia from "@livekit/agents-plugin-cartesia";
 import * as silero from "@livekit/agents-plugin-silero";
 import { Room, RoomEvent } from "@livekit/rtc-node";
-import { buildAgent } from "./agent.js";
+import { buildAgent, refreshInstructions } from "./agent.js";
 import { createServerClient, type AgentConfig, type ServerClient } from "./serverClient.js";
 import { applyDataFrame, emptySessionState } from "./state.js";
 
@@ -38,9 +38,12 @@ async function main(): Promise<void> {
   console.log("[voice] connected to room");
 
   const state = emptySessionState();
+  const agent = buildAgent(state);
   const decoder = new TextDecoder();
   room.on(RoomEvent.DataReceived, (payload: Uint8Array, participant, _kind, topic?: string) => {
-    applyDataFrame(state, participant?.identity, topic, decoder.decode(payload));
+    if (applyDataFrame(state, participant?.identity, topic, decoder.decode(payload))) {
+      void refreshInstructions(agent, state);
+    }
   });
 
   const session = new voice.AgentSession({
@@ -60,7 +63,6 @@ async function main(): Promise<void> {
       }),
     },
   });
-  const agent = buildAgent(state);
   await session.start({ agent, room });
   console.log("[voice] session started");
 }

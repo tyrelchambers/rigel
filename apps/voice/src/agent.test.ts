@@ -1,7 +1,7 @@
 import { llm } from "@livekit/agents";
 import { describe, expect, test } from "vitest";
-import { buildAgent, CONTEXT_HEADING } from "./agent.js";
-import { emptySessionState } from "./state.js";
+import { buildAgent, CONTEXT_HEADING, refreshInstructions } from "./agent.js";
+import { DESKTOP_IDENTITY, applyDataFrame, emptySessionState } from "./state.js";
 
 function readCluster(agent: ReturnType<typeof buildAgent>) {
   const tool = agent.toolCtx.getFunctionTool("readCluster");
@@ -20,6 +20,26 @@ describe("buildAgent", () => {
     const state = emptySessionState();
     state.activeContext = "kind-rigel";
     expect(buildAgent(state).instructions).toContain("kind-rigel");
+  });
+
+  test("the context the desktop publishes after connect reaches the instructions", async () => {
+    const state = emptySessionState();
+    const agent = buildAgent(state);
+    expect(agent.instructions).toContain("No kubectl context is selected");
+
+    applyDataFrame(state, DESKTOP_IDENTITY, "rigel.state", JSON.stringify({ activeContext: "kind-rigel" }));
+    await refreshInstructions(agent, state);
+    expect(agent.instructions).toContain("kind-rigel");
+    expect(agent.instructions).not.toContain("No kubectl context is selected");
+  });
+
+  test("clearing the context puts the no-context wording back", async () => {
+    const state = emptySessionState();
+    state.activeContext = "kind-rigel";
+    const agent = buildAgent(state);
+    state.activeContext = null;
+    await refreshInstructions(agent, state);
+    expect(agent.instructions).toContain("No kubectl context is selected");
   });
 
   test("a read the builder rejects comes back as text, not a thrown tool call", async () => {
