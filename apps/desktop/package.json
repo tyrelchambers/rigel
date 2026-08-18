@@ -2,7 +2,7 @@
   "name": "desktop",
   "private": true,
   "version": "0.8.0",
-  "description": "Rigel desktop (Electron) — wraps the Node server + built SPA into a macOS app",
+  "description": "Rigel desktop (Electron) \u2014 wraps the Node server + built SPA into a macOS app",
   "homepage": "https://rigel.run",
   "main": "dist/main.js",
   "scripts": {
@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "dev": "pnpm build && electron .",
+    "dev:voice": "RIGEL_VOICE=1 pnpm run dev",
     "smoke": "pnpm build && HELMSMAN_SMOKE=1 electron .",
     "dist": "pnpm build && electron-builder --mac --arm64",
     "dist:all": "pnpm build && electron-builder --mac --arm64 --x64",
