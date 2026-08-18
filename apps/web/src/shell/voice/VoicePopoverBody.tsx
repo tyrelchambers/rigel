@@ -8,21 +8,18 @@ import { useEffect, useState } from "react";
 import { differenceInSeconds } from "date-fns";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCircleExclamation } from "@awesome.me/kit-6050953220/icons/classic/solid";
-import {
-  useMultibandTrackVolume,
-  useTranscriptions,
-  useVoiceAssistant,
-  type AgentState,
-} from "@livekit/components-react";
+import { useMultibandTrackVolume, useTranscriptions, type AgentState } from "@livekit/components-react";
 import { MENTION_KIND_LABEL, type MentionCandidate } from "@/panels/chat/mentions";
-import { useMicTrackRef } from "./useVoiceRoom";
+import { useAssistantState, useMicTrackRef } from "./useVoiceRoom";
 import {
   markAppearance,
   spectrumAt,
   usePrefersReducedMotion,
   visualStateFor,
   voiceHalo,
+  VOICE_LEVEL_GAIN,
   VOICE_SPECTRUM,
+  type AgentReport,
 } from "./VoiceMark";
 import { AGENT_IDENTITY_PREFIX, type VoiceAction } from "./VoiceSessionEffects";
 
@@ -48,8 +45,6 @@ const DOT_HALO_ALPHA = "66";
 const BAR_COUNT = 28;
 const BAR_MIN_PX = 6;
 const BAR_MAX_PX = 60;
-/** Saturates a bar at the same input level the old 40px waveform did. */
-const BAR_GAIN = 2.6;
 
 function SignalEdge() {
   return (
@@ -63,8 +58,8 @@ function SignalEdge() {
   );
 }
 
-function Waveform() {
-  const { state, audioTrack } = useVoiceAssistant();
+function Waveform({ report }: { report: AgentReport }) {
+  const { state, audioTrack } = useAssistantState(report);
   const micRef = useMicTrackRef();
   const bands = useMultibandTrackVolume(state === "speaking" ? audioTrack : micRef, { bands: BAR_COUNT });
   // With no track the hook hands back an empty array, which would leave the
@@ -78,7 +73,7 @@ function Waveform() {
       style={{ background: "var(--surface-sunken)", borderColor: "var(--border-subtle)" }}
     >
       {levels.map((v, i) => {
-        const amp = Number.isFinite(v) ? Math.min(1, Math.max(0, v * BAR_GAIN)) : 0;
+        const amp = Number.isFinite(v) ? Math.min(1, Math.max(0, v * VOICE_LEVEL_GAIN)) : 0;
         return (
           <div
             key={i}
@@ -95,8 +90,8 @@ function Waveform() {
   );
 }
 
-function StateRow({ onEnd }: { onEnd: () => void }) {
-  const { state } = useVoiceAssistant();
+function StateRow({ onEnd, report }: { onEnd: () => void; report: AgentReport }) {
+  const { state } = useAssistantState(report);
   const reducedMotion = usePrefersReducedMotion();
   const { color, glow } = markAppearance(visualStateFor(state, true), 0, reducedMotion);
   return (
@@ -298,11 +293,13 @@ function Pills({ pills }: { pills: MentionCandidate[] }) {
 
 export function VoicePopoverBody({
   onEnd,
+  report,
   pills,
   actions,
   onRunClick,
 }: {
   onEnd: () => void;
+  report: AgentReport;
   pills: MentionCandidate[];
   actions: VoiceAction[];
   onRunClick: (a: VoiceAction) => void;
@@ -318,8 +315,8 @@ export function VoicePopoverBody({
   return (
     <>
       <SignalEdge />
-      <StateRow onEnd={onEnd} />
-      <Waveform />
+      <StateRow onEnd={onEnd} report={report} />
+      <Waveform report={report} />
       <Transcript />
       {actions.map((a) =>
         a.tier === "voice" && !a.done ? (

@@ -16,6 +16,32 @@ export const VOICE_SPECTRUM = ["#38bdf8", "#6366f1", "#8b5cf6"] as const;
 
 export type VoiceVisualState = "disconnected" | "listening" | "thinking" | "speaking" | "failed";
 
+/**
+ * Speech rarely drives the track-volume hooks past ~0.3, so an ungained level
+ * moves the rings by a fraction of a pixel and the mark reads as frozen.
+ * Shared with the popover waveform so both instruments saturate together.
+ */
+export const VOICE_LEVEL_GAIN = 2.6;
+
+/** What the worker has said about itself on rigel.agent.state, and whether the
+ * wait for it to say anything at all has run out. */
+export interface AgentReport {
+  state: AgentState | null;
+  timedOut: boolean;
+}
+
+/**
+ * The agent's own report wins. useVoiceAssistant is the fallback, and its
+ * "connecting" cannot be taken at face value: that is equally what it says when
+ * it cannot find the agent participant, which is not a condition it ever
+ * reports leaving. Past the timeout, stop pretending.
+ */
+export function effectiveAgentState(report: AgentReport, hookState: AgentState): AgentState {
+  if (report.state) return report.state;
+  if (report.timedOut && (hookState === "connecting" || hookState === "disconnected")) return "failed";
+  return hookState;
+}
+
 export interface MarkAppearance {
   color: string;
   opacity: number;
@@ -133,7 +159,7 @@ export function markAppearance(
     return { color, glow, opacity: REDUCED_MOTION_OPACITY[state], ripple: 0, pulsing: false };
   }
   const coupled = state === "listening" || state === "speaking";
-  const ripple = coupled && Number.isFinite(level) ? Math.min(1, Math.max(0, level)) : 0;
+  const ripple = coupled && Number.isFinite(level) ? Math.min(1, Math.max(0, level * VOICE_LEVEL_GAIN)) : 0;
   return { color, glow, opacity: 1, ripple, pulsing: state === "thinking" };
 }
 

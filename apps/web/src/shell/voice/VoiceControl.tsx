@@ -8,14 +8,20 @@
  * Renders nothing unless the server reports the voice flag enabled.
  */
 import { useCallback, useEffect, useState } from "react";
-import { RoomAudioRenderer, RoomContext, useTrackVolume, useVoiceAssistant } from "@livekit/components-react";
+import { RoomAudioRenderer, RoomContext, useTrackVolume } from "@livekit/components-react";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useVoiceStatus, type ActionResult } from "@/lib/api";
 import type { MentionCandidate } from "@/panels/chat/mentions";
-import { VoiceMark, visualStateFor } from "./VoiceMark";
+import { VoiceMark, visualStateFor, type AgentReport } from "./VoiceMark";
 import { VoicePopoverBody } from "./VoicePopoverBody";
-import { useMicTrackRef, useVoiceRoom, type VoiceConnection } from "./useVoiceRoom";
+import {
+  useAgentReport,
+  useAssistantState,
+  useMicTrackRef,
+  useVoiceRoom,
+  type VoiceConnection,
+} from "./useVoiceRoom";
 import {
   ACTION_RESULT_TOPIC,
   publishJson,
@@ -36,8 +42,8 @@ export function resultSummary(result: ActionResult): { ok: boolean; summary: str
   return { ok, summary: summary.slice(0, MAX_SUMMARY) };
 }
 
-function LiveVoiceMark() {
-  const { state, audioTrack } = useVoiceAssistant();
+function LiveVoiceMark({ report }: { report: AgentReport }) {
+  const { state, audioTrack } = useAssistantState(report);
   const micLevel = useTrackVolume(useMicTrackRef());
   const agentLevel = useTrackVolume(audioTrack);
   const visual = visualStateFor(state, true);
@@ -61,6 +67,7 @@ export function voiceButtonLabel(open: boolean, status: VoiceConnection): string
 export function VoiceControl({ style }: { style?: React.CSSProperties }) {
   const { data } = useVoiceStatus();
   const { room, status, connect, disconnect } = useVoiceRoom();
+  const { report, onAgentState } = useAgentReport(room);
   const [open, setOpen] = useState(false);
   const [pills, setPills] = useState<MentionCandidate[]>([]);
   const [actions, setActions] = useState<VoiceAction[]>([]);
@@ -115,7 +122,7 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
       {room && (
         <RoomContext.Provider value={room}>
           <RoomAudioRenderer />
-          <VoiceSessionEffects room={room} onPills={setPills} onAction={onAction} />
+          <VoiceSessionEffects room={room} onPills={setPills} onAction={onAction} onAgentState={onAgentState} />
           <ConfirmSheet
             action={confirmAction?.action ?? null}
             open={confirmAction != null}
@@ -157,7 +164,7 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
         >
           {room ? (
             <RoomContext.Provider value={room}>
-              <LiveVoiceMark />
+              <LiveVoiceMark report={report} />
             </RoomContext.Provider>
           ) : (
             <VoiceMark state="disconnected" level={0} />
@@ -171,6 +178,7 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
           {room ? (
             <RoomContext.Provider value={room}>
               <VoicePopoverBody
+                report={report}
                 pills={pills}
                 actions={actions}
                 onRunClick={setConfirmAction}

@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useRef } from "react";
 import type { Room } from "livekit-client";
-import { useDataChannel, useTranscriptions } from "@livekit/components-react";
+import { useDataChannel, useTranscriptions, type AgentState } from "@livekit/components-react";
 import type { ActionBlock } from "@/lib/api";
 import { useCluster } from "@/store/cluster";
 import { buildMentions, type MentionCandidate } from "@/panels/chat/mentions";
@@ -22,6 +22,19 @@ export const AGENT_IDENTITY_PREFIX = "rigel-agent";
 
 export const ACTION_TOPIC = "rigel.action";
 export const ACTION_RESULT_TOPIC = "rigel.action.result";
+
+/** The worker's own state channel, published by apps/voice/src/lifecycle.ts. */
+export const AGENT_STATE_TOPIC = "rigel.agent.state";
+
+/** The five states an AgentSession reports, a subset of the SDK's AgentState.
+ * Anything else on the wire is not a state this session can be in. */
+const REPORTED_STATES: readonly string[] = ["initializing", "idle", "listening", "thinking", "speaking"];
+
+export function toReportedAgentState(body: unknown): AgentState | null {
+  if (!body || typeof body !== "object") return null;
+  const state = (body as { state?: unknown }).state;
+  return typeof state === "string" && REPORTED_STATES.includes(state) ? (state as AgentState) : null;
+}
 
 const MAX_PILLS = 6;
 
@@ -101,10 +114,12 @@ export function VoiceSessionEffects({
   room,
   onPills,
   onAction,
+  onAgentState,
 }: {
   room: Room;
   onPills: (pills: MentionCandidate[]) => void;
   onAction: (frame: VoiceActionFrame) => void;
+  onAgentState: (state: AgentState) => void;
 }) {
   const transcriptions = useTranscriptions();
   const publishedIds = useRef(new Set<string>());
@@ -167,6 +182,27 @@ export function VoiceSessionEffects({
   );
   useDataChannel(ACTION_TOPIC, handleFrame);
   useDataChannel(ACTION_RESULT_TOPIC, handleFrame);
+
+  // Same sender check as the action frames, for the same reason: this drives
+  // what the popover tells the operator the assistant is doing, and an
+  // unresolved sender must not be able to say it is listening.
+  useDataChannel(
+    AGENT_STATE_TOPIC,
+    useCallback(
+      (msg: VoiceDataMessage) => {
+        if (!(msg.from?.identity ?? "").startsWith(AGENT_IDENTITY_PREFIX)) return;
+        let body: unknown;
+        try {
+          body = JSON.parse(new TextDecoder().decode(msg.payload));
+        } catch {
+          return;
+        }
+        const state = toReportedAgentState(body);
+        if (state) onAgentState(state);
+      },
+      [onAgentState],
+    ),
+  );
 
   useEffect(() => {
     const candidates = buildMentions(useCluster.getState().resources);

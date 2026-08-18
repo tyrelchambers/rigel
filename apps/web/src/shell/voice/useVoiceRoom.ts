@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Room, RoomEvent, Track } from "livekit-client";
-import { useLocalParticipant, type TrackReference } from "@livekit/components-react";
+import {
+  useLocalParticipant,
+  useVoiceAssistant,
+  type AgentState,
+  type TrackReference,
+} from "@livekit/components-react";
 import { fetchVoiceToken } from "@/lib/api";
+import { effectiveAgentState, type AgentReport } from "./VoiceMark";
 
 export type VoiceConnection = "idle" | "connecting" | "connected" | "error";
 
@@ -93,4 +99,43 @@ export function useMicTrackRef(): TrackReference | undefined {
   const { microphoneTrack, localParticipant } = useLocalParticipant();
   if (!microphoneTrack) return undefined;
   return { participant: localParticipant, publication: microphoneTrack, source: Track.Source.Microphone };
+}
+
+/**
+ * How long a live room may go without the worker saying what the agent is doing
+ * before the popover calls it unavailable. The worker joins the room at app
+ * start and replies to a desktop joining immediately, so the only case that
+ * legitimately runs long is opening voice while the worker is still booting.
+ * Not terminal either way: a report arriving later takes over.
+ */
+export const AGENT_REPORT_TIMEOUT_MS = 15_000;
+
+/** Tracks the worker's reports for one room, and how long the silence has run.
+ * Both reset when the room does, since a report belongs to a session. */
+export function useAgentReport(room: Room | null): {
+  report: AgentReport;
+  onAgentState: (state: AgentState) => void;
+} {
+  const [state, setState] = useState<AgentState | null>(null);
+  const [timedOut, setTimedOut] = useState(false);
+  useEffect(() => {
+    setState(null);
+    setTimedOut(false);
+    if (!room) return;
+    const id = setTimeout(() => setTimedOut(true), AGENT_REPORT_TIMEOUT_MS);
+    return () => clearTimeout(id);
+  }, [room]);
+  return { report: { state, timedOut }, onAgentState: setState };
+}
+
+/** The assistant state the UI should render, plus the agent's audio track.
+ * useVoiceAssistant stays the source for the track: the waveform needs the
+ * real published audio, which no data frame can stand in for. Requires a
+ * RoomContext. */
+export function useAssistantState(report: AgentReport): {
+  state: AgentState;
+  audioTrack: TrackReference | undefined;
+} {
+  const { state, audioTrack } = useVoiceAssistant();
+  return { state: effectiveAgentState(report, state), audioTrack };
 }

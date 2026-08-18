@@ -34,7 +34,9 @@ vi.mock("@livekit/components-react", () => ({
 import {
   ACTION_RESULT_TOPIC,
   ACTION_TOPIC,
+  AGENT_STATE_TOPIC,
   publishJson,
+  toReportedAgentState,
   toVoiceActionFrame,
   VoiceSessionEffects,
   type VoiceActionFrame,
@@ -134,13 +136,13 @@ test("publishJson sends a reliable frame on the given topic", () => {
 test("publishes the active context once on mount", () => {
   useCluster.setState({ activeContext: "prod" });
   const room = fakeRoom();
-  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} />);
+  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} onAgentState={() => {}} />);
   expect(frames(room, "rigel.state")).toEqual([{ activeContext: "prod" }]);
 });
 
 test("publishes again when the active context changes", () => {
   const room = fakeRoom();
-  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} />);
+  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} onAgentState={() => {}} />);
   expect(frames(room, "rigel.state")).toHaveLength(1);
 
   useCluster.getState().applySwitch("staging", null);
@@ -149,7 +151,7 @@ test("publishes again when the active context changes", () => {
 
 test("does not republish when an unrelated store field changes", () => {
   const room = fakeRoom();
-  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} />);
+  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} onAgentState={() => {}} />);
   const publishData = room.localParticipant.publishData as ReturnType<typeof vi.fn>;
   const before = publishData.mock.calls.length;
 
@@ -159,7 +161,7 @@ test("does not republish when an unrelated store field changes", () => {
 
 test("stops publishing after unmount", () => {
   const room = fakeRoom();
-  const { unmount } = render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} />);
+  const { unmount } = render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} onAgentState={() => {}} />);
   const publishData = room.localParticipant.publishData as ReturnType<typeof vi.fn>;
   unmount();
   const before = publishData.mock.calls.length;
@@ -171,7 +173,7 @@ test("stops publishing after unmount", () => {
 test("publishes the cluster's resource names as keyterms on mount", () => {
   useCluster.setState({ resources: RESOURCES });
   const room = fakeRoom();
-  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} />);
+  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} onAgentState={() => {}} />);
   expect(frames(room, "rigel.keyterms")).toEqual([
     { names: ["web", "cert-manager", "web-7f9b64c8d-x2x4p"] },
   ]);
@@ -179,7 +181,7 @@ test("publishes the cluster's resource names as keyterms on mount", () => {
 
 test("publishes again when the resources change", () => {
   const room = fakeRoom();
-  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} />);
+  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} onAgentState={() => {}} />);
   expect(frames(room, "rigel.keyterms")).toEqual([{ names: [] }]);
 
   useCluster.setState({ resources: RESOURCES });
@@ -192,7 +194,7 @@ test("publishes again when the resources change", () => {
 test("a resource update that leaves the names alone does not republish", () => {
   useCluster.setState({ resources: RESOURCES });
   const room = fakeRoom();
-  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} />);
+  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} onAgentState={() => {}} />);
   expect(frames(room, "rigel.keyterms")).toHaveLength(1);
 
   useCluster.setState({
@@ -209,7 +211,7 @@ test("a resource update that leaves the names alone does not republish", () => {
 
 test("renders nothing", () => {
   const room = fakeRoom();
-  const { container } = render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} />);
+  const { container } = render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} onAgentState={() => {}} />);
   expect(container.innerHTML).toBe("");
 });
 
@@ -219,7 +221,7 @@ test("a spoken resource name publishes its summary and becomes a pill", () => {
   const room = fakeRoom();
   const pills = pillCollector();
 
-  render(<VoiceSessionEffects room={room} onPills={pills.onPills} onAction={() => {}} />);
+  render(<VoiceSessionEffects room={room} onPills={pills.onPills} onAction={() => {}} onAgentState={() => {}} />);
 
   expect(frames(room, "rigel.context")).toEqual([
     { id: "dep-u-cm", context: "Deployment cert-manager in default: 1/1 ready, image \u2014" },
@@ -232,11 +234,11 @@ test("the same resource named again in a later turn is not republished", () => {
   h.transcriptions = [{ text: "check certmanager", participantInfo: { identity: "rigel-desktop" } }];
   const room = fakeRoom();
   const pills = pillCollector();
-  const { rerender } = render(<VoiceSessionEffects room={room} onPills={pills.onPills} onAction={() => {}} />);
+  const { rerender } = render(<VoiceSessionEffects room={room} onPills={pills.onPills} onAction={() => {}} onAgentState={() => {}} />);
   expect(frames(room, "rigel.context")).toHaveLength(1);
 
   h.transcriptions = [...h.transcriptions, { text: "and cert manager again", participantInfo: { identity: "rigel-desktop" } }];
-  rerender(<VoiceSessionEffects room={room} onPills={pills.onPills} onAction={() => {}} />);
+  rerender(<VoiceSessionEffects room={room} onPills={pills.onPills} onAction={() => {}} onAgentState={() => {}} />);
 
   expect(frames(room, "rigel.context")).toHaveLength(1);
   expect(pills.names()).toEqual(["cert-manager"]);
@@ -248,7 +250,7 @@ test("what the agent says back never pins a resource", () => {
   const room = fakeRoom();
   const pills = pillCollector();
 
-  render(<VoiceSessionEffects room={room} onPills={pills.onPills} onAction={() => {}} />);
+  render(<VoiceSessionEffects room={room} onPills={pills.onPills} onAction={() => {}} onAgentState={() => {}} />);
 
   expect(frames(room, "rigel.context")).toEqual([]);
   expect(pills.names()).toEqual([]);
@@ -266,7 +268,7 @@ test("pills are capped at six, keeping the most recent", () => {
   const room = fakeRoom();
   const pills = pillCollector();
 
-  render(<VoiceSessionEffects room={room} onPills={pills.onPills} onAction={() => {}} />);
+  render(<VoiceSessionEffects room={room} onPills={pills.onPills} onAction={() => {}} onAgentState={() => {}} />);
 
   expect(frames(room, "rigel.context")).toHaveLength(8);
   expect(pills.names()).toEqual(["svc-2", "svc-3", "svc-4", "svc-5", "svc-6", "svc-7"]);
@@ -276,7 +278,7 @@ test("a final user segment is recorded into chat history", () => {
   h.transcriptions = [finalSegment("seg-1", "restart web", "rigel-desktop")];
   const room = fakeRoom();
 
-  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} />);
+  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} onAgentState={() => {}} />);
 
   const sessions = loadSessions();
   expect(sessions).toHaveLength(1);
@@ -288,7 +290,7 @@ test("a final agent segment is recorded as an assistant message", () => {
   h.transcriptions = [finalSegment("seg-1", "Proposed a restart of web.", "rigel-agent-1")];
   const room = fakeRoom();
 
-  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} />);
+  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} onAgentState={() => {}} />);
 
   expect(loadSessions()[0]!.messages).toEqual([{ id: "seg-1", role: "assistant", text: "Proposed a restart of web." }]);
 });
@@ -297,7 +299,7 @@ test("interim (non-final) segments are never recorded", () => {
   h.transcriptions = [interimSegment("seg-1", "restart w", "rigel-desktop")];
   const room = fakeRoom();
 
-  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} />);
+  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} onAgentState={() => {}} />);
 
   expect(loadSessions()).toHaveLength(0);
 });
@@ -305,11 +307,11 @@ test("interim (non-final) segments are never recorded", () => {
 test("a segment that goes interim then final is recorded exactly once", () => {
   h.transcriptions = [interimSegment("seg-1", "restart w", "rigel-desktop")];
   const room = fakeRoom();
-  const { rerender } = render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} />);
+  const { rerender } = render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} onAgentState={() => {}} />);
   expect(loadSessions()).toHaveLength(0);
 
   h.transcriptions = [finalSegment("seg-1", "restart web", "rigel-desktop")];
-  rerender(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} />);
+  rerender(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} onAgentState={() => {}} />);
 
   const sessions = loadSessions();
   expect(sessions).toHaveLength(1);
@@ -320,11 +322,11 @@ test("a segment that goes interim then final is recorded exactly once", () => {
 test("a later unrelated interim tick does not rewrite an already-recorded final", () => {
   h.transcriptions = [finalSegment("seg-1", "restart web", "rigel-desktop")];
   const room = fakeRoom();
-  const { rerender } = render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} />);
+  const { rerender } = render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} onAgentState={() => {}} />);
   const firstUpdatedAt = loadSessions()[0]!.updatedAt;
 
   h.transcriptions = [finalSegment("seg-1", "restart web", "rigel-desktop"), interimSegment("seg-2", "and then", "rigel-desktop")];
-  rerender(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} />);
+  rerender(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} onAgentState={() => {}} />);
 
   const sessions = loadSessions();
   expect(sessions).toHaveLength(1);
@@ -335,13 +337,13 @@ test("a later unrelated interim tick does not rewrite an already-recorded final"
 test("multiple final turns accumulate under one session entry", () => {
   h.transcriptions = [finalSegment("seg-1", "restart web", "rigel-desktop")];
   const room = fakeRoom();
-  const { rerender } = render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} />);
+  const { rerender } = render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} onAgentState={() => {}} />);
 
   h.transcriptions = [
     finalSegment("seg-1", "restart web", "rigel-desktop"),
     finalSegment("seg-2", "Proposed a restart of web.", "rigel-agent-1"),
   ];
-  rerender(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} />);
+  rerender(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} onAgentState={() => {}} />);
 
   const sessions = loadSessions();
   expect(sessions).toHaveLength(1);
@@ -354,12 +356,12 @@ test("multiple final turns accumulate under one session entry", () => {
 test("two separate room mounts record under two separate session ids", () => {
   h.transcriptions = [finalSegment("seg-1", "restart web", "rigel-desktop")];
   const roomA = fakeRoom();
-  const { unmount } = render(<VoiceSessionEffects room={roomA} onPills={() => {}} onAction={() => {}} />);
+  const { unmount } = render(<VoiceSessionEffects room={roomA} onPills={() => {}} onAction={() => {}} onAgentState={() => {}} />);
   unmount();
 
   h.transcriptions = [finalSegment("seg-2", "scale api to 3", "rigel-desktop")];
   const roomB = fakeRoom();
-  render(<VoiceSessionEffects room={roomB} onPills={() => {}} onAction={() => {}} />);
+  render(<VoiceSessionEffects room={roomB} onPills={() => {}} onAction={() => {}} onAgentState={() => {}} />);
 
   const sessions = loadSessions();
   expect(sessions).toHaveLength(2);
@@ -369,7 +371,7 @@ test("two separate room mounts record under two separate session ids", () => {
 test("a click-tier frame from the agent reaches onAction intact", () => {
   const room = fakeRoom();
   const onAction = vi.fn();
-  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={onAction} />);
+  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={onAction} onAgentState={() => {}} />);
 
   deliver(ACTION_TOPIC, CLICK_FRAME, AGENT);
 
@@ -380,7 +382,7 @@ test("a click-tier frame from the agent reaches onAction intact", () => {
 test("a rigel.action frame from a non-agent identity is ignored", () => {
   const room = fakeRoom();
   const onAction = vi.fn();
-  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={onAction} />);
+  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={onAction} onAgentState={() => {}} />);
 
   deliver(ACTION_TOPIC, CLICK_FRAME, "rigel-phone-abc");
 
@@ -390,7 +392,7 @@ test("a rigel.action frame from a non-agent identity is ignored", () => {
 test("a rigel.action frame from the desktop itself is ignored", () => {
   const room = fakeRoom();
   const onAction = vi.fn();
-  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={onAction} />);
+  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={onAction} onAgentState={() => {}} />);
 
   deliver(ACTION_TOPIC, CLICK_FRAME, "rigel-desktop");
 
@@ -400,7 +402,7 @@ test("a rigel.action frame from the desktop itself is ignored", () => {
 test("a rigel.action frame with no resolvable sender fails closed", () => {
   const room = fakeRoom();
   const onAction = vi.fn();
-  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={onAction} />);
+  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={onAction} onAgentState={() => {}} />);
 
   deliver(ACTION_TOPIC, CLICK_FRAME, undefined);
 
@@ -410,7 +412,7 @@ test("a rigel.action frame with no resolvable sender fails closed", () => {
 test("an identity that merely starts with the wrong prefix is ignored", () => {
   const room = fakeRoom();
   const onAction = vi.fn();
-  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={onAction} />);
+  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={onAction} onAgentState={() => {}} />);
 
   deliver(ACTION_TOPIC, CLICK_FRAME, "not-rigel-agent");
 
@@ -420,7 +422,7 @@ test("an identity that merely starts with the wrong prefix is ignored", () => {
 test("a click-tier frame carrying a null command still reaches onAction", () => {
   const room = fakeRoom();
   const onAction = vi.fn();
-  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={onAction} />);
+  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={onAction} onAgentState={() => {}} />);
 
   deliver(ACTION_TOPIC, { ...CLICK_FRAME, command: null }, AGENT);
 
@@ -430,7 +432,7 @@ test("a click-tier frame carrying a null command still reaches onAction", () => 
 test("a rigel.action.result frame from the agent arrives as a done patch", () => {
   const room = fakeRoom();
   const onAction = vi.fn();
-  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={onAction} />);
+  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={onAction} onAgentState={() => {}} />);
 
   deliver(ACTION_RESULT_TOPIC, { id: "call-1", ok: true, summary: "ran" }, AGENT);
 
@@ -440,7 +442,7 @@ test("a rigel.action.result frame from the agent arrives as a done patch", () =>
 test("a rigel.action.result frame from a non-agent identity is ignored", () => {
   const room = fakeRoom();
   const onAction = vi.fn();
-  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={onAction} />);
+  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={onAction} onAgentState={() => {}} />);
 
   deliver(ACTION_RESULT_TOPIC, { id: "call-1", ok: true, summary: "ran" }, "rigel-phone-abc");
 
@@ -450,7 +452,7 @@ test("a rigel.action.result frame from a non-agent identity is ignored", () => {
 test("a malformed action frame is dropped rather than thrown", () => {
   const room = fakeRoom();
   const onAction = vi.fn();
-  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={onAction} />);
+  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={onAction} onAgentState={() => {}} />);
 
   expect(() => deliver(ACTION_TOPIC, "{not json", AGENT)).not.toThrow();
   expect(onAction).not.toHaveBeenCalled();
@@ -479,4 +481,56 @@ test("toVoiceActionFrame rejects an unknown topic", () => {
 
 test("toVoiceActionFrame treats a result frame with no ok field as a failure", () => {
   expect(toVoiceActionFrame(ACTION_RESULT_TOPIC, { id: "call-1" })?.done).toEqual({ ok: false, summary: "" });
+});
+
+test("a state report from the agent reaches onAgentState", () => {
+  const room = fakeRoom();
+  const onAgentState = vi.fn();
+  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} onAgentState={onAgentState} />);
+
+  deliver(AGENT_STATE_TOPIC, { state: "thinking" }, AGENT);
+
+  expect(onAgentState).toHaveBeenCalledExactlyOnceWith("thinking");
+});
+
+test("a state report from a phone in the room is ignored", () => {
+  const room = fakeRoom();
+  const onAgentState = vi.fn();
+  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} onAgentState={onAgentState} />);
+
+  deliver(AGENT_STATE_TOPIC, { state: "listening" }, "rigel-phone-abc");
+
+  expect(onAgentState).not.toHaveBeenCalled();
+});
+
+test("a state report with no resolvable sender fails closed", () => {
+  const room = fakeRoom();
+  const onAgentState = vi.fn();
+  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} onAgentState={onAgentState} />);
+
+  deliver(AGENT_STATE_TOPIC, { state: "listening" }, undefined);
+
+  expect(onAgentState).not.toHaveBeenCalled();
+});
+
+test("a malformed state report is dropped rather than thrown", () => {
+  const room = fakeRoom();
+  const onAgentState = vi.fn();
+  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={() => {}} onAgentState={onAgentState} />);
+
+  expect(() => deliver(AGENT_STATE_TOPIC, "{not json", AGENT)).not.toThrow();
+  deliver(AGENT_STATE_TOPIC, { state: "melting" }, AGENT);
+  expect(onAgentState).not.toHaveBeenCalled();
+});
+
+test("toReportedAgentState accepts only the five states a session can be in", () => {
+  for (const state of ["initializing", "idle", "listening", "thinking", "speaking"]) {
+    expect(toReportedAgentState({ state })).toBe(state);
+  }
+  expect(toReportedAgentState({ state: "failed" })).toBeNull();
+  expect(toReportedAgentState({ state: "connecting" })).toBeNull();
+  expect(toReportedAgentState({ state: 3 })).toBeNull();
+  expect(toReportedAgentState({})).toBeNull();
+  expect(toReportedAgentState(null)).toBeNull();
+  expect(toReportedAgentState("listening")).toBeNull();
 });

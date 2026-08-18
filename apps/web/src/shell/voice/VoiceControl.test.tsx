@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { act, cleanup, render, renderHook, screen, waitFor } from "@testing-library/react";
+import type { Room } from "livekit-client";
 import userEvent from "@testing-library/user-event";
 
 const h = vi.hoisted(() => {
@@ -96,8 +97,9 @@ vi.mock("@/components/ConfirmSheet", () => ({
 
 import { useCluster } from "@/store/cluster";
 import { notReadyMessage, resultSummary, voiceButtonLabel, VoiceControl } from "./VoiceControl";
-import { confirmSecondsLeft } from "./VoicePopoverBody";
-import { useVoiceRoom } from "./useVoiceRoom";
+import { confirmSecondsLeft, VoicePopoverBody } from "./VoicePopoverBody";
+import { AGENT_REPORT_TIMEOUT_MS, useAgentReport, useVoiceRoom } from "./useVoiceRoom";
+import { AGENT_STATE_TOPIC } from "./VoiceSessionEffects";
 
 beforeEach(() => {
   useCluster.setState({ activeContext: null, resources: {} });
@@ -583,4 +585,69 @@ test("the waveform rests at a baseline instead of vanishing when no track is pub
   const bars = baseElement.querySelectorAll("[data-voice-waveform] > div");
   expect(bars).toHaveLength(28);
   expect((bars[0] as HTMLElement).style.height).toBe("6px");
+});
+
+test("the worker's own state report drives the popover, not the hook", async () => {
+  h.status.data = { enabled: true, configured: true };
+  // What the live session actually produced: the pipeline was hearing and
+  // answering while useVoiceAssistant sat on "connecting" forever.
+  h.agent.state = "connecting";
+  render(<VoiceControl />);
+  await userEvent.click(screen.getByLabelText("Voice assistant"));
+  expect(await screen.findByText("Connecting…")).toBeTruthy();
+
+  deliver(AGENT_STATE_TOPIC, { state: "thinking" }, AGENT);
+
+  expect(await screen.findByText("Thinking")).toBeTruthy();
+});
+
+test("a state report from a phone cannot move the popover", async () => {
+  h.status.data = { enabled: true, configured: true };
+  h.agent.state = "connecting";
+  render(<VoiceControl />);
+  await userEvent.click(screen.getByLabelText("Voice assistant"));
+  await screen.findByText("Connecting…");
+
+  deliver(AGENT_STATE_TOPIC, { state: "speaking" }, "rigel-phone-abc");
+
+  expect(screen.getByText("Connecting…")).toBeTruthy();
+});
+
+test("useAgentReport starts silent and gives up after the timeout", () => {
+  vi.useFakeTimers();
+  try {
+    const room = new h.FakeRoom() as unknown as Room;
+    const { result } = renderHook(() => useAgentReport(room));
+    expect(result.current.report).toEqual({ state: null, timedOut: false });
+    act(() => vi.advanceTimersByTime(AGENT_REPORT_TIMEOUT_MS));
+    expect(result.current.report).toEqual({ state: null, timedOut: true });
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("useAgentReport drops the last report when the room changes, since a report is per session", () => {
+  const { result, rerender } = renderHook(({ room }) => useAgentReport(room), {
+    initialProps: { room: new h.FakeRoom() as unknown as Room },
+  });
+  act(() => result.current.onAgentState("speaking"));
+  expect(result.current.report.state).toBe("speaking");
+
+  rerender({ room: new h.FakeRoom() as unknown as Room });
+
+  expect(result.current.report.state).toBeNull();
+});
+
+test("a timed-out report reaches the popover's failure label, which the hook could never produce", () => {
+  h.agent.state = "connecting";
+  render(
+    <VoicePopoverBody
+      report={{ state: null, timedOut: true }}
+      onEnd={() => {}}
+      pills={[]}
+      actions={[]}
+      onRunClick={() => {}}
+    />,
+  );
+  expect(screen.getByText("Agent unavailable")).toBeTruthy();
 });

@@ -1,5 +1,14 @@
 import { describe, expect, test } from "vitest";
-import { markAppearance, spectrumAt, visualStateFor, VOICE_SPECTRUM, voiceHalo, wavyCircle } from "./VoiceMark";
+import {
+  effectiveAgentState,
+  markAppearance,
+  spectrumAt,
+  visualStateFor,
+  VOICE_LEVEL_GAIN,
+  VOICE_SPECTRUM,
+  voiceHalo,
+  wavyCircle,
+} from "./VoiceMark";
 
 test("wavyCircle produces a closed path around the center", () => {
   const d = wavyCircle(12, 12, 8);
@@ -84,9 +93,16 @@ describe("markAppearance", () => {
     expect(voiceHalo("#38bdf8", "55")).toContain("#38bdf800 100%");
   });
 
-  test("listening and speaking couple the ripple to the level", () => {
-    expect(markAppearance("listening", 0.4, false).ripple).toBeCloseTo(0.4);
-    expect(markAppearance("speaking", 0.7, false).ripple).toBeCloseTo(0.7);
+  test("listening and speaking couple the ripple to the gained level", () => {
+    expect(markAppearance("listening", 0.2, false).ripple).toBeCloseTo(0.2 * VOICE_LEVEL_GAIN);
+    expect(markAppearance("speaking", 0.3, false).ripple).toBeCloseTo(0.3 * VOICE_LEVEL_GAIN);
+  });
+
+  test("an ordinary speaking level moves the rings enough to see", () => {
+    // Ungained, useTrackVolume's ~0.1 gave a 1.5% outer-ring scale: sub-pixel
+    // on an 18px mark, which is what made the mark look frozen while the
+    // pipeline was in fact hearing everything.
+    expect(markAppearance("listening", 0.1, false).ripple).toBeGreaterThan(0.25);
   });
 
   test("the level is clamped into 0..1 and NaN reads as silence", () => {
@@ -154,5 +170,36 @@ describe("spectrumAt", () => {
     expect(spectrumAt(-1)).toBe(VOICE_SPECTRUM[0]);
     expect(spectrumAt(4)).toBe(VOICE_SPECTRUM[2]);
     expect(spectrumAt(Number.NaN)).toBe(VOICE_SPECTRUM[0]);
+  });
+});
+
+describe("effectiveAgentState", () => {
+  test("the worker's own report wins over the hook", () => {
+    expect(effectiveAgentState({ state: "thinking", timedOut: false }, "connecting")).toBe("thinking");
+    expect(effectiveAgentState({ state: "listening", timedOut: true }, "speaking")).toBe("listening");
+  });
+
+  test("with no report it falls back to the hook", () => {
+    expect(effectiveAgentState({ state: null, timedOut: false }, "speaking")).toBe("speaking");
+    expect(effectiveAgentState({ state: null, timedOut: false }, "connecting")).toBe("connecting");
+  });
+
+  test("silence past the timeout becomes failed, which the hook can never report", () => {
+    expect(effectiveAgentState({ state: null, timedOut: true }, "connecting")).toBe("failed");
+    expect(effectiveAgentState({ state: null, timedOut: true }, "disconnected")).toBe("failed");
+  });
+
+  test("a hook that did find the agent is believed even past the timeout", () => {
+    expect(effectiveAgentState({ state: null, timedOut: true }, "listening")).toBe("listening");
+  });
+
+  test("a late report takes the popover back off failed", () => {
+    expect(effectiveAgentState({ state: "listening", timedOut: true }, "connecting")).toBe("listening");
+  });
+});
+
+describe("visualStateFor", () => {
+  test("failed reaches its own visual state", () => {
+    expect(visualStateFor("failed", true)).toBe("failed");
   });
 });
