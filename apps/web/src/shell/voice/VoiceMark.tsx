@@ -1,7 +1,11 @@
 /**
  * The voice mark: three concentric wavy circles over a soft halo, animated
- * from the assistant state. Pure presentational; `level` is 0..1 (mic while
- * listening, agent output while speaking) and drives the ripple scale.
+ * from the assistant state. `level` is 0..1 (mic while listening, agent output
+ * while speaking) and drives the ripple scale.
+ *
+ * Also home to the pure state derivation the whole voice UI runs through:
+ * effectiveAgentState picks which report to believe, visualStateFor collapses
+ * that onto the five states the mark can draw.
  */
 import { useEffect, useState } from "react";
 import type { AgentState } from "@livekit/components-react";
