@@ -2,10 +2,12 @@ import { describe, expect, test, vi } from "vitest";
 import { desktopPresent, publishJson, type PublishRoom } from "./publish.js";
 import { DESKTOP_IDENTITY } from "./state.js";
 
+type PublishData = NonNullable<PublishRoom["localParticipant"]>["publishData"];
+
 function fakeRoom(
   identities: string[],
-  publishData = vi.fn(async () => {}),
-): { room: PublishRoom; publishData: typeof publishData } {
+  publishData: PublishData = vi.fn<PublishData>(async () => {}),
+): { room: PublishRoom; publishData: PublishData } {
   return {
     room: {
       localParticipant: { publishData },
@@ -21,8 +23,8 @@ describe("publishJson", () => {
     await publishJson(room, "rigel.action", { id: "a1", tier: "voice" });
 
     expect(publishData).toHaveBeenCalledTimes(1);
-    const [data, options] = publishData.mock.calls[0]!;
-    expect(JSON.parse(new TextDecoder().decode(data as Uint8Array))).toEqual({ id: "a1", tier: "voice" });
+    const [data, options] = vi.mocked(publishData).mock.calls[0]!;
+    expect(JSON.parse(new TextDecoder().decode(data))).toEqual({ id: "a1", tier: "voice" });
     expect(options).toEqual({
       reliable: true,
       topic: "rigel.action",

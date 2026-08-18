@@ -35,7 +35,7 @@ async function main(): Promise<void> {
   console.log("[voice] connected to room");
 
   const state = emptySessionState();
-  const agent = buildAgent(state);
+  const agent = buildAgent(state, server, room);
 
   const session = new voice.AgentSession({
     stt: new inference.STT({
@@ -62,6 +62,11 @@ async function main(): Promise<void> {
         apiKey: cfg.apiKey,
         apiSecret: cfg.apiSecret,
       }),
+      // Deterministic VAD, not the adaptive detector: the adaptive one
+      // classifies a short utterance near the agent's speech as a backchannel
+      // and discards it, and "confirm" spoken over the readback is exactly that
+      // shape. Dropping it would silently break the mutation gate.
+      interruption: { mode: "vad" },
     },
     keytermsOptions: { keyterms: state.keyterms },
   });
