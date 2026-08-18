@@ -59,6 +59,28 @@ describe("mintVoiceToken", () => {
     expect(phonePayload.video.canPublishData).toBeFalsy();
     expect(desktopPayload.video.canPublishData).toBe(true);
   });
+
+  test("agent tokens carry the agent marker and canUpdateOwnMetadata", async () => {
+    const agent = await mintVoiceToken("agent");
+    const payload = decodeJwt(agent!.token) as { video: Record<string, unknown> };
+    expect(payload.video.agent).toBe(true);
+    expect(payload.video.canUpdateOwnMetadata).toBe(true);
+  });
+
+  test("desktop tokens carry canUpdateOwnMetadata but not the agent marker", async () => {
+    const desktop = await mintVoiceToken("desktop");
+    const payload = decodeJwt(desktop!.token) as { video: Record<string, unknown> };
+    expect(payload.video.canUpdateOwnMetadata).toBe(true);
+    expect(payload.video.agent).toBeFalsy();
+  });
+
+  test("phone tokens carry neither the agent marker nor canUpdateOwnMetadata", async () => {
+    const phone = await mintVoiceToken("phone");
+    const payload = decodeJwt(phone!.token) as { video: Record<string, unknown> };
+    expect(payload.video.agent).toBeFalsy();
+    expect(payload.video.canUpdateOwnMetadata).toBeFalsy();
+    expect(payload.video.canPublishData).toBeFalsy();
+  });
 });
 
 describe("agentConfigResponse", () => {

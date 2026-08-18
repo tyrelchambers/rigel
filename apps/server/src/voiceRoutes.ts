@@ -19,6 +19,17 @@ export function identityFor(role: VoiceRole): string {
   return `rigel-phone-${randomBytes(4).toString("hex")}`;
 }
 
+/**
+ * `agent: true` and `canUpdateOwnMetadata: true` are load-bearing beyond
+ * what their names suggest. `@livekit/components-react`'s `useVoiceAssistant`
+ * finds the agent solely via `participant.kind === ParticipantKind.AGENT`
+ * (set server-side from the `agent` grant on the room-join token) and reads
+ * its state solely from the `lk.agent.state` attribute, which `@livekit/agents`
+ * writes with `localParticipant.setAttributes(...)`, a call that requires
+ * `canUpdateOwnMetadata` and silently rejects without it. Omit either grant
+ * and the renderer can never see the agent: it stays on "Connecting..."
+ * forever with no error, because nothing in this file's types says so.
+ */
 export async function mintVoiceToken(role: VoiceRole): Promise<{ url: string; token: string } | null> {
   const c = await voiceConfig();
   if (!c.url || !c.apiKey || !c.apiSecret) return null;
@@ -33,6 +44,8 @@ export async function mintVoiceToken(role: VoiceRole): Promise<{ url: string; to
     canPublish: true,
     canSubscribe: true,
     canPublishData: role !== "phone",
+    canUpdateOwnMetadata: role !== "phone",
+    agent: role === "agent",
   });
   return { url: c.url, token: await at.toJwt() };
 }
