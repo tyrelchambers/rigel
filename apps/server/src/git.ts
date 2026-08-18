@@ -55,7 +55,7 @@ import {
 } from "@rigel/k8s/src/pullRequestLedger";
 import { applyManifest } from "./install";
 
-const STATE_NAMESPACE = process.env.HELMSMAN_NAMESPACE ?? "default";
+export const STATE_NAMESPACE = process.env.HELMSMAN_NAMESPACE ?? "default";
 
 // ---------------------------------------------------------------------------
 // State: source list (ConfigMap) + tokens (Secret)
