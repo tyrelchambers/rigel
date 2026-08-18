@@ -163,7 +163,11 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
             <VoiceMark state="disconnected" level={0} />
           )}
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-[380px] gap-0 overflow-hidden p-0">
+        <PopoverContent
+          align="end"
+          className="w-[380px] gap-0 overflow-hidden rounded-xl p-0"
+          style={{ borderColor: "var(--border-strong)" }}
+        >
           {room ? (
             <RoomContext.Provider value={room}>
               <VoicePopoverBody
