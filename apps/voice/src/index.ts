@@ -3,8 +3,6 @@
 // No LiveKit worker registration/dispatch: this process serves exactly one room.
 import { voice, inference } from "@livekit/agents";
 import * as openai from "@livekit/agents-plugin-openai";
-import * as deepgram from "@livekit/agents-plugin-deepgram";
-import * as cartesia from "@livekit/agents-plugin-cartesia";
 import * as silero from "@livekit/agents-plugin-silero";
 import { Room, RoomEvent } from "@livekit/rtc-node";
 import { buildAgent, refreshInstructions } from "./agent.js";
@@ -47,13 +45,21 @@ async function main(): Promise<void> {
   });
 
   const session = new voice.AgentSession({
-    stt: new deepgram.STT({ apiKey: cfg.deepgramApiKey }),
+    stt: new inference.STT({
+      model: cfg.sttModel,
+      apiKey: cfg.apiKey,
+      apiSecret: cfg.apiSecret,
+    }),
     llm: new openai.LLM({
       baseURL: "https://openrouter.ai/api/v1",
       apiKey: cfg.openrouterApiKey,
       model: cfg.model,
     }),
-    tts: new cartesia.TTS({ apiKey: cfg.cartesiaApiKey }),
+    tts: new inference.TTS({
+      model: cfg.ttsModel,
+      apiKey: cfg.apiKey,
+      apiSecret: cfg.apiSecret,
+    }),
     vad: await silero.VAD.load(),
     turnHandling: {
       turnDetection: new inference.TurnDetector({
