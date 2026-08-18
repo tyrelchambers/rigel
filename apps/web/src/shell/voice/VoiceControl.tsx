@@ -21,6 +21,7 @@ import {
   useMicTrackRef,
   useVoiceRoom,
   type VoiceConnection,
+  type VoiceFailure,
 } from "./useVoiceRoom";
 import {
   ACTION_RESULT_TOPIC,
@@ -50,9 +51,17 @@ function LiveVoiceMark({ report }: { report: AgentReport }) {
   return <VoiceMark state={visual} level={visual === "speaking" ? agentLevel : micLevel} />;
 }
 
-export function notReadyMessage(configured: boolean, status: VoiceConnection): string {
+export function notReadyMessage(
+  configured: boolean,
+  status: VoiceConnection,
+  failure: VoiceFailure | null,
+): string {
   if (!configured) return "Add your LiveKit and OpenRouter keys in Settings to use voice.";
-  if (status === "error") return "Could not connect. Check the voice keys in Settings and try again.";
+  if (status === "error") {
+    return failure === "mic-denied"
+      ? "Rigel needs microphone access. Allow it in your system settings, then try again."
+      : "Could not connect. Check the voice keys in Settings and try again.";
+  }
   return "Connecting…";
 }
 
@@ -66,7 +75,7 @@ export function voiceButtonLabel(open: boolean, status: VoiceConnection): string
 
 export function VoiceControl({ style }: { style?: React.CSSProperties }) {
   const { data } = useVoiceStatus();
-  const { room, status, connect, disconnect } = useVoiceRoom();
+  const { room, status, failure, connect, disconnect } = useVoiceRoom();
   const { report, onAgentState } = useAgentReport(room);
   const [open, setOpen] = useState(false);
   const [pills, setPills] = useState<MentionCandidate[]>([]);
@@ -87,15 +96,19 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
     });
   }, []);
 
+  // Neither of these consults `status`. It is a render-time copy of the
+  // connection phase, and reading it here is exactly how a fast reopen used to
+  // skip the reconnect; connect/disconnect each own the live phase and are
+  // no-ops when there is nothing to do.
   const openSession = useCallback(() => {
     setOpen(true);
-    if (data?.configured && (status === "idle" || status === "error")) void connect();
-  }, [data?.configured, status, connect]);
+    if (data?.configured) void connect();
+  }, [data?.configured, connect]);
 
   const closeSession = useCallback(() => {
     setOpen(false);
-    if (status === "connecting" || status === "connected") disconnect();
-  }, [status, disconnect]);
+    disconnect();
+  }, [disconnect]);
 
   const reportResult = useCallback(
     async (frame: VoiceAction, ok: boolean, summary: string) => {
@@ -187,7 +200,7 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
             </RoomContext.Provider>
           ) : (
             <span className="px-3.5 py-3 text-2xs" style={{ color: "var(--fg-secondary)" }}>
-              {notReadyMessage(data.configured, status)}
+              {notReadyMessage(data.configured, status, failure)}
             </span>
           )}
         </PopoverContent>

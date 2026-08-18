@@ -6,11 +6,21 @@ import userEvent from "@testing-library/user-event";
 
 const h = vi.hoisted(() => {
   const rooms: FakeRoom[] = [];
-  const behavior = { failConnect: false, failMic: false, failPublish: false };
+  const pendingDisconnects: (() => void)[] = [];
+  const behavior = {
+    failConnect: false,
+    failMic: false,
+    failMicDenied: false,
+    failPublish: false,
+    holdDisconnect: false,
+  };
   class FakeRoom {
     handlers = new Map<string, () => void>();
     localParticipant = {
       setMicrophoneEnabled: vi.fn(async () => {
+        // livekit-client rethrows getUserMedia's own DOMException here, so the
+        // fake has to reject with the name and not a wrapper.
+        if (behavior.failMicDenied) throw Object.assign(new Error("Permission denied"), { name: "NotAllowedError" });
         if (behavior.failMic) throw new Error("mic failed");
       }),
       publishData: vi.fn(async (_payload: Uint8Array, options: { topic: string }) => {
@@ -27,8 +37,15 @@ const h = vi.hoisted(() => {
       // synchronously inside the disconnect() call, so a bug that leaves the
       // listener attached only shows up once the surrounding catch block has
       // already finished and set its own status.
+      const fire = () => this.handlers.get("disconnected")?.();
+      // holdDisconnect stretches that gap to whenever the test says, which is
+      // the window a user reopening the popover in a hurry lands in.
+      if (behavior.holdDisconnect) {
+        pendingDisconnects.push(fire);
+        return;
+      }
       await Promise.resolve();
-      this.handlers.get("disconnected")?.();
+      fire();
     });
     constructor() {
       rooms.push(this);
@@ -44,6 +61,7 @@ const h = vi.hoisted(() => {
   }
   return {
     rooms,
+    pendingDisconnects,
     FakeRoom,
     behavior,
     status: { data: undefined as { enabled: boolean; configured: boolean } | undefined },
@@ -98,7 +116,7 @@ vi.mock("@/components/ConfirmSheet", () => ({
 import { useCluster } from "@/store/cluster";
 import { notReadyMessage, resultSummary, voiceButtonLabel, VoiceControl } from "./VoiceControl";
 import { confirmSecondsLeft, VoicePopoverBody } from "./VoicePopoverBody";
-import { AGENT_REPORT_TIMEOUT_MS, useAgentReport, useVoiceRoom } from "./useVoiceRoom";
+import { AGENT_REPORT_TIMEOUT_MS, isMicDenied, useAgentReport, useVoiceRoom } from "./useVoiceRoom";
 import { AGENT_STATE_TOPIC } from "./VoiceSessionEffects";
 
 beforeEach(() => {
@@ -109,7 +127,10 @@ beforeEach(() => {
   h.transcriptions = [];
   h.behavior.failConnect = false;
   h.behavior.failMic = false;
+  h.behavior.failMicDenied = false;
   h.behavior.failPublish = false;
+  h.behavior.holdDisconnect = false;
+  h.pendingDisconnects.length = 0;
   h.channels.length = 0;
   h.actionResult = { code: 0, stdout: "", stderr: "" };
 });
@@ -344,6 +365,61 @@ test("closing while connecting never leaves a Room reachable through a later rec
   expect(await screen.findByText("End session")).toBeTruthy();
 });
 
+test("closing and reopening before Disconnected lands reconnects instead of dead-ending on Connecting", async () => {
+  h.status.data = { enabled: true, configured: true };
+  h.behavior.holdDisconnect = true;
+  render(<VoiceControl />);
+  const button = screen.getByLabelText("Voice assistant");
+  await userEvent.click(button);
+  await screen.findByText("End session");
+
+  await userEvent.click(button);
+  await userEvent.click(button);
+
+  await waitFor(() => expect(h.rooms).toHaveLength(2));
+  expect(await screen.findByText("End session")).toBeTruthy();
+
+  // The hung-up room's Disconnected finally arrives. It belongs to a session
+  // that has already been replaced and must not tear down the live one.
+  act(() => h.pendingDisconnects.forEach((fire) => fire()));
+  expect(screen.getByText("End session")).toBeTruthy();
+  expect(screen.queryByText("Connecting…")).toBeNull();
+});
+
+test("cancelling a connect and reopening before it settles lands a session, not a dead Connecting", async () => {
+  h.status.data = { enabled: true, configured: true };
+  let resolveToken: ((v: { url: string; token: string }) => void) | undefined;
+  h.fetchVoiceToken.mockImplementationOnce(
+    () => new Promise((resolve) => { resolveToken = resolve; }),
+  );
+  render(<VoiceControl />);
+  const button = screen.getByLabelText("Voice assistant");
+
+  await userEvent.click(button);
+  expect(await screen.findByText("Connecting…")).toBeTruthy();
+  await userEvent.click(button);
+  await userEvent.click(button);
+  expect(screen.getByText("Connecting…")).toBeTruthy();
+
+  await act(async () => {
+    resolveToken?.({ url: "wss://example", token: "jwt" });
+  });
+
+  await waitFor(() => expect(h.rooms).toHaveLength(1));
+  expect(await screen.findByText("End session")).toBeTruthy();
+  expect(h.rooms[0]!.disconnect).not.toHaveBeenCalled();
+});
+
+test("a denied microphone reaches the popover as a permission problem, not a keys problem", async () => {
+  h.status.data = { enabled: true, configured: true };
+  h.behavior.failMicDenied = true;
+  render(<VoiceControl />);
+  await userEvent.click(screen.getByLabelText("Voice assistant"));
+
+  expect(await screen.findByText(/microphone access/)).toBeTruthy();
+  expect(screen.queryByText(/keys in Settings/)).toBeNull();
+});
+
 test("voiceButtonLabel only names the ending action while the popover is open on a live or in-flight session", () => {
   expect(voiceButtonLabel(false, "idle")).toBe("Voice assistant");
   expect(voiceButtonLabel(true, "idle")).toBe("Voice assistant");
@@ -387,10 +463,22 @@ test("two connect() calls fired before the token resolves only produce one Room"
 });
 
 test("notReadyMessage distinguishes unconfigured, failed and in-flight", () => {
-  expect(notReadyMessage(false, "error")).toMatch(/Settings/);
-  expect(notReadyMessage(true, "error")).toMatch(/Could not connect/);
-  expect(notReadyMessage(true, "connecting")).toBe("Connecting…");
-  expect(notReadyMessage(true, "idle")).toBe("Connecting…");
+  expect(notReadyMessage(false, "error", null)).toMatch(/Settings/);
+  expect(notReadyMessage(true, "error", "connect")).toMatch(/Could not connect/);
+  expect(notReadyMessage(true, "connecting", null)).toBe("Connecting…");
+  expect(notReadyMessage(true, "idle", null)).toBe("Connecting…");
+});
+
+test("a denied microphone points at the system settings, not the voice keys", () => {
+  expect(notReadyMessage(true, "error", "mic-denied")).toMatch(/microphone access/);
+  expect(notReadyMessage(true, "error", "mic-denied")).not.toMatch(/keys/);
+});
+
+test("isMicDenied reads the DOMException name getUserMedia actually rejects with", () => {
+  expect(isMicDenied(Object.assign(new Error("Permission denied"), { name: "NotAllowedError" }))).toBe(true);
+  expect(isMicDenied(Object.assign(new Error("denied"), { name: "PermissionDeniedError" }))).toBe(true);
+  expect(isMicDenied(new Error("voice token failed: 409"))).toBe(false);
+  expect(isMicDenied(undefined)).toBe(false);
 });
 
 const AGENT = "rigel-agent";
