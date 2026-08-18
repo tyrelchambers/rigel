@@ -5,7 +5,7 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "./staticFiles";
 import { WebSocketServer } from "ws";
 import { resolveKubeconfigPath } from "./kubeconfig";
-import { kubectl, runProcess } from "@rigel/k8s/src/run";
+import { kubectl, runProcess, buildKubectlArgs } from "@rigel/k8s/src/run";
 import { WatchManager } from "./watchManager";
 import { makeWsHandlers } from "./ws";
 import { resolveRequestContext } from "./requestContext";
@@ -56,7 +56,9 @@ import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusM
 import { handleUpdates, type UpdatesRequest } from "./updates";
 import { chatConfig, setClaudeToken } from "./chatConfig";
 import { voiceStatus, voiceEnabled } from "./voiceConfig";
-import { mintVoiceToken, agentConfigResponse, checkWorkerToken, type VoiceRole } from "./voiceRoutes";
+import { mintVoiceToken, agentConfigResponse, checkWorkerToken, isVoiceWorkerRequest, VOICE_WORKER_HEADER, type VoiceRole } from "./voiceRoutes";
+import { recordAiAction } from "./aiActionLedger";
+import { buildAiActionEntry, summarizeActionDetail } from "@rigel/k8s/src/aiActionLedger";
 import { agentsView, setAgentAuth, setActiveAgent } from "./agentConfig";
 import { agentModels } from "./agentModels";
 import { getAgent, type AgentAuthMethod } from "./agentRegistry";
@@ -505,8 +507,20 @@ async function handler(req: Request): Promise<Response> {
         return Response.json({ command: fullCommand });
       }
 
-      // Execute mode: run kubectl and return the result
+      // Execute mode: run kubectl and return the result. Preview returned
+      // above, so only a command that actually ran reaches the ledger.
       const result = await kubectl(context, argv);
+      const outcome = result.code === 0 ? "success" : "failure";
+      void recordAiAction(
+        context,
+        buildAiActionEntry({
+          action: body,
+          source: isVoiceWorkerRequest(req) ? "voice" : "chat",
+          command: ["kubectl", ...buildKubectlArgs(context, argv)].join(" "),
+          outcome,
+          detail: summarizeActionDetail(outcome, result.stdout, result.stderr),
+        }),
+      );
       return Response.json(result);
     }
 
@@ -531,7 +545,7 @@ async function handler(req: Request): Promise<Response> {
     // session secret) can never read provider keys.
     if (url.pathname === "/api/voice/agent-config" && req.method === "GET") {
       if (!voiceEnabled()) return Response.json({ error: "voice is disabled" }, { status: 404 });
-      if (!checkWorkerToken(req.headers.get("x-rigel-voice-worker"))) {
+      if (!checkWorkerToken(req.headers.get(VOICE_WORKER_HEADER))) {
         return Response.json({ error: "forbidden" }, { status: 403 });
       }
       const cfg = await agentConfigResponse();
