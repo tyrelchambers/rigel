@@ -13,6 +13,12 @@ import { emptyAlertState, type AlertState } from "./alerts.js";
 export type Tier = "low" | "medium" | "blocked";
 export type Verdict = "auto" | "approved" | "rejected" | "escalated" | "skipped";
 export type Outcome = "success" | "failure" | "queued" | "skipped";
+/** Who initiated an action inside the agent's own loop. Deliberately excludes
+ * "voice": the in-cluster agent only receives Signal/Matrix text, so a voice
+ * value here would be unreachable. Voice-confirmed mutations are stamped in
+ * the separate desktop ledger's `AiActionSource` (packages/k8s/src/aiActionLedger.ts)
+ * instead, which answers a different question (which AI surface ran the
+ * mutation, not who approved it). */
 export type AuditActor = "autonomous" | "chat" | "pr";
 
 export interface AuditEntry {
