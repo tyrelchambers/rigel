@@ -3,7 +3,6 @@
 // No LiveKit worker registration/dispatch: this process serves exactly one room.
 import { voice, inference } from "@livekit/agents";
 import * as openai from "@livekit/agents-plugin-openai";
-import * as silero from "@livekit/agents-plugin-silero";
 import { Room, RoomEvent } from "@livekit/rtc-node";
 import { buildAgent, refreshInstructions } from "./agent.js";
 import { createServerClient, type AgentConfig, type ServerClient } from "./serverClient.js";
@@ -60,7 +59,9 @@ async function main(): Promise<void> {
       apiKey: cfg.apiKey,
       apiSecret: cfg.apiSecret,
     }),
-    vad: await silero.VAD.load(),
+    // No `vad:` on purpose. AgentSession auto-provisions the bundled
+    // inference.VAD({ model: "silero" }), which runs in-process via
+    // @livekit/local-inference. Passing one here would only duplicate it.
     turnHandling: {
       turnDetection: new inference.TurnDetector({
         version: "v1",

@@ -95,18 +95,17 @@ const permissionHookMjsBundle = build({
 // can't run tsx, so we bundle. Native N-API addons stay external and resolve
 // from apps/desktop/node_modules at fork time — same reason node-pty is a
 // desktop dependency above:
-//   - @livekit/rtc-node   the LiveKit room/track client
-//   - onnxruntime-node    used by silero's local VAD model; bundling it trips
-//     esbuild on its platform .node binaries, so it must stay external and
-//     resolvable from apps/desktop/node_modules
-//   - sharp               imported unconditionally by @livekit/agents' own
-//     llm/utils.js (image-frame encoding, unrelated to voice); if it isn't
+//   - @livekit/rtc-node          the LiveKit room/track client
+//   - @livekit/local-inference   backs the AgentSession's auto-provisioned VAD
+//     and the local turn-detector fallback. @livekit/agents loads it through
+//     `createRequire(import.meta.url)`, which after bundling resolves relative
+//     to THIS output file, so it must be an apps/desktop dependency. When it
+//     can't be resolved the SDK does not throw: the VAD silently becomes a
+//     no-op stream and end-of-turn prediction degrades to always-true.
+//   - sharp                      imported unconditionally by @livekit/agents'
+//     own llm/utils.js (image-frame encoding, unrelated to voice); if it isn't
 //     resolvable the import throws at module-load time and voice.mjs never
 //     boots, even though the audio-only pipeline here never touches it
-// @livekit/local-inference (on-device VAD/EOT, superseded here by silero +
-// the cloud turn detector) is NOT external: @livekit/agents loads it via a
-// runtime `createRequire(...)` wrapped in try/catch and degrades gracefully
-// when it's unresolvable, so it doesn't need to be a desktop dependency.
 const voiceBundle = build({
   entryPoints: ["../voice/src/index.ts"],
   outfile: "dist/voice.mjs",
@@ -114,7 +113,7 @@ const voiceBundle = build({
   platform: "node",
   format: "esm",
   target: "node22",
-  external: ["@livekit/rtc-node", "onnxruntime-node", "sharp", "electron", "node-pty"],
+  external: ["@livekit/rtc-node", "@livekit/local-inference", "sharp", "electron", "node-pty"],
   banner: {
     js: "import { createRequire as __rigelCreateRequire } from 'node:module'; const require = __rigelCreateRequire(import.meta.url);",
   },
