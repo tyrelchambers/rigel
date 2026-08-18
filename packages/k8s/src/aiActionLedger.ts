@@ -1,7 +1,7 @@
 // The AI-action audit ledger (HELM-18): every cluster mutation Rigel's chat and
 // voice surfaces perform, recorded durably so it outlives Kubernetes's ~1h Event
 // TTL. Stored as a newest-first, capped JSON array in the server-owned
-// `rigel-chat-actions` ConfigMap. Pure helpers only (no process spawning) —
+// `rigel-chat-actions` ConfigMap. Pure helpers only (no process spawning);
 // apps/server/src/aiActionLedger.ts owns the serialized read-modify-write.
 //
 // The agent surface keeps its own richer ledger in `assistant-state`; these two

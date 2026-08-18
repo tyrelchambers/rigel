@@ -395,3 +395,42 @@ test("captured output is bounded, and only its first line is stored", async () =
   expect(recorded[0]!.entry.detail).toBe("node/worker-1 cordoned");
   expect(recorded[0]!.entry.target).toEqual({ kind: "Node", name: "worker-1", namespace: "" });
 });
+
+test("output with no trailing newline still reaches the ledger detail", async () => {
+  const { recorded, proc, mgr } = ledgerHarness();
+  mgr.run({ id: "r5", action: { kind: "pause", name: "api", namespace: "web" } });
+
+  proc.stdout.end("deployment.apps/api paused");
+  await settle();
+  proc.emit("close", 0);
+  await settle();
+
+  expect(recorded[0]!.entry).toMatchObject({ kind: "Paused", detail: "deployment.apps/api paused" });
+});
+
+test("concurrent runs on one connection each get their own entry", async () => {
+  const recorded: AiActionEntry[] = [];
+  const procs: any[] = [];
+  const ws = fakeWs();
+  const mgr = new ActionRunManager(
+    ws as any,
+    null,
+    (() => { const p = fakeProc(); procs.push(p); return p; }) as any,
+    (_c, e) => recorded.push(e),
+  );
+  mgr.run({ id: "a", action: { kind: "restart", name: "api", namespace: "web" } });
+  mgr.run({ id: "b", action: { kind: "scale", name: "web", namespace: "web", replicas: 2 } });
+
+  procs[0].stdout.end("deployment.apps/api restarted\n");
+  procs[1].stdout.end("deployment.apps/web scaled\n");
+  await settle();
+  procs[0].emit("close", 0);
+  procs[1].emit("close", 0);
+  await settle();
+
+  expect(recorded.map((e) => e.kind)).toEqual(["Restarted", "Scaled"]);
+  expect(recorded.map((e) => e.detail)).toEqual([
+    "deployment.apps/api restarted",
+    "deployment.apps/web scaled",
+  ]);
+});
