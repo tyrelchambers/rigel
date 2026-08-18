@@ -375,6 +375,25 @@ export {
   type ChatPrRecord,
 } from "./pullRequestLedger";
 
+export {
+  AI_ACTIONS_CONFIGMAP,
+  AI_ACTIONS_DATA_KEY,
+  AI_ACTIONS_LABEL_VALUE,
+  AI_ACTIONS_MAX,
+  AI_ACTION_DETAIL_MAX,
+  aiActionsConfigMapJSON,
+  appendAiAction,
+  buildAiActionEntry,
+  parseAiActions,
+  summarizeActionDetail,
+  type AiActionEntry,
+  type AiActionInput,
+  type AiActionOutcome,
+  type AiActionSource,
+  type AiActionSubject,
+  type AiActionTarget,
+} from "./aiActionLedger";
+
 /** Kubernetes ObjectMeta (subset used by the web panels). */
 export interface ObjectMeta {
   name: string;
