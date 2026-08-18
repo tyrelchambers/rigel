@@ -36,12 +36,6 @@ async function main(): Promise<void> {
 
   const state = emptySessionState();
   const agent = buildAgent(state);
-  const decoder = new TextDecoder();
-  room.on(RoomEvent.DataReceived, (payload: Uint8Array, participant, _kind, topic?: string) => {
-    if (applyDataFrame(state, participant?.identity, topic, decoder.decode(payload))) {
-      void refreshInstructions(agent, state);
-    }
-  });
 
   const session = new voice.AgentSession({
     stt: new inference.STT({
@@ -69,7 +63,16 @@ async function main(): Promise<void> {
         apiSecret: cfg.apiSecret,
       }),
     },
+    keytermsOptions: { keyterms: state.keyterms },
   });
+
+  const decoder = new TextDecoder();
+  room.on(RoomEvent.DataReceived, (payload: Uint8Array, participant, _kind, topic?: string) => {
+    const effect = applyDataFrame(state, participant?.identity, topic, decoder.decode(payload));
+    if (effect.contextChanged) void refreshInstructions(agent, state);
+    if (effect.keytermsChanged) session.updateOptions({ keyterms: state.keyterms });
+  });
+
   await session.start({ agent, room });
   console.log("[voice] session started");
 }
