@@ -88,33 +88,26 @@ test("publishes the active context once on mount", () => {
   useCluster.setState({ activeContext: "prod" });
   const room = fakeRoom();
   render(<VoiceSessionEffects room={room} onPills={() => {}} />);
-  const publishData = room.localParticipant.publishData as ReturnType<typeof vi.fn>;
-  expect(publishData).toHaveBeenCalledTimes(1);
-  const { body, topic } = decode(publishData.mock.calls[0]!);
-  expect(topic).toBe("rigel.state");
-  expect(body).toEqual({ activeContext: "prod" });
+  expect(frames(room, "rigel.state")).toEqual([{ activeContext: "prod" }]);
 });
 
 test("publishes again when the active context changes", () => {
   const room = fakeRoom();
   render(<VoiceSessionEffects room={room} onPills={() => {}} />);
-  const publishData = room.localParticipant.publishData as ReturnType<typeof vi.fn>;
-  expect(publishData).toHaveBeenCalledTimes(1);
+  expect(frames(room, "rigel.state")).toHaveLength(1);
 
   useCluster.getState().applySwitch("staging", null);
-  expect(publishData).toHaveBeenCalledTimes(2);
-  const { body } = decode(publishData.mock.calls[1]!);
-  expect(body).toEqual({ activeContext: "staging" });
+  expect(frames(room, "rigel.state")).toEqual([{ activeContext: null }, { activeContext: "staging" }]);
 });
 
 test("does not republish when an unrelated store field changes", () => {
   const room = fakeRoom();
   render(<VoiceSessionEffects room={room} onPills={() => {}} />);
   const publishData = room.localParticipant.publishData as ReturnType<typeof vi.fn>;
-  expect(publishData).toHaveBeenCalledTimes(1);
+  const before = publishData.mock.calls.length;
 
   useCluster.getState().setNamespaceFilter("kube-system");
-  expect(publishData).toHaveBeenCalledTimes(1);
+  expect(publishData.mock.calls).toHaveLength(before);
 });
 
 test("stops publishing after unmount", () => {
@@ -122,9 +115,49 @@ test("stops publishing after unmount", () => {
   const { unmount } = render(<VoiceSessionEffects room={room} onPills={() => {}} />);
   const publishData = room.localParticipant.publishData as ReturnType<typeof vi.fn>;
   unmount();
+  const before = publishData.mock.calls.length;
 
   useCluster.getState().applySwitch("staging", null);
-  expect(publishData).toHaveBeenCalledTimes(1);
+  expect(publishData.mock.calls).toHaveLength(before);
+});
+
+test("publishes the cluster's resource names as keyterms on mount", () => {
+  useCluster.setState({ resources: RESOURCES });
+  const room = fakeRoom();
+  render(<VoiceSessionEffects room={room} onPills={() => {}} />);
+  expect(frames(room, "rigel.keyterms")).toEqual([
+    { names: ["web", "cert-manager", "web-7f9b64c8d-x2x4p"] },
+  ]);
+});
+
+test("publishes again when the resources change", () => {
+  const room = fakeRoom();
+  render(<VoiceSessionEffects room={room} onPills={() => {}} />);
+  expect(frames(room, "rigel.keyterms")).toEqual([{ names: [] }]);
+
+  useCluster.setState({ resources: RESOURCES });
+  expect(frames(room, "rigel.keyterms")).toHaveLength(2);
+  expect(frames(room, "rigel.keyterms")[1]).toEqual({
+    names: ["web", "cert-manager", "web-7f9b64c8d-x2x4p"],
+  });
+});
+
+test("a resource update that leaves the names alone does not republish", () => {
+  useCluster.setState({ resources: RESOURCES });
+  const room = fakeRoom();
+  render(<VoiceSessionEffects room={room} onPills={() => {}} />);
+  expect(frames(room, "rigel.keyterms")).toHaveLength(1);
+
+  useCluster.setState({
+    resources: {
+      ...RESOURCES,
+      deployments: {
+        ...RESOURCES.deployments,
+        "default/web": { metadata: { uid: "u-web", name: "web", namespace: "default" }, spec: { replicas: 3 }, status: { readyReplicas: 3 } },
+      },
+    },
+  });
+  expect(frames(room, "rigel.keyterms")).toHaveLength(1);
 });
 
 test("renders nothing", () => {

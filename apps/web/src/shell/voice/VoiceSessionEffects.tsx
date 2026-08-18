@@ -1,8 +1,9 @@
 /**
  * Headless, room-scoped effects that must outlive the popover: publish the
- * active context, resolve spoken resource names against the live store and
- * publish each new match's one-line summary to the worker, and record turns
- * into chat history (Task 11). Mounted next to RoomAudioRenderer.
+ * active context, prime the worker's STT with the cluster's resource names,
+ * resolve spoken resource names against the live store and publish each new
+ * match's one-line summary to the worker, and record turns into chat history
+ * (Task 11). Mounted next to RoomAudioRenderer.
  */
 import { useEffect, useRef } from "react";
 import type { Room } from "livekit-client";
@@ -10,6 +11,7 @@ import { useTranscriptions } from "@livekit/components-react";
 import { useCluster } from "@/store/cluster";
 import { buildMentions, type MentionCandidate } from "@/panels/chat/mentions";
 import { upsertSession } from "@/panels/chat/chatHistory";
+import { voiceKeytermNames } from "./keyterms";
 import { matchTranscript } from "./transcriptMatch";
 import { toHistoryEntry, type VoiceSegment } from "./voiceHistory";
 
@@ -38,6 +40,7 @@ export function VoiceSessionEffects({
   const sessionIdRef = useRef(`voice-${crypto.randomUUID()}`);
   const startedAtRef = useRef(Date.now());
   const recordedRef = useRef<string | null>(null);
+  const keytermsRef = useRef<string | null>(null);
 
   // Pills belong to a session, but they are held above this component so they
   // survive the popover. Ending one session and starting another mounts a new
@@ -53,6 +56,21 @@ export function VoiceSessionEffects({
     publish();
     return useCluster.subscribe((s, prev) => {
       if (s.activeContext !== prev.activeContext) publish();
+    });
+  }, [room]);
+
+  useEffect(() => {
+    keytermsRef.current = null;
+    const publish = () => {
+      const names = voiceKeytermNames(buildMentions(useCluster.getState().resources));
+      const signature = names.join("\u0000");
+      if (signature === keytermsRef.current) return;
+      keytermsRef.current = signature;
+      publishJson(room, "rigel.keyterms", { names });
+    };
+    publish();
+    return useCluster.subscribe((s, prev) => {
+      if (s.resources !== prev.resources) publish();
     });
   }, [room]);
 
