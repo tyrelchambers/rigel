@@ -19,6 +19,22 @@ export interface ActionResult {
   stderr: string;
 }
 
+/**
+ * The server answers /api/voice/agent-config with 409 (never thrown as a
+ * generic HTTP error) when voice is reachable but not configured: missing a
+ * required field in the rigel-user-config Secret, not a transient failure.
+ * `missing` names which fields, straight from the response body, so a caller
+ * can log something more useful than a bare status code.
+ */
+export class VoiceNotConfiguredError extends Error {
+  readonly missing: string[];
+  constructor(missing: string[]) {
+    super(`voice is not configured${missing.length > 0 ? ` (missing ${missing.join(", ")})` : ""}`);
+    this.name = "VoiceNotConfiguredError";
+    this.missing = missing;
+  }
+}
+
 export interface ServerClient {
   agentConfig(): Promise<AgentConfig>;
   previewAction(action: SuggestedAction, context: string | null): Promise<string[]>;
@@ -40,6 +56,10 @@ export function createServerClient(
   return {
     async agentConfig() {
       const res = await fetchFn(`${base}/api/voice/agent-config`, { headers: headers() });
+      if (res.status === 409) {
+        const body = (await res.json().catch(() => ({}))) as { missing?: string[] };
+        throw new VoiceNotConfiguredError(body.missing ?? []);
+      }
       if (!res.ok) throw new Error(`agent-config failed: ${res.status}`);
       return (await res.json()) as AgentConfig;
     },

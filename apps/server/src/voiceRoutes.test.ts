@@ -6,7 +6,7 @@ import {
   identityFor, mintVoiceToken, agentConfigResponse, checkWorkerToken, isVoiceWorkerRequest,
   maskedVoiceConfig, voiceConfigPatch, VOICE_ROOM, VOICE_WORKER_HEADER,
 } from "./voiceRoutes";
-import { setVoiceConfig } from "./voiceConfig";
+import { setVoiceConfig, voiceConfig, missingVoiceFields } from "./voiceConfig";
 import {
   __setClusterConfigIO,
   __useFakeClusterConfig,
@@ -126,6 +126,14 @@ describe("agentConfigResponse", () => {
   test("null without an OpenRouter key", async () => {
     delete process.env.OPENROUTER_API_KEY;
     expect(await agentConfigResponse(CTX)).toBeNull();
+  });
+
+  test("when null, missingVoiceFields names what index.ts reports in the 409 body", async () => {
+    delete process.env.LIVEKIT_API_SECRET;
+    delete process.env.OPENROUTER_API_KEY;
+    expect(await agentConfigResponse(CTX)).toBeNull();
+    const { config } = await voiceConfig(CTX);
+    expect(missingVoiceFields(config)).toEqual(["apiSecret", "openrouterApiKey"]);
   });
 });
 

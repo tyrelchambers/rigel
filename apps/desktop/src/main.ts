@@ -130,6 +130,14 @@ const VOICE_RESTART_DELAY_MS = 1_000;
 // cannot stay up is given up on sooner and quietly: the popover already tells
 // the user the agent is unavailable.
 const VOICE_MAX_CRASHES = 3;
+// sysexits.h EX_CONFIG, matching apps/voice/src/index.ts's NOT_CONFIGURED_EXIT_CODE.
+// A 409 from /api/voice/agent-config means "not configured", which restarting
+// faster cannot fix, so this exit code is kept OUT of the crash-loop guard
+// entirely (never pushed to voiceCrashes, never subject to VOICE_MAX_CRASHES)
+// and retried on its own slow, indefinite cadence instead: the user may fix
+// Settings at any time while the app keeps running.
+const VOICE_NOT_CONFIGURED_EXIT_CODE = 78;
+const VOICE_NOT_CONFIGURED_RETRY_MS = 30_000;
 
 // ── Free-port helper ────────────────────────────────────────────────────────
 // Ask the OS for an ephemeral port (listen(0)), read it, release it. There's a
@@ -412,6 +420,14 @@ function forkVoiceWorker(port: number): UtilityProcess | null {
     // the user next opens it. Same exclusions as the server: an intentional
     // quit, the headless smoke run, and the pre-window boot phase.
     if (quitting || SMOKE || mainWindow === null) return;
+    if (code === VOICE_NOT_CONFIGURED_EXIT_CODE) {
+      console.log(`[rigel] voice is not configured; retrying in ${VOICE_NOT_CONFIGURED_RETRY_MS}ms`);
+      setTimeout(() => {
+        if (quitting || mainWindow === null) return;
+        voiceProc = forkVoiceWorker(serverPort);
+      }, VOICE_NOT_CONFIGURED_RETRY_MS);
+      return;
+    }
     scheduleVoiceRestart();
   });
 

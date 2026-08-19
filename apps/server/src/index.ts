@@ -55,7 +55,7 @@ import type { CloudCluster } from "@rigel/cloud-connect/src/index";
 import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusMetrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
 import { chatConfig, setClaudeToken } from "./chatConfig";
-import { voiceStatus, voiceEnabled, setVoiceConfig } from "./voiceConfig";
+import { voiceStatus, voiceEnabled, setVoiceConfig, voiceConfig, missingVoiceFields } from "./voiceConfig";
 import { mintVoiceToken, agentConfigResponse, checkWorkerToken, isVoiceWorkerRequest, maskedVoiceConfig, voiceConfigPatch, VOICE_WORKER_HEADER, type VoiceRole } from "./voiceRoutes";
 import { recordAiAction } from "./aiActionLedger";
 import { buildAiActionEntry, summarizeActionDetail } from "@rigel/k8s/src/aiActionLedger";
@@ -589,7 +589,13 @@ async function handler(req: Request): Promise<Response> {
         return Response.json({ error: "forbidden" }, { status: 403 });
       }
       const cfg = await agentConfigResponse(context);
-      if (!cfg) return Response.json({ error: "voice is not configured" }, { status: 409 });
+      if (!cfg) {
+        const { config } = await voiceConfig(context);
+        return Response.json(
+          { error: "voice is not configured", missing: missingVoiceFields(config) },
+          { status: 409 },
+        );
+      }
       return Response.json(cfg);
     }
 

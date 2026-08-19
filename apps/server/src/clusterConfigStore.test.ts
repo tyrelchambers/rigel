@@ -178,12 +178,62 @@ describe("migration from local files", () => {
     expect(fake.logs.join("\n")).toMatch(/voice\.apiSecret could not be decrypted/);
   });
 
-  it("does not touch the local files when the cluster already has a Secret", async () => {
+  it("never overwrites a field the cluster already has, and drains the file once nothing local remains", async () => {
     const voice = await writeLocal([".rigel", "rigel-voice.json"], JSON.stringify({ url: "wss://local" }));
     fake.secrets.set(CTX, { ...emptyUserConfigData(), [VOICE_CONFIG_KEY]: JSON.stringify({ url: "wss://cluster" }) });
     const read = await readUserConfig(CTX);
     expect(JSON.parse(read.data[VOICE_CONFIG_KEY])).toEqual({ url: "wss://cluster" });
-    expect(await readFile(voice, "utf8")).toContain("wss://local");
+    await expect(readFile(voice, "utf8")).rejects.toThrow();
+  });
+
+  it("half-migrated: lifts the fields the Secret is missing without touching the one it already has", async () => {
+    fake.secrets.set(CTX, {
+      ...emptyUserConfigData(),
+      [VOICE_CONFIG_KEY]: JSON.stringify({ openrouterApiKey: "or-cluster" }),
+    });
+    const voice = await writeLocal(
+      [".rigel", "rigel-voice.json"],
+      JSON.stringify({
+        url: "wss://local",
+        apiKey: "key-local",
+        apiSecret: "secret-local",
+        openrouterApiKey: "or-local",
+        model: "openai/gpt-4.1-mini",
+        ttsModel: "cartesia/sonic-2",
+      }),
+    );
+
+    const read = await readUserConfig(CTX);
+    expect(JSON.parse(read.data[VOICE_CONFIG_KEY])).toEqual({
+      url: "wss://local",
+      apiKey: "key-local",
+      apiSecret: "secret-local",
+      openrouterApiKey: "or-cluster",
+      model: "openai/gpt-4.1-mini",
+      ttsModel: "cartesia/sonic-2",
+    });
+    await expect(readFile(voice, "utf8")).rejects.toThrow();
+  });
+
+  it("a field cleared through Settings is never resurrected from a local file kept around for an undecryptable one", async () => {
+    fake.secrets.set(CTX, {
+      ...emptyUserConfigData(),
+      [VOICE_CONFIG_KEY]: JSON.stringify({ model: "openai/gpt-4.1-mini" }),
+    });
+    const voice = await writeLocal(
+      [".rigel", "rigel-voice.json"],
+      JSON.stringify({ model: "openai/gpt-4.1-mini", apiSecret: "enc:v1:bm90LWRlY3J5cHRhYmxl" }),
+    );
+
+    const first = await readUserConfig(CTX);
+    expect(JSON.parse(first.data[VOICE_CONFIG_KEY])).toEqual({ model: "openai/gpt-4.1-mini" });
+    expect(await readFile(voice, "utf8")).not.toContain("openai/gpt-4.1-mini");
+    expect(await readFile(voice, "utf8")).toContain("enc:v1:");
+
+    __resetClusterConfigCache();
+    fake.secrets.set(CTX, { ...emptyUserConfigData(), [VOICE_CONFIG_KEY]: JSON.stringify({}) });
+    const cleared = await readUserConfig(CTX);
+    expect(JSON.parse(cleared.data[VOICE_CONFIG_KEY])).toEqual({});
   });
 
   it("keeps the local files when the push fails", async () => {

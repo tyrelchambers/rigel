@@ -111,13 +111,21 @@ export interface VoiceStatus {
   configured: boolean;
 }
 
-/** configured = the room can be minted AND the LLM can run. STT/TTS ride on
- * the same LiveKit apiKey/apiSecret already checked here. */
+/** The room can be minted only once all of these are set; STT/TTS ride on the
+ *  same LiveKit apiKey/apiSecret. */
+const REQUIRED_FOR_AGENT: readonly (keyof VoiceConfig)[] = ["url", "apiKey", "apiSecret", "openrouterApiKey"];
+
+/** Which required fields the effective config is still missing, in field
+ *  order. Empty when the agent can run. */
+export function missingVoiceFields(c: VoiceConfig): (keyof VoiceConfig)[] {
+  return REQUIRED_FOR_AGENT.filter((k) => !c[k]);
+}
+
 export async function voiceStatus(context: string | null): Promise<VoiceStatus> {
   const { config: c } = await voiceConfig(context);
   return {
     enabled: voiceEnabled(),
-    configured: !!(c.url && c.apiKey && c.apiSecret && c.openrouterApiKey),
+    configured: missingVoiceFields(c).length === 0,
   };
 }
 

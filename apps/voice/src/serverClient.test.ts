@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { createServerClient } from "./serverClient.js";
+import { createServerClient, VoiceNotConfiguredError } from "./serverClient.js";
 
 function fakeFetch(status: number, body: unknown) {
   return vi.fn(async () => ({ ok: status < 400, status, json: async () => body })) as unknown as typeof fetch;
@@ -19,6 +19,15 @@ describe("createServerClient", () => {
       "x-rigel-session": "sess",
       "x-rigel-voice-worker": "wt",
     });
+  });
+
+  test("agentConfig throws VoiceNotConfiguredError naming the missing fields on 409", async () => {
+    const f = fakeFetch(409, { error: "voice is not configured", missing: ["apiSecret", "openrouterApiKey"] });
+    const c = createServerClient(BASE, "sess", "wt", f);
+    const err = await c.agentConfig().catch((e) => e);
+    expect(err).toBeInstanceOf(VoiceNotConfiguredError);
+    expect((err as VoiceNotConfiguredError).missing).toEqual(["apiSecret", "openrouterApiKey"]);
+    expect((err as Error).message).toMatch(/apiSecret, openrouterApiKey/);
   });
 
   test("previewAction posts to /api/action?preview=1 with the context header", async () => {

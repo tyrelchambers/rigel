@@ -10,7 +10,7 @@ import { ParticipantKind, Room, RoomEvent } from "@livekit/rtc-node";
 import * as openai from "@livekit/agents-plugin-openai";
 import { buildAgent, refreshInstructions } from "./agent.js";
 import { announceAgentState, endDesktopSession } from "./lifecycle.js";
-import { createServerClient, type AgentConfig, type ServerClient } from "./serverClient.js";
+import { createServerClient, VoiceNotConfiguredError, type AgentConfig, type ServerClient } from "./serverClient.js";
 import { applyDataFrame, DESKTOP_IDENTITY, emptySessionState } from "./state.js";
 
 /**
@@ -28,12 +28,25 @@ async function bootstrap(server: ServerClient): Promise<AgentConfig> {
     try {
       return await server.agentConfig();
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`agent-config attempt ${i + 1}/30 failed: ${message}`);
       if (i === 29) throw err;
       await new Promise((r) => setTimeout(r, 1000));
     }
   }
   throw new Error("unreachable");
 }
+
+/**
+ * sysexits.h EX_CONFIG: "something was found in an unconfigured or
+ * misconfigured state". forkVoiceWorker's exit handler in
+ * apps/desktop/src/main.ts checks for this exact code (no shared package
+ * between these two processes to hold the constant) to retry a missing
+ * config patiently instead of feeding it to the crash-loop guard: unlike an
+ * actual crash, respawning faster cannot fix "not configured", only the user
+ * finishing Settings can.
+ */
+const NOT_CONFIGURED_EXIT_CODE = 78;
 
 async function main(): Promise<void> {
   // Every agents-SDK class logs from a field initializer, so constructing one
@@ -160,6 +173,11 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
+  if (err instanceof VoiceNotConfiguredError) {
+    console.error(err.message);
+    process.exit(NOT_CONFIGURED_EXIT_CODE);
+    return;
+  }
   console.error("fatal:", err);
   process.exit(1);
 });

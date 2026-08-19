@@ -14,7 +14,6 @@ import {
   USER_CONFIG_SECRET,
   emptyUserConfigData,
   isSecretAbsent,
-  isUserConfigEmpty,
   parseUserConfigSecret,
   userConfigSecretJSON,
   type UserConfigData,
@@ -22,7 +21,7 @@ import {
 } from "@rigel/k8s/src/userConfig";
 import { applyManifest } from "./install";
 import { STATE_NAMESPACE } from "./git";
-import { readLocalConfig, removeLocalConfig } from "./localConfigMigration";
+import { readLocalConfig } from "./localConfigMigration";
 
 /** "ok" = the cluster answered, so an empty config means "not configured yet".
  *  "unavailable" = nothing was read, which is a different situation entirely. */
@@ -79,7 +78,6 @@ interface CacheEntry {
 }
 
 const cache = new Map<string, CacheEntry>();
-const migrated = new Set<string>();
 
 function cacheKey(context: string | null): string {
   return context ?? "";
@@ -88,7 +86,6 @@ function cacheKey(context: string | null): string {
 /** Test seam: drop every cached read and let migration run again. */
 export function __resetClusterConfigCache(): void {
   cache.clear();
-  migrated.clear();
 }
 
 function statusOf(context: string | null, state: ClusterConfigState, message?: string): ClusterConfigStatus {
@@ -106,43 +103,36 @@ function failureMessage(res: RunResult): string {
 }
 
 /**
- * Lift whatever the local files still hold into a cluster that has no Secret
- * yet, then drain those files so no credential lives in two places. Files whose
- * values could not be decrypted here are kept and named in the log.
+ * Lift whatever the local files still hold into `current`, one field at a
+ * time: a field already present in `current` is left alone, and only a field
+ * still missing there gets pulled from a local file. Runs on every read, not
+ * just while the Secret is absent, so a Secret that only has SOME fields
+ * keeps making progress instead of freezing migration forever. Fields whose
+ * values could not be decrypted here are named in the log and never dropped
+ * from their file.
  */
-async function migrateLocalConfig(context: string | null): Promise<UserConfigData | null> {
-  const key = cacheKey(context);
-  if (migrated.has(key)) return null;
-  migrated.add(key);
-
-  const local = await readLocalConfig();
+async function migrateLocalConfig(context: string | null, current: UserConfigData): Promise<UserConfigData | null> {
+  const local = await readLocalConfig(current);
   if (!local) return null;
-  const data = { ...emptyUserConfigData(), ...local.data };
-  if (isUserConfigEmpty(data)) {
-    if (local.undecryptable.length === 0) await removeLocalConfig(local.files);
+
+  if (Object.keys(local.data).length === 0) {
+    await local.drain();
     return null;
   }
 
+  const data = { ...current, ...local.data };
   const res = await io.write(context, userConfigSecretJSON(STATE_NAMESPACE, data));
   if (res.code !== 0) {
-    migrated.delete(key);
     io.log(
       `rigel: could not move local config into ${USER_CONFIG_SECRET} on ${context ?? "the current context"}: ${failureMessage(res)}`,
     );
     return null;
   }
 
-  if (local.undecryptable.length > 0) {
-    io.log(
-      `rigel: moved local config into ${USER_CONFIG_SECRET} on ${context ?? "the current context"}, but ${local.undecryptable.join(", ")} could not be decrypted on this machine, so ${local.files.join(", ")} were left in place`,
-    );
-    return data;
-  }
-
-  const failed = await removeLocalConfig(local.files);
+  await local.drain();
   io.log(
-    failed.length > 0
-      ? `rigel: moved local config into ${USER_CONFIG_SECRET} on ${context ?? "the current context"}; could not remove ${failed.join(", ")}`
+    local.undecryptable.length > 0
+      ? `rigel: moved local config into ${USER_CONFIG_SECRET} on ${context ?? "the current context"}, but ${local.undecryptable.join(", ")} could not be decrypted on this machine and were left in the local file`
       : `rigel: moved local config into ${USER_CONFIG_SECRET} on ${context ?? "the current context"} and removed ${local.files.join(", ")}`,
   );
   return data;
@@ -151,15 +141,14 @@ async function migrateLocalConfig(context: string | null): Promise<UserConfigDat
 async function loadUserConfig(context: string | null): Promise<ClusterConfigRead> {
   const res = await io.read(context);
   if (res.code === 0) {
-    return {
-      ...statusOf(context, "ok"),
-      data: parseUserConfigSecret(res.stdout, (v) => Buffer.from(v, "base64").toString("utf8")),
-    };
+    const data = parseUserConfigSecret(res.stdout, (v) => Buffer.from(v, "base64").toString("utf8"));
+    const lifted = await migrateLocalConfig(context, data);
+    return { ...statusOf(context, "ok"), data: lifted ?? data };
   }
   if (!isSecretAbsent(res)) {
     return { ...statusOf(context, "unavailable", failureMessage(res)), data: emptyUserConfigData() };
   }
-  const lifted = await migrateLocalConfig(context);
+  const lifted = await migrateLocalConfig(context, emptyUserConfigData());
   return { ...statusOf(context, "ok"), data: lifted ?? emptyUserConfigData() };
 }
 

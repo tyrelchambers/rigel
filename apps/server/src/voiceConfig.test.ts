@@ -10,7 +10,7 @@ import {
   type FakeClusterConfig,
 } from "./clusterConfigStore";
 import {
-  voiceConfig, voiceStatus, setVoiceConfig, envVoiceFields,
+  voiceConfig, voiceStatus, missingVoiceFields, setVoiceConfig, envVoiceFields,
   DEFAULT_VOICE_MODEL, DEFAULT_STT_MODEL, DEFAULT_TTS_MODEL, VOICE_FIELDS, VOICE_SECRET_FIELDS,
 } from "./voiceConfig";
 
@@ -122,6 +122,23 @@ describe("voiceStatus", () => {
     process.env.RIGEL_VOICE = "1";
     await setVoiceConfig(CTX, { url: "wss://x", apiKey: "k", apiSecret: "s", openrouterApiKey: "o" });
     expect(await voiceStatus(CTX)).toEqual({ enabled: true, configured: true });
+  });
+});
+
+describe("missingVoiceFields", () => {
+  test("names each required field still absent, in field order", async () => {
+    const { config } = await voiceConfig(CTX);
+    expect(missingVoiceFields(config)).toEqual(["url", "apiKey", "apiSecret", "openrouterApiKey"]);
+  });
+
+  test("shrinks as fields are set, and is empty once the agent can run", async () => {
+    await setVoiceConfig(CTX, { url: "wss://x", apiKey: "k" });
+    const { config } = await voiceConfig(CTX);
+    expect(missingVoiceFields(config)).toEqual(["apiSecret", "openrouterApiKey"]);
+
+    await setVoiceConfig(CTX, { apiSecret: "s", openrouterApiKey: "o" });
+    const { config: full } = await voiceConfig(CTX);
+    expect(missingVoiceFields(full)).toEqual([]);
   });
 });
 
