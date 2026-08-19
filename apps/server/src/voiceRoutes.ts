@@ -7,6 +7,7 @@
 import { randomBytes } from "node:crypto";
 import { AccessToken } from "livekit-server-sdk";
 import { envVoiceFields, voiceConfig, voiceStatus, VOICE_FIELDS, type VoiceConfig, type VoiceStatus } from "./voiceConfig";
+import type { ClusterConfigStatus } from "./clusterConfigStore";
 import { checkSessionSecret } from "./sessionAuth";
 
 export const VOICE_ROOM = "rigel-voice";
@@ -37,8 +38,11 @@ export function identityFor(role: VoiceRole): string {
  * worker publishes its own on `rigel.agent.state`), but the hook still supplies
  * the agent's audio track for the waveform.
  */
-export async function mintVoiceToken(role: VoiceRole): Promise<{ url: string; token: string } | null> {
-  const c = await voiceConfig();
+export async function mintVoiceToken(
+  role: VoiceRole,
+  context: string | null,
+): Promise<{ url: string; token: string } | null> {
+  const { config: c } = await voiceConfig(context);
   if (!c.url || !c.apiKey || !c.apiSecret) return null;
   const at = new AccessToken(c.apiKey, c.apiSecret, { identity: identityFor(role), ttl: "6h" });
   if (role === "agent") at.kind = "agent";
@@ -69,9 +73,9 @@ export interface AgentConfigResponse {
   openrouterApiKey: string;
 }
 
-export async function agentConfigResponse(): Promise<AgentConfigResponse | null> {
-  const c = await voiceConfig();
-  const minted = await mintVoiceToken("agent");
+export async function agentConfigResponse(context: string | null): Promise<AgentConfigResponse | null> {
+  const { config: c } = await voiceConfig(context);
+  const minted = await mintVoiceToken("agent", context);
   if (!minted || !c.openrouterApiKey) return null;
   return {
     ...minted,
@@ -100,10 +104,13 @@ export interface MaskedVoiceConfig {
   /** Field to the env var supplying it; those fields are not editable here. */
   env: Partial<Record<keyof VoiceConfig, string>>;
   status: VoiceStatus;
+  /** Which cluster these values live in, and whether it could be read. Empty
+   *  values with an unreachable cluster are NOT "not configured yet". */
+  cluster: ClusterConfigStatus;
 }
 
-export async function maskedVoiceConfig(): Promise<MaskedVoiceConfig> {
-  const c = await voiceConfig();
+export async function maskedVoiceConfig(context: string | null): Promise<MaskedVoiceConfig> {
+  const { config: c, cluster } = await voiceConfig(context);
   return {
     url: c.url,
     apiKey: c.apiKey,
@@ -113,7 +120,8 @@ export async function maskedVoiceConfig(): Promise<MaskedVoiceConfig> {
     apiSecretSet: !!c.apiSecret,
     openrouterApiKeySet: !!c.openrouterApiKey,
     env: envVoiceFields(),
-    status: await voiceStatus(),
+    status: await voiceStatus(context),
+    cluster,
   };
 }
 

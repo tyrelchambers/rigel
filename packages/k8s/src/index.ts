@@ -109,6 +109,21 @@ export {
 } from "./gitSources";
 
 export {
+  USER_CONFIG_SECRET,
+  VOICE_CONFIG_KEY,
+  AGENTS_CONFIG_KEY,
+  CLAUDE_TOKEN_KEY,
+  USER_CONFIG_KEYS,
+  type UserConfigKey,
+  type UserConfigData,
+  emptyUserConfigData,
+  isUserConfigEmpty,
+  parseUserConfigSecret,
+  userConfigSecretJSON,
+  isSecretAbsent,
+} from "./userConfig";
+
+export {
   type MetricsInstallBackend,
   type InstalledBackend,
   METRICS_SERVICE_NAME,

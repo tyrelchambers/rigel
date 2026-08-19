@@ -7,6 +7,12 @@ import {
   maskedVoiceConfig, voiceConfigPatch, VOICE_ROOM, VOICE_WORKER_HEADER,
 } from "./voiceRoutes";
 import { setVoiceConfig } from "./voiceConfig";
+import {
+  __setClusterConfigIO,
+  __useFakeClusterConfig,
+  __resetClusterConfigCache,
+  type FakeClusterConfig,
+} from "./clusterConfigStore";
 
 function decodeJwt(token: string): Record<string, unknown> {
   return JSON.parse(Buffer.from(token.split(".")[1]!, "base64url").toString("utf8"));
@@ -18,13 +24,16 @@ const ENV = [
 ];
 let prev: Record<string, string | undefined>;
 let prevHome: string | undefined;
+let fake: FakeClusterConfig;
+/** Config is per cluster, so every call names the context it belongs to. */
+const CTX = "test-cluster";
 
 beforeEach(async () => {
+  fake = __useFakeClusterConfig();
   prev = Object.fromEntries(ENV.map((k) => [k, process.env[k]]));
-  // voiceConfig falls back to ~/.rigel/rigel-voice.json for any field the env
-  // does not set, so a test that deletes one env var is otherwise answered by
-  // whatever the developer has configured on this machine. Point HOME at an
-  // empty directory so "unconfigured" means unconfigured.
+  // Any field the env does not set is answered by the cluster's Secret, which
+  // the fake starts empty. HOME still points somewhere empty so the one-time
+  // local migration finds nothing of the developer's to lift.
   prevHome = process.env.HOME;
   process.env.HOME = await mkdtemp(join(tmpdir(), "rigel-voice-routes-"));
   process.env.LIVEKIT_URL = "wss://test.livekit.example";
@@ -35,6 +44,8 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  __setClusterConfigIO(null);
+  __resetClusterConfigCache();
   process.env.HOME = prevHome;
   for (const [k, v] of Object.entries(prev)) {
     if (v === undefined) delete process.env[k];
@@ -52,7 +63,7 @@ describe("identityFor", () => {
 
 describe("mintVoiceToken", () => {
   test("mints a JWT for the fixed room with join + data grants", async () => {
-    const minted = await mintVoiceToken("desktop");
+    const minted = await mintVoiceToken("desktop", CTX);
     expect(minted?.url).toBe("wss://test.livekit.example");
     const payload = decodeJwt(minted!.token) as { sub: string; video: Record<string, unknown> };
     expect(payload.sub).toBe("rigel-desktop");
@@ -63,12 +74,12 @@ describe("mintVoiceToken", () => {
 
   test("returns null when LiveKit is unconfigured", async () => {
     delete process.env.LIVEKIT_URL;
-    expect(await mintVoiceToken("desktop")).toBeNull();
+    expect(await mintVoiceToken("desktop", CTX)).toBeNull();
   });
 
   test("phone tokens cannot publish data; desktop tokens can", async () => {
-    const phone = await mintVoiceToken("phone");
-    const desktop = await mintVoiceToken("desktop");
+    const phone = await mintVoiceToken("phone", CTX);
+    const desktop = await mintVoiceToken("desktop", CTX);
     const phonePayload = decodeJwt(phone!.token) as { video: Record<string, unknown> };
     const desktopPayload = decodeJwt(desktop!.token) as { video: Record<string, unknown> };
     expect(phonePayload.video.canPublishData).toBeFalsy();
@@ -76,7 +87,7 @@ describe("mintVoiceToken", () => {
   });
 
   test("agent tokens carry the agent kind claim, the agent marker, and canUpdateOwnMetadata", async () => {
-    const agent = await mintVoiceToken("agent");
+    const agent = await mintVoiceToken("agent", CTX);
     const payload = decodeJwt(agent!.token) as { kind?: string; video: Record<string, unknown> };
     expect(payload.kind).toBe("agent");
     expect(payload.video.agent).toBe(true);
@@ -84,7 +95,7 @@ describe("mintVoiceToken", () => {
   });
 
   test("desktop tokens carry canUpdateOwnMetadata but neither the agent kind nor the marker", async () => {
-    const desktop = await mintVoiceToken("desktop");
+    const desktop = await mintVoiceToken("desktop", CTX);
     const payload = decodeJwt(desktop!.token) as { kind?: string; video: Record<string, unknown> };
     expect(payload.video.canUpdateOwnMetadata).toBe(true);
     expect(payload.video.agent).toBeFalsy();
@@ -92,7 +103,7 @@ describe("mintVoiceToken", () => {
   });
 
   test("phone tokens carry neither the agent marker nor canUpdateOwnMetadata", async () => {
-    const phone = await mintVoiceToken("phone");
+    const phone = await mintVoiceToken("phone", CTX);
     const payload = decodeJwt(phone!.token) as { video: Record<string, unknown> };
     expect(payload.video.agent).toBeFalsy();
     expect(payload.video.canUpdateOwnMetadata).toBeFalsy();
@@ -102,7 +113,7 @@ describe("mintVoiceToken", () => {
 
 describe("agentConfigResponse", () => {
   test("carries the agent token plus provider keys and model", async () => {
-    const res = await agentConfigResponse();
+    const res = await agentConfigResponse(CTX);
     expect(res?.openrouterApiKey).toBe("or-key");
     expect(res?.model).toBeTruthy();
     expect(res?.apiKey).toBe("APIkey");
@@ -114,13 +125,13 @@ describe("agentConfigResponse", () => {
 
   test("null without an OpenRouter key", async () => {
     delete process.env.OPENROUTER_API_KEY;
-    expect(await agentConfigResponse()).toBeNull();
+    expect(await agentConfigResponse(CTX)).toBeNull();
   });
 });
 
 describe("maskedVoiceConfig", () => {
   test("reports secrets as set/unset booleans, never as values", async () => {
-    const m = await maskedVoiceConfig();
+    const m = await maskedVoiceConfig(CTX);
     expect(m.url).toBe("wss://test.livekit.example");
     expect(m.apiKey).toBe("APIkey");
     expect(m.apiSecretSet).toBe(true);
@@ -132,21 +143,35 @@ describe("maskedVoiceConfig", () => {
 
   test("names the env var supplying each env-sourced field", async () => {
     delete process.env.LIVEKIT_API_KEY;
-    await setVoiceConfig({ apiKey: "from-file" });
-    const m = await maskedVoiceConfig();
+    await setVoiceConfig(CTX, { apiKey: "from-cluster" });
+    const m = await maskedVoiceConfig(CTX);
     expect(m.env.url).toBe("LIVEKIT_URL");
     expect(m.env.apiSecret).toBe("LIVEKIT_API_SECRET");
     expect(m.env.apiKey).toBeUndefined();
-    expect(m.apiKey).toBe("from-file");
+    expect(m.apiKey).toBe("from-cluster");
   });
 
   test("carries the models and the feature status", async () => {
     delete process.env.OPENROUTER_API_KEY;
-    const m = await maskedVoiceConfig();
+    const m = await maskedVoiceConfig(CTX);
     expect(m.model).toBeTruthy();
     expect(m.sttModel).toBeTruthy();
     expect(m.ttsModel).toBeTruthy();
     expect(m.status).toEqual({ enabled: false, configured: false });
+  });
+
+  test("names the cluster the config belongs to", async () => {
+    const m = await maskedVoiceConfig(CTX);
+    expect(m.cluster.context).toBe(CTX);
+    expect(m.cluster.state).toBe("ok");
+    expect(m.cluster.secret).toBe("rigel-user-config");
+  });
+
+  test("an unreachable cluster is reported as such, not as unconfigured", async () => {
+    fake.reachable = false;
+    const m = await maskedVoiceConfig(CTX);
+    expect(m.cluster.state).toBe("unavailable");
+    expect(m.cluster.message).toMatch(/connection to the server/);
   });
 });
 

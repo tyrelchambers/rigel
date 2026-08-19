@@ -336,7 +336,7 @@ async function installAssistant(
   // Settings) so they don't re-enter it.
   const creds = parseCredentials(req);
   if (!creds.claudeToken) {
-    const saved = (await effectiveClaudeToken()) ?? "";
+    const saved = (await effectiveClaudeToken(context)) ?? "";
     if (saved.trim() !== "") creds.claudeToken = saved.trim();
   }
 

@@ -163,6 +163,12 @@ const bootAccessReady = accessFor(bootContext).then((a) => {
 // survives. The forwards bind the SERVER's 127.0.0.1 — see the module caveat.
 const portForwards = new PortForwardManager(bootContext);
 
+// Config writes land in a per-cluster Secret, so an unreachable cluster is the
+// expected failure and must reach the UI as its own message, not a bare 500.
+function errorText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 async function handler(req: Request): Promise<Response> {
   {
     const url = new URL(req.url);
@@ -404,16 +410,20 @@ async function handler(req: Request): Promise<Response> {
     // take precedence and are not overwritten. Lets a self-hoster enable chat
     // from the Settings screen without an env restart.
     if (url.pathname === "/api/chat-config" && req.method === "GET") {
-      return Response.json(await chatConfig());
+      return Response.json(await chatConfig(context));
     }
     if (url.pathname === "/api/chat-config" && req.method === "POST") {
       const body = (await req.json().catch(() => ({}))) as { token?: unknown };
-      await setClaudeToken(typeof body.token === "string" ? body.token : "");
-      return Response.json(await chatConfig());
+      try {
+        await setClaudeToken(context, typeof body.token === "string" ? body.token : "");
+      } catch (err) {
+        return Response.json({ error: errorText(err) }, { status: 503 });
+      }
+      return Response.json(await chatConfig(context));
     }
 
     if (url.pathname === "/api/agents" && req.method === "GET") {
-      return Response.json(await agentsView());
+      return Response.json(await agentsView(context));
     }
 
     // POST /api/agents/active  { id } — switch the active agent.
@@ -425,7 +435,11 @@ async function handler(req: Request): Promise<Response> {
       if (agent.status === "comingSoon") {
         return Response.json({ error: "agent not available yet" }, { status: 409 });
       }
-      return Response.json(await setActiveAgent(agent.id));
+      try {
+        return Response.json(await setActiveAgent(agent.id, context));
+      } catch (err) {
+        return Response.json({ error: errorText(err) }, { status: 503 });
+      }
     }
 
     // POST /api/agents/<id>/auth  { authMethod, secret? }
@@ -452,8 +466,11 @@ async function handler(req: Request): Promise<Response> {
       if (authMethod === "apiKey" && !secret.trim()) {
         return Response.json({ error: "an API key is required" }, { status: 400 });
       }
-      const view = await setAgentAuth(agent.id, { authMethod, secret });
-      return Response.json(view);
+      try {
+        return Response.json(await setAgentAuth(agent.id, { authMethod, secret }, context));
+      } catch (err) {
+        return Response.json({ error: errorText(err) }, { status: 503 });
+      }
     }
 
     // GET /api/agents/<id>/models — the models + efforts this agent can run, for
@@ -526,7 +543,7 @@ async function handler(req: Request): Promise<Response> {
 
     // GET /api/voice/status: is the voice feature flag on, and is it configured.
     if (url.pathname === "/api/voice/status" && req.method === "GET") {
-      return Response.json(await voiceStatus());
+      return Response.json(await voiceStatus(context));
     }
 
     // GET /api/voice/config: the Settings view of the credentials. Masked: the
@@ -535,7 +552,7 @@ async function handler(req: Request): Promise<Response> {
     // empty string clears it. Env-supplied fields still win in voiceConfig(),
     // so the panel reports them instead of offering them for edit.
     if (url.pathname === "/api/voice/config" && req.method === "GET") {
-      return Response.json(await maskedVoiceConfig());
+      return Response.json(await maskedVoiceConfig(context));
     }
     if (url.pathname === "/api/voice/config" && req.method === "PUT") {
       let body: unknown;
@@ -544,8 +561,12 @@ async function handler(req: Request): Promise<Response> {
       } catch {
         return Response.json({ error: "invalid JSON body" }, { status: 400 });
       }
-      await setVoiceConfig(voiceConfigPatch(body));
-      return Response.json(await maskedVoiceConfig());
+      try {
+        await setVoiceConfig(context, voiceConfigPatch(body));
+      } catch (err) {
+        return Response.json({ error: errorText(err) }, { status: 503 });
+      }
+      return Response.json(await maskedVoiceConfig(context));
     }
 
     // POST /api/voice/token: mint a room JWT for the renderer (or a phone, for
@@ -554,7 +575,7 @@ async function handler(req: Request): Promise<Response> {
       if (!voiceEnabled()) return Response.json({ error: "voice is disabled" }, { status: 404 });
       const body = (await req.json().catch(() => ({}))) as { role?: string };
       const role: VoiceRole = body.role === "phone" ? "phone" : "desktop";
-      const minted = await mintVoiceToken(role);
+      const minted = await mintVoiceToken(role, context);
       if (!minted) return Response.json({ error: "voice is not configured" }, { status: 409 });
       return Response.json(minted);
     }
@@ -567,7 +588,7 @@ async function handler(req: Request): Promise<Response> {
       if (!checkWorkerToken(req.headers.get(VOICE_WORKER_HEADER))) {
         return Response.json({ error: "forbidden" }, { status: 403 });
       }
-      const cfg = await agentConfigResponse();
+      const cfg = await agentConfigResponse(context);
       if (!cfg) return Response.json({ error: "voice is not configured" }, { status: 409 });
       return Response.json(cfg);
     }

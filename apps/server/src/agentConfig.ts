@@ -1,14 +1,23 @@
-// Per-agent auth config, persisted to ~/.claude/rigel-agents.json (0600).
+// Per-agent auth config, stored per cluster in the rigel-user-config Secret.
 //
-// Claude is special: its SUBSCRIPTION token keeps living in the existing
-// rigel-oauth-token file (env CLAUDE_CODE_OAUTH_TOKEN still wins), reusing
-// chatConfig.ts. This file only stores the chosen auth method + any API keys.
+// Claude is special: its SUBSCRIPTION token keeps its own key in that Secret
+// (env CLAUDE_CODE_OAUTH_TOKEN still wins), reusing chatConfig.ts. This module
+// only stores the chosen auth method + any API keys.
+//
+// Provider LOGINS (codex/gemini/opencode auth.json) stay on disk: those files
+// belong to the vendor CLIs, which read them from the home directory, and Rigel
+// neither writes nor moves them.
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { access, readFile, writeFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { commandOnPath } from "@rigel/k8s/src/toolPath";
+import { AGENTS_CONFIG_KEY } from "@rigel/k8s/src/userConfig";
 import { effectiveClaudeToken, setClaudeToken } from "./chatConfig";
-import { decryptSecret, encryptSecret } from "./secretStore";
+import {
+  readUserConfig,
+  writeUserConfig,
+  type ClusterConfigStatus,
+} from "./clusterConfigStore";
 import {
   getAgent,
   listAgents,
@@ -45,21 +54,30 @@ interface AgentsConfig {
   agents: Partial<Record<AgentId, AgentAuthEntry>>;
 }
 
-function configPath(): string {
-  return join(homedir(), ".claude", "rigel-agents.json");
-}
-
-export async function readAgentsConfig(): Promise<AgentsConfig> {
+function parseAgentsConfig(blob: string): AgentsConfig {
   try {
-    const parsed = JSON.parse(await readFile(configPath(), "utf8")) as Partial<AgentsConfig>;
+    const parsed = JSON.parse(blob || "{}") as Partial<AgentsConfig>;
     return { activeAgentId: parsed.activeAgentId ?? "claude", agents: parsed.agents ?? {} };
   } catch {
     return { activeAgentId: "claude", agents: {} };
   }
 }
 
-async function writeAgentsConfig(cfg: AgentsConfig): Promise<void> {
-  await writeFile(configPath(), JSON.stringify(cfg, null, 2), { mode: 0o600 });
+export async function readAgentsConfig(context: string | null): Promise<AgentsConfig> {
+  return parseAgentsConfig((await readUserConfig(context)).data[AGENTS_CONFIG_KEY]);
+}
+
+/** Apply `edit` to the stored config inside the write queue, so a concurrent
+ *  save to another agent's entry cannot be lost. */
+async function updateAgentsConfig(
+  context: string | null,
+  edit: (cfg: AgentsConfig) => void,
+): Promise<void> {
+  await writeUserConfig(context, (current) => {
+    const cfg = parseAgentsConfig(current[AGENTS_CONFIG_KEY]);
+    edit(cfg);
+    return { [AGENTS_CONFIG_KEY]: JSON.stringify(cfg) };
+  });
 }
 
 function authMethodFor(cfg: AgentsConfig, id: AgentId): AgentAuthMethod {
@@ -67,28 +85,26 @@ function authMethodFor(cfg: AgentsConfig, id: AgentId): AgentAuthMethod {
 }
 
 /** Env vars to launch Claude with, per its active auth method. */
-export async function claudeAuthEnv(): Promise<Record<string, string>> {
-  const cfg = await readAgentsConfig();
+export async function claudeAuthEnv(context: string | null): Promise<Record<string, string>> {
+  const cfg = await readAgentsConfig(context);
   const entry = cfg.agents.claude;
   if (entry?.authMethod === "apiKey" && entry.apiKey) {
-    const key = decryptSecret(entry.apiKey);
-    if (key) return { ANTHROPIC_API_KEY: key };
+    return { ANTHROPIC_API_KEY: entry.apiKey };
   }
-  const token = await effectiveClaudeToken();
+  const token = await effectiveClaudeToken(context);
   return token ? { CLAUDE_CODE_OAUTH_TOKEN: token } : {};
 }
 
 /** Env vars to launch Codex with, per its active auth method. */
-export async function codexAuthEnv(): Promise<Record<string, string>> {
-  const cfg = await readAgentsConfig();
+export async function codexAuthEnv(context: string | null): Promise<Record<string, string>> {
+  const cfg = await readAgentsConfig(context);
   const entry = cfg.agents.codex;
   if (entry?.authMethod === "apiKey" && entry.apiKey) {
     // CODEX_API_KEY (not OPENAI_API_KEY): `codex exec` builds its session with
     // enable_codex_api_key_env=true (codex-rs/exec/src/lib.rs), so it reads the
     // key from CODEX_API_KEY. OPENAI_API_KEY is only consulted by the TUI/realtime
     // paths, never by headless exec. Verified against the codex source.
-    const key = decryptSecret(entry.apiKey);
-    if (key) return { CODEX_API_KEY: key };
+    return { CODEX_API_KEY: entry.apiKey };
   }
   // Subscription: Codex reads its own ~/.codex/auth.json; nothing to inject.
   return {};
@@ -106,12 +122,11 @@ export async function codexSubscriptionConnected(): Promise<boolean> {
 }
 
 /** Env vars to launch Gemini with, per its active auth method. */
-export async function geminiAuthEnv(): Promise<Record<string, string>> {
-  const cfg = await readAgentsConfig();
+export async function geminiAuthEnv(context: string | null): Promise<Record<string, string>> {
+  const cfg = await readAgentsConfig(context);
   const entry = cfg.agents.gemini;
   if (entry?.authMethod === "apiKey" && entry.apiKey) {
-    const key = decryptSecret(entry.apiKey);
-    if (key) return { GEMINI_API_KEY: key };
+    return { GEMINI_API_KEY: entry.apiKey };
   }
   // Subscription: Gemini reads its own ~/.gemini/oauth_creds.json; nothing to inject.
   return {};
@@ -159,10 +174,14 @@ export type AgentConnection = "connected" | "notInstalled" | "notSignedIn" | "co
  * login (token/auth file). Distinct from whether the CLI is installed: an agent can
  * have a credential with no CLI (e.g. a stored API key) and vice versa.
  */
-async function agentHasCredential(id: AgentId, cfg: AgentsConfig): Promise<boolean> {
+async function agentHasCredential(
+  id: AgentId,
+  cfg: AgentsConfig,
+  context: string | null,
+): Promise<boolean> {
   if (id === "claude") {
     if (authMethodFor(cfg, "claude") === "apiKey") return !!cfg.agents.claude?.apiKey;
-    return !!(await effectiveClaudeToken());
+    return !!(await effectiveClaudeToken(context));
   }
   if (id === "codex") {
     if (authMethodFor(cfg, "codex") === "apiKey") return !!cfg.agents.codex?.apiKey;
@@ -190,12 +209,12 @@ async function agentHasCredential(id: AgentId, cfg: AgentsConfig): Promise<boole
  * Install is the primary gate — you must install before you can sign in — so a
  * missing CLI reports "notInstalled" regardless of any stored credential.
  */
-export async function agentConnection(id: AgentId): Promise<AgentConnection> {
+export async function agentConnection(id: AgentId, context: string | null): Promise<AgentConnection> {
   const desc = getAgent(id);
   if (!desc || desc.status === "comingSoon") return "comingSoon";
   if (!agentInstalled(id)) return "notInstalled";
-  const cfg = await readAgentsConfig();
-  return (await agentHasCredential(id, cfg)) ? "connected" : "notSignedIn";
+  const cfg = await readAgentsConfig(context);
+  return (await agentHasCredential(id, cfg, context)) ? "connected" : "notSignedIn";
 }
 
 export interface AgentView {
@@ -212,10 +231,14 @@ export interface AgentView {
 export interface AgentsResponse {
   activeAgentId: AgentId;
   agents: AgentView[];
+  /** Which cluster this config belongs to, and whether it could be read. */
+  cluster: ClusterConfigStatus;
 }
 
-export async function agentsView(): Promise<AgentsResponse> {
-  const cfg = await readAgentsConfig();
+export async function agentsView(context: string | null): Promise<AgentsResponse> {
+  const read = await readUserConfig(context);
+  const { data, ...cluster } = read;
+  const cfg = parseAgentsConfig(data[AGENTS_CONFIG_KEY]);
   const agents: AgentView[] = [];
   for (const d of listAgents()) {
     agents.push({
@@ -223,14 +246,14 @@ export async function agentsView(): Promise<AgentsResponse> {
       label: d.label,
       vendor: d.vendor,
       status: d.status,
-      connection: await agentConnection(d.id),
+      connection: await agentConnection(d.id, context),
       authMethods: d.authMethods,
       authMethod: authMethodFor(cfg, d.id),
       installUrl: d.installUrl,
       installLabel: d.installLabel,
     });
   }
-  return { activeAgentId: cfg.activeAgentId, agents };
+  return { activeAgentId: cfg.activeAgentId, agents, cluster };
 }
 
 export interface SetAgentAuthInput {
@@ -238,41 +261,44 @@ export interface SetAgentAuthInput {
   secret?: string;
 }
 
-export async function setAgentAuth(id: AgentId, input: SetAgentAuthInput): Promise<AgentView> {
+export async function setAgentAuth(
+  id: AgentId,
+  input: SetAgentAuthInput,
+  context: string | null,
+): Promise<AgentView> {
   const desc = getAgent(id);
   if (!desc) throw new Error(`unknown agent: ${id}`);
   if (desc.status === "comingSoon") throw new Error(`agent not available: ${id}`);
 
-  const cfg = await readAgentsConfig();
   const secret = (input.secret ?? "").trim();
+  const claudeSubscription = id === "claude" && input.authMethod !== "apiKey";
 
-  if (id === "claude") {
-    if (input.authMethod === "apiKey") {
-      cfg.agents.claude = { authMethod: "apiKey", apiKey: secret ? encryptSecret(secret) : undefined };
-    } else {
-      cfg.agents.claude = { authMethod: "subscription" };
-      await setClaudeToken(secret); // persists/clears the OAuth token file
+  await updateAgentsConfig(context, (cfg) => {
+    if (claudeSubscription) cfg.agents.claude = { authMethod: "subscription" };
+    else {
+      cfg.agents[id] = {
+        authMethod: input.authMethod,
+        apiKey: input.authMethod === "apiKey" && secret ? secret : undefined,
+      };
     }
-  } else {
-    cfg.agents[id] = {
-      authMethod: input.authMethod,
-      apiKey: input.authMethod === "apiKey" && secret ? encryptSecret(secret) : undefined,
-    };
-  }
-  await writeAgentsConfig(cfg);
-  const view = (await agentsView()).agents.find((a) => a.id === id);
+  });
+  // Sequenced after the auth-method write so a failure to store the token cannot
+  // leave the config claiming a subscription that was never saved.
+  if (claudeSubscription) await setClaudeToken(context, secret);
+
+  const view = (await agentsView(context)).agents.find((a) => a.id === id);
   if (!view) throw new Error(`agent vanished: ${id}`);
   return view;
 }
 
 /** Switch the active agent. Only an available agent can be activated. */
-export async function setActiveAgent(id: AgentId): Promise<AgentsResponse> {
+export async function setActiveAgent(id: AgentId, context: string | null): Promise<AgentsResponse> {
   const desc = getAgent(id);
   if (!desc) throw new Error(`unknown agent: ${id}`);
   if (desc.status === "comingSoon") throw new Error(`agent not available: ${id}`);
 
-  const cfg = await readAgentsConfig();
-  cfg.activeAgentId = id;
-  await writeAgentsConfig(cfg);
-  return await agentsView();
+  await updateAgentsConfig(context, (cfg) => {
+    cfg.activeAgentId = id;
+  });
+  return await agentsView(context);
 }

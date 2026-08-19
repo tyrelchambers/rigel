@@ -308,7 +308,7 @@ export async function* runClaude(
   const env: Record<string, string> = {
     ...(process.env as Record<string, string>),
     ...(context ? { KUBECONFIG_CONTEXT: context } : {}),
-    ...(await claudeAuthEnv()),
+    ...(await claudeAuthEnv(context)),
     // Monetization (HELM-16): the audit CLI reads RIGEL_UNLOCKED_AUDITS to gate
     // which audit kinds may run. Derived from the LIVE entitlement here (the
     // server holds it), so an upgrade takes effect on the next audit run with no
