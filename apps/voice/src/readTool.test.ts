@@ -120,6 +120,19 @@ describe("assertRead (the commandPolicy invariant)", () => {
   });
 });
 
+/** Scripted stand-ins for a sequence of kubectl child processes, one per spawn. */
+function fakeSpawnSeq(steps: Array<{ stdout?: string; stderr?: string; code?: number | null; error?: Error }>) {
+  const calls: Array<{ command: string; args: string[] }> = [];
+  let step = 0;
+  const spawnFn: SpawnRead = (command, args) => {
+    calls.push({ command, args });
+    const opts = steps[step++] ?? { stdout: "" };
+    const one = fakeSpawn(opts);
+    return one.spawnFn(command, args);
+  };
+  return { spawnFn, calls };
+}
+
 describe("runRead", () => {
   test("spawns kubectl with the active context in front of the built argv", async () => {
     const { spawnFn, calls } = fakeSpawn({ stdout: "NAME  READY\n" });
@@ -143,9 +156,9 @@ describe("runRead", () => {
   });
 
   test("a non-zero exit surfaces the code and the (capped) output", async () => {
-    const { spawnFn } = fakeSpawn({ stderr: "Error from server (NotFound)", code: 1 });
+    const { spawnFn } = fakeSpawn({ stderr: "Error from server (Forbidden)", code: 1 });
     const out = await runRead({ verb: "get", kind: "pod", name: "nope" }, null, spawnFn);
-    expect(out).toMatch(/^kubectl exited 1:\nError from server \(NotFound\)$/);
+    expect(out).toMatch(/^kubectl exited 1:\nError from server \(Forbidden\)$/);
   });
 
   test("empty successful output still says something the model can speak", async () => {
@@ -162,5 +175,99 @@ describe("runRead", () => {
     const spawnFn = vi.fn<SpawnRead>();
     await expect(runRead({ verb: "describe", kind: "pod" }, null, spawnFn)).rejects.toThrow(/name/);
     expect(spawnFn).not.toHaveBeenCalled();
+  });
+});
+
+const NOT_FOUND = 'Error from server (NotFound): deployments.apps "reddex" not found';
+const DEPLOY_LIST = [
+  "NAME                          READY   UP-TO-DATE   AVAILABLE",
+  "reddex-deploy                 3/3     3            3",
+  "reddex-custom-website-deploy  1/1     1            1",
+  "grafana                       1/1     1            1",
+].join("\n");
+
+describe("runRead NotFound recovery", () => {
+  test("a named get that misses lists the kind and reports the near matches", async () => {
+    const { spawnFn, calls } = fakeSpawnSeq([
+      { stderr: NOT_FOUND, code: 1 },
+      { stdout: DEPLOY_LIST },
+    ]);
+    const out = await runRead({ verb: "get", kind: "deployment", name: "reddex", namespace: "default" }, null, spawnFn);
+    expect(calls.map((c) => c.args)).toEqual([
+      ["get", "deployment", "reddex", "-n", "default", "-o", "wide"],
+      ["get", "deployment", "-n", "default", "-o", "wide"],
+    ]);
+    expect(out).toContain("No deployment named \"reddex\"");
+    expect(out).toContain("3 deployment");
+    expect(out).toContain("reddex-deploy");
+    expect(out).toContain("reddex-custom-website-deploy");
+    expect(out).not.toContain("grafana");
+  });
+
+  test("the fallback argv is built and policy-checked exactly like the primary", async () => {
+    const { spawnFn, calls } = fakeSpawnSeq([{ stderr: NOT_FOUND, code: 1 }, { stdout: DEPLOY_LIST }]);
+    await runRead({ verb: "get", kind: "deployment", name: "reddex", namespace: "default" }, "prod", spawnFn);
+    for (const call of calls) {
+      const argv = call.args.slice(2);
+      expect(call.args.slice(0, 2)).toEqual(["--context", "prod"]);
+      expect(() => assertRead(argv, "prod")).not.toThrow();
+    }
+  });
+
+  test("with nothing close by name, the full listing and the count ride along", async () => {
+    const { spawnFn } = fakeSpawnSeq([
+      { stderr: 'Error from server (NotFound): deployments.apps "nginx" not found', code: 1 },
+      { stdout: DEPLOY_LIST },
+    ]);
+    const out = await runRead({ verb: "get", kind: "deployment", name: "nginx", namespace: "default" }, null, spawnFn);
+    expect(out).toContain("3 deployment");
+    expect(out).toContain("Nothing is close by name");
+    expect(out).toContain("reddex-custom-website-deploy");
+  });
+
+  test("a describe that misses recovers the same way", async () => {
+    const { spawnFn, calls } = fakeSpawnSeq([{ stderr: NOT_FOUND, code: 1 }, { stdout: DEPLOY_LIST }]);
+    await runRead({ verb: "describe", kind: "deployment", name: "reddex", namespace: "default" }, null, spawnFn);
+    expect(calls[1]?.args).toEqual(["get", "deployment", "-n", "default", "-o", "wide"]);
+  });
+
+  test("a squashed spoken name still finds its hyphenated resource", async () => {
+    const { spawnFn } = fakeSpawnSeq([
+      { stderr: 'Error from server (NotFound): deployments.apps "reddexdeploy" not found', code: 1 },
+      { stdout: DEPLOY_LIST },
+    ]);
+    const out = await runRead({ verb: "get", kind: "deployment", name: "reddexdeploy" }, null, spawnFn);
+    expect(out).toContain("reddex-deploy");
+  });
+
+  test("the fallback never fires a third command, even when it fails itself", async () => {
+    const { spawnFn, calls } = fakeSpawnSeq([
+      { stderr: NOT_FOUND, code: 1 },
+      { stderr: "Error from server (Forbidden)", code: 1 },
+    ]);
+    const out = await runRead({ verb: "get", kind: "deployment", name: "reddex", namespace: "default" }, null, spawnFn);
+    expect(calls).toHaveLength(2);
+    expect(out).toContain("No deployment named \"reddex\"");
+    expect(out).toContain("Forbidden");
+  });
+
+  test("the fallback output is capped like the primary", async () => {
+    const { spawnFn } = fakeSpawnSeq([
+      { stderr: 'Error from server (NotFound): deployments.apps "zzz" not found', code: 1 },
+      { stdout: "NAME\n" + "x".repeat(20000) },
+    ]);
+    const out = await runRead({ verb: "get", kind: "deployment", name: "zzz", namespace: "default" }, null, spawnFn);
+    expect(out).toContain("[truncated]");
+    expect(out.length).toBeLessThan(8192 + 512);
+  });
+
+  test("a failure that is not a miss, and a listing get, never fall back", async () => {
+    const denied = fakeSpawnSeq([{ stderr: "Error from server (Forbidden): deployments.apps is forbidden", code: 1 }]);
+    await runRead({ verb: "get", kind: "deployment", name: "reddex", namespace: "default" }, null, denied.spawnFn);
+    expect(denied.calls).toHaveLength(1);
+
+    const listing = fakeSpawnSeq([{ stdout: "No resources found in default namespace.", code: 0 }]);
+    await runRead({ verb: "get", kind: "deployment", namespace: "default" }, null, listing.spawnFn);
+    expect(listing.calls).toHaveLength(1);
   });
 });
