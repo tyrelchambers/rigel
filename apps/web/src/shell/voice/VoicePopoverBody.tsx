@@ -4,11 +4,12 @@
  * resources the session has pinned. Must be rendered inside a
  * RoomContext.Provider.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { differenceInSeconds } from "date-fns";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCircleExclamation } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useMultibandTrackVolume, useTranscriptions, type AgentState } from "@livekit/components-react";
+import { MessageScroller, useMessageScroller } from "@shadcn/react/message-scroller";
 import { MENTION_KIND_LABEL, type MentionCandidate } from "@/panels/chat/mentions";
 import { useAssistantState, useMicTrackRef } from "./useVoiceRoom";
 import {
@@ -123,43 +124,67 @@ function StateRow({ onEnd, report }: { onEnd: () => void; report: AgentReport })
   );
 }
 
-function Transcript() {
+/** Reveals the transcript's bottom whenever a voice-tier action arms,
+ *  overriding a reader's scroll-up: a spoken "confirm" is about to run a
+ *  cluster mutation, so it must surface regardless of where they're reading. */
+function TranscriptFollow({ actions }: { actions: VoiceAction[] }) {
+  const { scrollToEnd } = useMessageScroller();
+  const reducedMotion = usePrefersReducedMotion();
+  const armedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const armed = new Set(actions.filter((a) => a.tier === "voice" && !a.done).map((a) => a.id));
+    const isNew = [...armed].some((id) => !armedRef.current.has(id));
+    armedRef.current = armed;
+    if (isNew) scrollToEnd({ behavior: reducedMotion ? "auto" : "smooth" });
+  }, [actions, reducedMotion, scrollToEnd]);
+  return null;
+}
+
+function Transcript({ actions }: { actions: VoiceAction[] }) {
   const transcriptions = useTranscriptions();
   const recent = transcriptions.slice(-12);
-  if (recent.length === 0) {
-    return (
-      <span className="px-4 py-3.5 text-2xs" style={{ color: "var(--fg-tertiary)" }}>
-        Say something. Your words appear here as you speak.
-      </span>
-    );
-  }
   return (
-    <div className="flex max-h-52 flex-col gap-2.5 overflow-y-auto px-4 py-3.5">
-      {recent.map((t, i) => {
-        const fromAgent = (t.participantInfo?.identity ?? "").startsWith(AGENT_IDENTITY_PREFIX);
-        return (
-          <span
-            key={t.streamInfo?.id ?? i}
-            className={`rounded-[9px] border px-[11px] py-2 text-xs leading-[18px] ${fromAgent ? "max-w-[260px] self-start" : "max-w-[90%] self-end"}`}
-            style={
-              fromAgent
-                ? {
-                    background: `${VOICE_SPECTRUM[0]}14`,
-                    borderColor: `${VOICE_SPECTRUM[0]}3d`,
-                    color: "var(--fg-primary)",
-                  }
-                : {
-                    background: "var(--surface-sunken)",
-                    borderColor: "var(--border-subtle)",
-                    color: "var(--fg-secondary)",
-                  }
-            }
-          >
-            {t.text}
-          </span>
-        );
-      })}
-    </div>
+    <MessageScroller.Provider autoScroll defaultScrollPosition="end">
+      <TranscriptFollow actions={actions} />
+      <MessageScroller.Root>
+        <MessageScroller.Viewport className="max-h-52 overflow-y-auto px-4 py-3.5">
+          {recent.length === 0 ? (
+            <span className="text-2xs" style={{ color: "var(--fg-tertiary)" }}>
+              Say something. Your words appear here as you speak.
+            </span>
+          ) : (
+            <MessageScroller.Content className="flex flex-col gap-2.5">
+              {recent.map((t, i) => {
+                const id = t.streamInfo?.id ?? String(i);
+                const fromAgent = (t.participantInfo?.identity ?? "").startsWith(AGENT_IDENTITY_PREFIX);
+                return (
+                  <MessageScroller.Item key={id} messageId={id} className="flex">
+                    <span
+                      className={`rounded-[9px] border px-[11px] py-2 text-xs leading-[18px] ${fromAgent ? "max-w-[260px] self-start" : "max-w-[90%] self-end"}`}
+                      style={
+                        fromAgent
+                          ? {
+                              background: `${VOICE_SPECTRUM[0]}14`,
+                              borderColor: `${VOICE_SPECTRUM[0]}3d`,
+                              color: "var(--fg-primary)",
+                            }
+                          : {
+                              background: "var(--surface-sunken)",
+                              borderColor: "var(--border-subtle)",
+                              color: "var(--fg-secondary)",
+                            }
+                      }
+                    >
+                      {t.text}
+                    </span>
+                  </MessageScroller.Item>
+                );
+              })}
+            </MessageScroller.Content>
+          )}
+        </MessageScroller.Viewport>
+      </MessageScroller.Root>
+    </MessageScroller.Provider>
   );
 }
 
@@ -317,7 +342,7 @@ export function VoicePopoverBody({
       <SignalEdge />
       <StateRow onEnd={onEnd} report={report} />
       <Waveform report={report} />
-      <Transcript />
+      <Transcript actions={actions} />
       {actions.map((a) =>
         a.tier === "voice" && !a.done ? (
           <PendingConfirm key={a.id} action={a} now={now} />
