@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   identityFor, mintVoiceToken, agentConfigResponse, checkWorkerToken, isVoiceWorkerRequest,
   VOICE_ROOM, VOICE_WORKER_HEADER,
@@ -10,9 +13,16 @@ function decodeJwt(token: string): Record<string, unknown> {
 
 const ENV = ["LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "OPENROUTER_API_KEY", "RIGEL_VOICE_WORKER_TOKEN"];
 let prev: Record<string, string | undefined>;
+let prevHome: string | undefined;
 
-beforeEach(() => {
+beforeEach(async () => {
   prev = Object.fromEntries(ENV.map((k) => [k, process.env[k]]));
+  // voiceConfig falls back to ~/.claude/rigel-voice.json for any field the env
+  // does not set, so a test that deletes one env var is otherwise answered by
+  // whatever the developer has configured on this machine. Point HOME at an
+  // empty directory so "unconfigured" means unconfigured.
+  prevHome = process.env.HOME;
+  process.env.HOME = await mkdtemp(join(tmpdir(), "rigel-voice-routes-"));
   process.env.LIVEKIT_URL = "wss://test.livekit.example";
   process.env.LIVEKIT_API_KEY = "APIkey";
   process.env.LIVEKIT_API_SECRET = "sixty-four-chars-of-secret-material-for-hs256-signing-goes-here!";
@@ -21,6 +31,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  process.env.HOME = prevHome;
   for (const [k, v] of Object.entries(prev)) {
     if (v === undefined) delete process.env[k];
     else process.env[k] = v;
