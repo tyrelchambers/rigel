@@ -121,6 +121,15 @@ const serverCrashes: number[] = [];
 // Settle delay before respawning a crashed server. The renderer's WebSocket
 // reconnect (apps/web/src/lib/ws.ts) re-establishes once the new server binds.
 const SERVER_RESTART_DELAY_MS = 800;
+// The same, for the voice worker. Its own list and delay: a voice crash loop
+// says nothing about the server's health, and the worker has to rejoin the
+// LiveKit room rather than rebind a port.
+const voiceCrashes: number[] = [];
+const VOICE_RESTART_DELAY_MS = 1_000;
+// Tighter than the server's default of 5. Voice is optional, so a worker that
+// cannot stay up is given up on sooner and quietly: the popover already tells
+// the user the agent is unavailable.
+const VOICE_MAX_CRASHES = 3;
 
 // ── Free-port helper ────────────────────────────────────────────────────────
 // Ask the OS for an ephemeral port (listen(0)), read it, release it. There's a
@@ -397,9 +406,33 @@ function forkVoiceWorker(port: number): UtilityProcess | null {
   child.on("exit", (code) => {
     console.log(`[rigel] voice worker exited (code=${code})`);
     voiceProc = null;
+    // Without this the worker's death is permanent for the app run, and the
+    // only sign of it is the popover reaching "Agent unavailable" 15 s after
+    // the user next opens it. Same exclusions as the server: an intentional
+    // quit, the headless smoke run, and the pre-window boot phase.
+    if (quitting || SMOKE || mainWindow === null) return;
+    scheduleVoiceRestart();
   });
 
   return child;
+}
+
+// Respawn the crashed voice worker against the same server port. Capped by the
+// shared crash-loop policy, and silent when it gives up: unlike the server,
+// nothing else in the app stops working.
+function scheduleVoiceRestart(): void {
+  const now = Date.now();
+  voiceCrashes.push(now);
+  const decision = decideRestart(voiceCrashes, now, { maxInWindow: VOICE_MAX_CRASHES });
+  if (!decision.restart) {
+    console.error(`[rigel] giving up on the voice worker: ${decision.reason}`);
+    return;
+  }
+  console.log(`[rigel] voice worker crashed, restarting in ${VOICE_RESTART_DELAY_MS}ms`);
+  setTimeout(() => {
+    if (quitting || mainWindow === null) return;
+    voiceProc = forkVoiceWorker(serverPort);
+  }, VOICE_RESTART_DELAY_MS);
 }
 
 // Respawn the crashed server on the SAME port so the renderer's existing origin

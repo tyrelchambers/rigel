@@ -1,8 +1,10 @@
 /**
- * Crash-loop guard for the forked Rigel server. The desktop supervises the
- * server child and restarts it when it dies unexpectedly, but a server that
- * crashes on startup must NOT be respawned in a hot loop. We allow a handful of
- * restarts inside a rolling window, then give up and surface the failure.
+ * Crash-loop guard for the desktop's forked children (the Rigel server and the
+ * voice worker). Each is supervised and restarted when it dies unexpectedly,
+ * but a child that crashes on startup must NOT be respawned in a hot loop. We
+ * allow a handful of restarts inside a rolling window, then give up. Callers
+ * keep their own crash list and pass their own limit; the policy is shared so
+ * there is only ever one answer to "is this a crash loop".
  */
 export interface RestartDecision {
   restart: boolean;
