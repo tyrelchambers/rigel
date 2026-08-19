@@ -225,6 +225,8 @@ export interface AgentView {
   connection: AgentConnection;
   authMethods: AgentAuthMethod[];
   authMethod: AgentAuthMethod;
+  /** Whether a Rigel-stored API key exists. Never the key itself. */
+  apiKeySet: boolean;
   installUrl: string;
   installLabel: string;
 }
@@ -249,6 +251,7 @@ export async function agentsView(context: string | null): Promise<AgentsResponse
       connection: await agentConnection(d.id, context),
       authMethods: d.authMethods,
       authMethod: authMethodFor(cfg, d.id),
+      apiKeySet: !!cfg.agents[d.id]?.apiKey,
       installUrl: d.installUrl,
       installLabel: d.installLabel,
     });

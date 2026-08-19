@@ -1281,6 +1281,8 @@ export interface AgentView {
   connection: AgentConnection;
   authMethods: AgentAuthMethod[];
   authMethod: AgentAuthMethod;
+  /** Whether a key is already stored. The key itself never leaves the server. */
+  apiKeySet?: boolean;
   installUrl: string;
   installLabel: string;
 }
