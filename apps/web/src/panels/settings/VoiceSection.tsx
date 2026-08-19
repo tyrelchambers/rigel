@@ -8,10 +8,13 @@
 //
 // A field an env var supplies wins inside voiceConfig(), so it renders as
 // read-only and stays out of the patch. Accepting an edit the server would
-// ignore is the one thing this panel must not do.
+// ignore is the one thing this panel must not do — and with the values now
+// living in a per-cluster Secret with no local fallback, the same applies when
+// no cluster is reachable: the form goes read-only rather than pretending a
+// save would land.
 import { useId, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCheck, faLock } from "@awesome.me/kit-6050953220/icons/classic/solid";
+import { faCheck, faLock, faTriangleExclamation } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Button } from "@/components/ui/button";
 import {
   useVoiceConfig,
@@ -68,6 +71,7 @@ function SecretField({
   envVar,
   stored,
   edit,
+  locked,
   onChange,
   onClear,
 }: {
@@ -75,6 +79,7 @@ function SecretField({
   envVar: string | undefined;
   stored: boolean;
   edit: SecretEdit | undefined;
+  locked: boolean;
   onChange: (value: string) => void;
   onClear: () => void;
 }) {
@@ -90,7 +95,7 @@ function SecretField({
         className={INPUT_CLASS}
         placeholder={envVar ? "Supplied by the environment" : stored ? "Set. Type to replace." : "Not set"}
         value={edit?.value ?? ""}
-        disabled={!!envVar}
+        disabled={!!envVar || locked}
         onChange={(e) => onChange(e.target.value)}
       />
       {envVar ? (
@@ -98,7 +103,8 @@ function SecretField({
       ) : edit?.clear ? (
         <span className="text-2xs text-[var(--status-pending)]">Cleared on save.</span>
       ) : (
-        stored && (
+        stored &&
+        !locked && (
           <button
             type="button"
             onClick={onClear}
@@ -126,6 +132,10 @@ export function VoiceSection() {
 
 function VoiceForm({ config }: { config: VoiceConfigView }) {
   const save = useSaveVoiceConfig();
+  // No cluster reachable is NOT "nothing configured yet": there is nowhere to
+  // read from and nowhere to save to, so the form is shown but locked.
+  const locked = config.cluster.state === "unavailable";
+  const clusterName = config.cluster.context ?? "the current kubeconfig context";
   const [text, setText] = useState<TextEdits>({});
   const [secrets, setSecrets] = useState<SecretEdits>({});
   const [saved, setSaved] = useState(false);
@@ -170,7 +180,7 @@ function VoiceForm({ config }: { config: VoiceConfigView }) {
   }
 
   const patch = buildPatch();
-  const dirty = Object.keys(patch).length > 0;
+  const dirty = Object.keys(patch).length > 0 && !locked;
 
   function revert() {
     setText({});
@@ -206,9 +216,32 @@ function VoiceForm({ config }: { config: VoiceConfigView }) {
       <p className="text-xs leading-snug text-muted-foreground">
         Talk to Rigel over a LiveKit room. Speech, the model, and speech synthesis all run through
         LiveKit Inference on the same API key and secret; the OpenRouter key runs the assistant
-        itself. Stored on this machine, secrets encrypted at rest.
+        itself.
         {!config.status.enabled && " Voice stays hidden until RIGEL_VOICE=1 is set."}
       </p>
+
+      {locked ? (
+        <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-foreground">
+          <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 size-3.5 text-destructive" />
+          <span>
+            These settings live in the <span className="font-mono">{config.cluster.secret}</span>{" "}
+            Secret on <span className="font-medium">{clusterName}</span>, which could not be reached,
+            so nothing can be read or saved here. Connect a cluster and reopen this page.
+            {config.cluster.message && (
+              <span className="mt-1 block font-mono text-2xs text-muted-foreground">
+                {config.cluster.message}
+              </span>
+            )}
+          </span>
+        </div>
+      ) : (
+        <p className="text-xs leading-snug text-muted-foreground">
+          Saved in the <span className="font-mono">{config.cluster.secret}</span> Secret in the{" "}
+          <span className="font-mono">{config.cluster.namespace}</span> namespace on{" "}
+          <span className="font-medium">{clusterName}</span>. Each cluster keeps its own, and
+          nothing is written to this machine.
+        </p>
+      )}
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-3.5">
         {TEXT_FIELDS.map(({ key, label, placeholder }) => {
@@ -220,7 +253,7 @@ function VoiceForm({ config }: { config: VoiceConfigView }) {
                 className={INPUT_CLASS}
                 placeholder={placeholder}
                 value={valueOf(key)}
-                disabled={!!envVar}
+                disabled={!!envVar || locked}
                 onChange={(e) => editText(key, e.target.value)}
               />
               {envVar && <EnvNote envVar={envVar} />}
@@ -235,6 +268,7 @@ function VoiceForm({ config }: { config: VoiceConfigView }) {
             envVar={envOf(key)}
             stored={set(config)}
             edit={secrets[key]}
+            locked={locked}
             onChange={(v) => editSecret(key, v)}
             onClear={() => clearSecret(key)}
           />
@@ -245,7 +279,7 @@ function VoiceForm({ config }: { config: VoiceConfigView }) {
 
       <div className="flex items-center justify-between pt-1">
         <span className="text-xs text-[var(--fg-tertiary)]">
-          Blank a field, or clear a key, then save.
+          {locked ? "Not editable without a cluster." : "Blank a field, or clear a key, then save."}
         </span>
         <div className="flex items-center gap-2">
           {saved && (

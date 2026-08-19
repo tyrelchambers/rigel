@@ -46,8 +46,14 @@ export function isUserConfigEmpty(data: UserConfigData): boolean {
  * Decode a `kubectl get secret -o json` payload into the three known entries.
  * Unknown keys are dropped and a malformed payload reads as empty, so a
  * hand-edited Secret can neither smuggle fields in nor throw on a config read.
+ *
+ * `decodeBase64` is a parameter because this package is compiled for the
+ * browser too, where node's Buffer does not exist.
  */
-export function parseUserConfigSecret(stdout: string): UserConfigData {
+export function parseUserConfigSecret(
+  stdout: string,
+  decodeBase64: (value: string) => string,
+): UserConfigData {
   const out = emptyUserConfigData();
   let parsed: unknown;
   try {
@@ -61,7 +67,7 @@ export function parseUserConfigSecret(stdout: string): UserConfigData {
     const raw = (data as Record<string, unknown>)[key];
     if (typeof raw !== "string" || !raw) continue;
     try {
-      out[key] = Buffer.from(raw, "base64").toString("utf8");
+      out[key] = decodeBase64(raw);
     } catch {
       out[key] = "";
     }

@@ -24,6 +24,12 @@ function view(over: Partial<VoiceConfigView> = {}): VoiceConfigView {
     openrouterApiKeySet: false,
     env: {},
     status: { enabled: true, configured: false },
+    cluster: {
+      context: "prod-cluster",
+      namespace: "default",
+      secret: "rigel-user-config",
+      state: "ok",
+    },
     ...over,
   };
 }
@@ -109,6 +115,33 @@ describe("VoiceSection", () => {
     render(<VoiceSection />);
     fireEvent.change(field(/livekit url/i), { target: { value: "wss://x" } });
     fireEvent.change(field(/livekit url/i), { target: { value: "wss://project.livekit.cloud" } });
+    expect(save()).toBeDisabled();
+  });
+
+  it("names the cluster the settings belong to", () => {
+    render(<VoiceSection />);
+    expect(screen.getByText("prod-cluster")).toBeInTheDocument();
+    expect(screen.getAllByText("rigel-user-config")).not.toHaveLength(0);
+  });
+
+  it("with no cluster reachable, says so and locks the form instead of saving nowhere", () => {
+    current = view({
+      cluster: {
+        context: "prod-cluster",
+        namespace: "default",
+        secret: "rigel-user-config",
+        state: "unavailable",
+        message: "The connection to the server 127.0.0.1:6443 was refused",
+      },
+    });
+    render(<VoiceSection />);
+    expect(screen.getByText(/could not be reached/i)).toBeInTheDocument();
+    expect(screen.getByText(/connection to the server/i)).toBeInTheDocument();
+    expect(field(/livekit url/i)).toBeDisabled();
+    expect(field(/livekit api secret/i)).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /clear this key/i })).toBeNull();
+
+    fireEvent.change(field(/^model$/i), { target: { value: "openai/gpt-4.1" } });
     expect(save()).toBeDisabled();
   });
 

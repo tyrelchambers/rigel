@@ -12,26 +12,27 @@ import {
 } from "./userConfig";
 
 const b64 = (s: string) => Buffer.from(s, "utf8").toString("base64");
+const unb64 = (s: string) => Buffer.from(s, "base64").toString("utf8");
 
 describe("parseUserConfigSecret", () => {
   it("decodes the known keys", () => {
     const stdout = JSON.stringify({
       data: { [VOICE_CONFIG_KEY]: b64('{"url":"wss://x"}'), [CLAUDE_TOKEN_KEY]: b64("tok") },
     });
-    const data = parseUserConfigSecret(stdout);
+    const data = parseUserConfigSecret(stdout, unb64);
     expect(data[VOICE_CONFIG_KEY]).toBe('{"url":"wss://x"}');
     expect(data[CLAUDE_TOKEN_KEY]).toBe("tok");
   });
 
   it("drops keys it does not own", () => {
     const stdout = JSON.stringify({ data: { smuggled: b64("nope"), [CLAUDE_TOKEN_KEY]: b64("tok") } });
-    expect(Object.keys(parseUserConfigSecret(stdout)).sort()).toEqual([...USER_CONFIG_KEYS].sort());
+    expect(Object.keys(parseUserConfigSecret(stdout, unb64)).sort()).toEqual([...USER_CONFIG_KEYS].sort());
   });
 
   it("reads malformed or dataless payloads as empty rather than throwing", () => {
-    expect(parseUserConfigSecret("not json")).toEqual(emptyUserConfigData());
-    expect(parseUserConfigSecret("{}")).toEqual(emptyUserConfigData());
-    expect(parseUserConfigSecret(JSON.stringify({ data: "nope" }))).toEqual(emptyUserConfigData());
+    expect(parseUserConfigSecret("not json", unb64)).toEqual(emptyUserConfigData());
+    expect(parseUserConfigSecret("{}", unb64)).toEqual(emptyUserConfigData());
+    expect(parseUserConfigSecret(JSON.stringify({ data: "nope" }), unb64)).toEqual(emptyUserConfigData());
   });
 });
 
@@ -50,7 +51,7 @@ describe("userConfigSecretJSON", () => {
     const { stringData } = JSON.parse(userConfigSecretJSON("default", data));
     const encoded: Record<string, string> = {};
     for (const [k, v] of Object.entries(stringData)) encoded[k] = b64(v as string);
-    expect(parseUserConfigSecret(JSON.stringify({ data: encoded }))).toEqual(data);
+    expect(parseUserConfigSecret(JSON.stringify({ data: encoded }), unb64)).toEqual(data);
   });
 });
 

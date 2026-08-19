@@ -1209,13 +1209,27 @@ export function useSuggestions() {
 // AI copilot config — is the Claude token set? GET/POST /api/chat-config.
 // ---------------------------------------------------------------------------
 
+/**
+ * Where a config lives and whether that cluster could be read. "unavailable"
+ * means nothing was read, which is NOT the same as an empty config: one is a
+ * disconnected cluster, the other is a connected one nobody has configured yet.
+ */
+export interface ClusterConfigStatus {
+  context: string | null;
+  namespace: string;
+  secret: string;
+  state: "ok" | "unavailable";
+  message?: string;
+}
+
 export interface ChatConfig {
   /** True when the copilot has a usable token (env- or in-app-supplied). */
   configured: boolean;
-  /** "env" = managed by deployment env (read-only here); "file" = set in-app. */
-  source: "env" | "file" | null;
+  /** "env" = managed by deployment env (read-only here); "cluster" = set in-app. */
+  source: "env" | "cluster" | null;
   /** The k8s Secret backing the token env var, when known (for a deep link). */
   secret?: { name: string; namespace: string } | null;
+  cluster?: ClusterConfigStatus;
 }
 
 async function fetchChatConfig(): Promise<ChatConfig> {
@@ -1224,10 +1238,13 @@ async function fetchChatConfig(): Promise<ChatConfig> {
   return (await res.json()) as ChatConfig;
 }
 
-/** Whether the AI copilot is configured. Drives the chat empty-state + Settings. */
+/** Whether the AI copilot is configured. Drives the chat empty-state + Settings.
+ *  Keyed by context: the token lives in the cluster, so switching clusters is a
+ *  different answer, not a stale one. */
 export function useChatConfig() {
+  const context = useCluster((s) => s.activeContext);
   return useQuery({
-    queryKey: ["chat-config"] as const,
+    queryKey: ["chat-config", context] as const,
     queryFn: fetchChatConfig,
     staleTime: 30_000,
   });
@@ -1236,6 +1253,7 @@ export function useChatConfig() {
 /** Set (or clear, with "") the in-app Claude token, then refresh chat-config. */
 export function useSetChatToken() {
   const qc = useQueryClient();
+  const context = useCluster((s) => s.activeContext);
   return useMutation<ChatConfig, Error, string>({
     mutationFn: async (token) => {
       const res = await apiFetch("/api/chat-config", {
@@ -1246,7 +1264,7 @@ export function useSetChatToken() {
       if (!res.ok) throw new Error((await res.text()) || "failed to save token");
       return (await res.json()) as ChatConfig;
     },
-    onSuccess: (data) => qc.setQueryData(["chat-config"], data),
+    onSuccess: (data) => qc.setQueryData(["chat-config", context], data),
   });
 }
 
@@ -1269,6 +1287,8 @@ export interface AgentView {
 export interface AgentsResponse {
   activeAgentId: AgentId;
   agents: AgentView[];
+  /** Which cluster this config belongs to, and whether it could be read. */
+  cluster?: ClusterConfigStatus;
 }
 
 async function fetchAgents(): Promise<AgentsResponse> {
@@ -1278,8 +1298,9 @@ async function fetchAgents(): Promise<AgentsResponse> {
 }
 
 export function useAgents() {
+  const context = useCluster((s) => s.activeContext);
   return useQuery({
-    queryKey: ["agents"] as const,
+    queryKey: ["agents", context] as const,
     queryFn: fetchAgents,
     staleTime: 30_000,
   });
@@ -1544,10 +1565,12 @@ export interface VoiceStatus {
 }
 
 /** Drives whether the voice affordance exists at all. A failed request reads as
- * "off" so the header stays quiet on an older server. */
+ * "off" so the header stays quiet on an older server. Keyed by context: the
+ * credentials live in the cluster, so "configured" is a per-cluster answer. */
 export function useVoiceStatus() {
+  const context = useCluster((s) => s.activeContext);
   return useQuery({
-    queryKey: ["voice-status"],
+    queryKey: ["voice-status", context] as const,
     queryFn: async (): Promise<VoiceStatus> => {
       const res = await apiFetch("/api/voice/status");
       if (!res.ok) return { enabled: false, configured: false };
@@ -1573,11 +1596,17 @@ export interface VoiceConfigView {
   /** Field to the env var supplying it. Env wins, so these are not editable. */
   env: Partial<Record<VoiceField, string>>;
   status: VoiceStatus;
+  /** The cluster these values live in. Config is per cluster with no local
+   *  fallback, so the panel names it and refuses to save without one. */
+  cluster: ClusterConfigStatus;
 }
 
+/** Keyed by context: the credentials live in the cluster, so switching clusters
+ *  asks a different question rather than reusing a stale answer. */
 export function useVoiceConfig() {
+  const context = useCluster((s) => s.activeContext);
   return useQuery({
-    queryKey: ["voice-config"],
+    queryKey: ["voice-config", context] as const,
     queryFn: async (): Promise<VoiceConfigView> => {
       const res = await apiFetch("/api/voice/config");
       if (!res.ok) throw new Error(`voice config failed: ${res.status}`);
@@ -1590,6 +1619,7 @@ export function useVoiceConfig() {
 /** Save a partial patch. An omitted field is left alone, "" clears it. */
 export function useSaveVoiceConfig() {
   const qc = useQueryClient();
+  const context = useCluster((s) => s.activeContext);
   return useMutation<VoiceConfigView, Error, Partial<Record<VoiceField, string>>>({
     mutationFn: async (patch) => {
       const res = await apiFetch("/api/voice/config", {
@@ -1597,12 +1627,15 @@ export function useSaveVoiceConfig() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
       });
-      if (!res.ok) throw new Error((await res.text()) || "failed to save voice settings");
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(err.error ?? "failed to save voice settings");
+      }
       return (await res.json()) as VoiceConfigView;
     },
     onSuccess: (data) => {
-      qc.setQueryData(["voice-config"], data);
-      qc.setQueryData(["voice-status"], data.status);
+      qc.setQueryData(["voice-config", context], data);
+      qc.setQueryData(["voice-status", context], data.status);
     },
   });
 }

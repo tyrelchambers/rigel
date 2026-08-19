@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -61,11 +61,20 @@ describe("readUserConfig", () => {
     expect(fake.reads).toEqual([CTX, "other"]);
   });
 
-  it("does not cache a failure, so a cluster that comes back is picked up", async () => {
-    fake.reachable = false;
-    expect((await readUserConfig(CTX)).state).toBe("unavailable");
-    fake.reachable = true;
-    expect((await readUserConfig(CTX)).state).toBe("ok");
+  it("coalesces reads while the cluster is down, then retries once the failure expires", async () => {
+    vi.useFakeTimers();
+    try {
+      fake.reachable = false;
+      expect((await readUserConfig(CTX)).state).toBe("unavailable");
+      expect((await readUserConfig(CTX)).state).toBe("unavailable");
+      expect(fake.reads).toHaveLength(1);
+
+      fake.reachable = true;
+      vi.advanceTimersByTime(5_001);
+      expect((await readUserConfig(CTX)).state).toBe("ok");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("decodes what the Secret holds", async () => {

@@ -60,7 +60,9 @@ const OPENCODE_MODELS: AgentModels = { models: ["anthropic/claude-sonnet-4-6", "
  */
 function renderPane(agents?: AgentsResponse, models?: Partial<Record<string, AgentModels>>) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  if (agents) qc.setQueryData(["agents"], agents);
+  // The agents query is keyed by the active context (the config lives in the
+  // cluster), and the store's default activeContext is null.
+  if (agents) qc.setQueryData(["agents", null], agents);
   // Pre-seed sibling queries so nothing tries to hit the network.
   qc.setQueryData([null, "suggestions"], []);
   for (const [id, m] of Object.entries(models ?? {})) {

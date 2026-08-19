@@ -66,9 +66,19 @@ export function __setClusterConfigIO(next: ClusterConfigIO | null): void {
 
 // Config is read on per-request paths, so every read would otherwise be an API
 // call. Successful reads are cached until a write replaces them; the server is
-// the only writer of this Secret. A failed read is evicted once it settles so a
-// cluster that comes back does not stay "unavailable" for the process lifetime.
-const cache = new Map<string, Promise<ClusterConfigRead>>();
+// the only writer of this Secret. A failed read expires quickly instead of
+// being cached forever, so a cluster that comes back is picked up, while a
+// burst of reads against a cluster that is down (agentsView asks per agent)
+// still costs one timing-out kubectl rather than one per read.
+const UNAVAILABLE_TTL_MS = 5_000;
+
+interface CacheEntry {
+  read: Promise<ClusterConfigRead>;
+  /** Epoch ms after which this entry is stale; Infinity for a good read. */
+  expiresAt: number;
+}
+
+const cache = new Map<string, CacheEntry>();
 const migrated = new Set<string>();
 
 function cacheKey(context: string | null): string {
@@ -141,7 +151,10 @@ async function migrateLocalConfig(context: string | null): Promise<UserConfigDat
 async function loadUserConfig(context: string | null): Promise<ClusterConfigRead> {
   const res = await io.read(context);
   if (res.code === 0) {
-    return { ...statusOf(context, "ok"), data: parseUserConfigSecret(res.stdout) };
+    return {
+      ...statusOf(context, "ok"),
+      data: parseUserConfigSecret(res.stdout, (v) => Buffer.from(v, "base64").toString("utf8")),
+    };
   }
   if (!isSecretAbsent(res)) {
     return { ...statusOf(context, "unavailable", failureMessage(res)), data: emptyUserConfigData() };
@@ -154,16 +167,19 @@ async function loadUserConfig(context: string | null): Promise<ClusterConfigRead
 export function readUserConfig(context: string | null): Promise<ClusterConfigRead> {
   const key = cacheKey(context);
   const cached = cache.get(key);
-  if (cached) return cached;
-  const pending = loadUserConfig(context);
-  cache.set(key, pending);
-  pending.then(
+  if (cached && cached.expiresAt > Date.now()) return cached.read;
+
+  const entry: CacheEntry = { read: loadUserConfig(context), expiresAt: Infinity };
+  cache.set(key, entry);
+  entry.read.then(
     (read) => {
-      if (read.state !== "ok") cache.delete(key);
+      if (read.state !== "ok") entry.expiresAt = Date.now() + UNAVAILABLE_TTL_MS;
     },
-    () => cache.delete(key),
+    () => {
+      entry.expiresAt = Date.now() + UNAVAILABLE_TTL_MS;
+    },
   );
-  return pending;
+  return entry.read;
 }
 
 // A write is a read-modify-write over one Secret, so two overlapping writes
@@ -202,7 +218,7 @@ export function writeUserConfig(
     const res = await io.write(context, userConfigSecretJSON(STATE_NAMESPACE, data));
     if (res.code !== 0) throw new Error(failureMessage(res));
     const next: ClusterConfigRead = { ...statusOf(context, "ok"), data };
-    cache.set(cacheKey(context), Promise.resolve(next));
+    cache.set(cacheKey(context), { read: Promise.resolve(next), expiresAt: Infinity });
     return next;
   });
 }

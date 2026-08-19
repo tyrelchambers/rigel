@@ -45,7 +45,9 @@ function fakeAccount(over: Partial<UseAccountResult> = {}): UseAccountResult {
 
 function renderWizard(agents?: AgentsResponse, metricsAvailable?: boolean, account = fakeAccount()) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  if (agents) qc.setQueryData(["agents"], agents);
+  // The agents query is keyed by the active context (the config lives in the
+  // cluster), and the store's default activeContext is null.
+  if (agents) qc.setQueryData(["agents", null], agents);
   if (metricsAvailable !== undefined) {
     qc.setQueryData([null, "metrics", "nodes"], { available: metricsAvailable, items: [] });
   }

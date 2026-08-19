@@ -1,4 +1,7 @@
-// At-rest codec for Rigel-managed secrets (agent API keys, the Claude OAuth token).
+// At-rest codec for the local config files Rigel used to keep. Configuration now
+// lives in a per-cluster Secret in plaintext, so decryptSecret survives only to
+// read pre-migration values (see localConfigMigration.ts) and encryptSecret has
+// no remaining writer.
 //
 // Stored values carry an "enc:v1:" marker when they were encrypted with the OS
 // keychain via Electron's safeStorage (macOS Keychain / Windows Credential Manager
