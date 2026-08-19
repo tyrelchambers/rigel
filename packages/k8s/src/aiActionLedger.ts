@@ -16,6 +16,28 @@ export const AI_ACTIONS_LABEL_VALUE = "ai-actions";
 export const AI_ACTIONS_MAX = 200;
 /** Longest `detail` we persist; a ConfigMap is not a log store. */
 export const AI_ACTION_DETAIL_MAX = 200;
+/** Longest `trigger` we persist; it carries a chat label or a voice utterance. */
+export const AI_ACTION_TRIGGER_MAX = 200;
+/** Longest `command` we persist. Long enough to keep a real kubectl invocation
+ *  intact, short enough that the ring buffer cannot outgrow a ConfigMap. */
+export const AI_ACTION_COMMAND_MAX = 1000;
+/**
+ * Byte budget for the serialized entry array. A ConfigMap caps near 1MiB, and
+ * `kubectl apply` stores the whole manifest a second time in its
+ * last-applied-configuration annotation, so the usable share is well under half.
+ */
+export const AI_ACTIONS_MAX_BYTES = 256 * 1024;
+
+/** Appended in place of the cut text so a reader never mistakes a truncated
+ *  value for the whole one. */
+export const AI_ACTION_TRUNCATED_MARKER = "... [truncated]";
+
+/** Cut `value` to `max` characters, spending the tail on a visible marker. */
+export function truncateForLedger(value: string, max: number): string {
+  if (value.length <= max) return value;
+  const keep = Math.max(0, max - AI_ACTION_TRUNCATED_MARKER.length);
+  return `${value.slice(0, keep)}${AI_ACTION_TRUNCATED_MARKER}`.slice(0, Math.max(max, 0));
+}
 
 /** Which AI surface ran the action. Both execute through the same server seams. */
 export type AiActionSource = "chat" | "voice";
@@ -147,24 +169,40 @@ export function buildAiActionEntry(input: AiActionInput): AiActionEntry {
     source: input.source,
     kind: KIND_LABELS[input.action.kind] ?? input.action.kind,
     target: targetFor(input.action),
-    command: input.command,
+    command: truncateForLedger(input.command, AI_ACTION_COMMAND_MAX),
     outcome: input.outcome,
   };
   const trigger = trimmed(input.trigger) ?? trimmed(input.action.label);
-  if (trigger) entry.trigger = trigger;
+  if (trigger) entry.trigger = truncateForLedger(trigger, AI_ACTION_TRIGGER_MAX);
   const detail = trimmed(input.detail);
-  if (detail) entry.detail = detail.slice(0, AI_ACTION_DETAIL_MAX);
+  if (detail) entry.detail = truncateForLedger(detail, AI_ACTION_DETAIL_MAX);
   return entry;
 }
 
-/** Prepend an entry and truncate to the ring-buffer cap. Never mutates `list`. */
+/**
+ * Prepend an entry and truncate to the ring-buffer cap, then drop further
+ * oldest entries until the serialized list fits `maxBytes`. Never mutates
+ * `list`, and never throws: a ledger that refuses every write from here on is
+ * worse than one that has forgotten its oldest entries.
+ */
 export function appendAiAction(
   list: AiActionEntry[],
   entry: AiActionEntry,
   max: number = AI_ACTIONS_MAX,
+  maxBytes: number = AI_ACTIONS_MAX_BYTES,
 ): AiActionEntry[] {
-  return [entry, ...list].slice(0, max);
+  const next = [entry, ...list].slice(0, max);
+  while (next.length > 1 && serializedBytes(next) > maxBytes) next.pop();
+  return next;
 }
+
+const serializedBytes = (entries: AiActionEntry[]): number => {
+  try {
+    return new TextEncoder().encode(JSON.stringify(entries)).length;
+  } catch {
+    return 0;
+  }
+};
 
 /** Parse the ledger's JSON array (empty on missing/invalid input). */
 export function parseAiActions(dataJSON: string | undefined | null): AiActionEntry[] {
@@ -209,5 +247,5 @@ export function summarizeActionDetail(
   const preferred = outcome === "failure" ? stderr : stdout;
   const other = outcome === "failure" ? stdout : stderr;
   const line = firstLine(preferred) ?? firstLine(other);
-  return line ? line.slice(0, AI_ACTION_DETAIL_MAX) : undefined;
+  return line ? truncateForLedger(line, AI_ACTION_DETAIL_MAX) : undefined;
 }

@@ -3,7 +3,13 @@ import {
   AI_ACTIONS_CONFIGMAP,
   AI_ACTIONS_DATA_KEY,
   AI_ACTIONS_MAX,
+  AI_ACTIONS_MAX_BYTES,
+  AI_ACTION_COMMAND_MAX,
+  AI_ACTION_DETAIL_MAX,
+  AI_ACTION_TRIGGER_MAX,
+  AI_ACTION_TRUNCATED_MARKER,
   aiActionsConfigMapJSON,
+  truncateForLedger,
   appendAiAction,
   buildAiActionEntry,
   parseAiActions,
@@ -164,6 +170,45 @@ describe("buildAiActionEntry", () => {
     expect(Number.isNaN(Date.parse(built.at))).toBe(false);
   });
 
+  it("caps a pathological command and marks it as truncated", () => {
+    const built = buildAiActionEntry({
+      action: { kind: "setEnv", name: "api", namespace: "default" },
+      source: "chat",
+      command: `kubectl set env deployment/api BLOB=${"x".repeat(50_000)} -n default`,
+      outcome: "success",
+    });
+    expect(built.command).toHaveLength(AI_ACTION_COMMAND_MAX);
+    expect(built.command.endsWith(AI_ACTION_TRUNCATED_MARKER)).toBe(true);
+    expect(built.command.startsWith("kubectl set env deployment/api BLOB=")).toBe(true);
+  });
+
+  it("leaves a command that fits the cap untouched", () => {
+    const command = `kubectl set env deployment/api BLOB=${"x".repeat(AI_ACTION_COMMAND_MAX - 40)}`;
+    const built = buildAiActionEntry({
+      action: { kind: "setEnv", name: "api" },
+      source: "chat",
+      command,
+      outcome: "success",
+    });
+    expect(built.command).toBe(command);
+    expect(built.command).not.toContain(AI_ACTION_TRUNCATED_MARKER);
+  });
+
+  it("caps a pathological trigger and detail with the same marker", () => {
+    const built = buildAiActionEntry({
+      action: { kind: "restart", name: "api" },
+      source: "voice",
+      command: "kubectl rollout restart deployment/api",
+      outcome: "failure",
+      trigger: "t".repeat(5_000),
+      detail: "d".repeat(5_000),
+    });
+    expect(built.trigger).toHaveLength(AI_ACTION_TRIGGER_MAX);
+    expect(built.trigger!.endsWith(AI_ACTION_TRUNCATED_MARKER)).toBe(true);
+    expect(built.detail).toHaveLength(AI_ACTION_DETAIL_MAX);
+    expect(built.detail!.endsWith(AI_ACTION_TRUNCATED_MARKER)).toBe(true);
+  });
+
   it("omits trigger and detail rather than storing empty strings", () => {
     const built = buildAiActionEntry({
       action: { kind: "restart", name: "api", label: "  " },
@@ -200,6 +245,55 @@ describe("appendAiAction", () => {
   it("honours an explicit cap", () => {
     const list = appendAiAction([entry({ id: "a" }), entry({ id: "b" })], entry({ id: "c" }), 2);
     expect(list.map((e) => e.id)).toEqual(["c", "a"]);
+  });
+
+  it("keeps a full ring buffer of ordinary entries, well inside the byte budget", () => {
+    let list: AiActionEntry[] = [];
+    for (let i = 0; i < AI_ACTIONS_MAX; i++) list = appendAiAction(list, entry({ id: `e${i}` }));
+    expect(list).toHaveLength(AI_ACTIONS_MAX);
+    expect(JSON.stringify(list).length).toBeLessThan(AI_ACTIONS_MAX_BYTES / 2);
+  });
+
+  it("keeps a long history of maximally capped entries inside the byte budget", () => {
+    const fat = (id: string): AiActionEntry =>
+      entry({
+        id,
+        command: truncateForLedger("k".repeat(5_000), AI_ACTION_COMMAND_MAX),
+        trigger: truncateForLedger("t".repeat(5_000), AI_ACTION_TRIGGER_MAX),
+        detail: truncateForLedger("d".repeat(5_000), AI_ACTION_DETAIL_MAX),
+      });
+    let list: AiActionEntry[] = [];
+    for (let i = 0; i < AI_ACTIONS_MAX; i++) list = appendAiAction(list, fat(`e${i}`));
+    expect(list.length).toBeGreaterThanOrEqual(100);
+    expect(list.length).toBeLessThanOrEqual(AI_ACTIONS_MAX);
+    expect(JSON.stringify(list).length).toBeLessThanOrEqual(AI_ACTIONS_MAX_BYTES);
+  });
+
+  it("drops the oldest entries when the serialized list exceeds the byte budget", () => {
+    const bytes = JSON.stringify([entry({ id: "a" })]).length * 3;
+    let list: AiActionEntry[] = [];
+    for (let i = 0; i < 10; i++) list = appendAiAction(list, entry({ id: `e${i}` }), 10, bytes);
+    expect(list.length).toBeLessThan(10);
+    expect(list[0]!.id).toBe("e9");
+    expect(JSON.stringify(list).length).toBeLessThanOrEqual(bytes);
+  });
+
+  it("keeps the newest entry even when it alone exceeds the byte budget", () => {
+    const list = appendAiAction([entry({ id: "old" })], entry({ id: "new" }), 10, 1);
+    expect(list.map((e) => e.id)).toEqual(["new"]);
+  });
+});
+
+describe("truncateForLedger", () => {
+  it("returns a value at or under the cap unchanged", () => {
+    expect(truncateForLedger("kubectl get pods", 100)).toBe("kubectl get pods");
+    expect(truncateForLedger("abcde", 5)).toBe("abcde");
+  });
+
+  it("never exceeds the cap, even when the cap is shorter than the marker", () => {
+    expect(truncateForLedger("x".repeat(50), 10)).toHaveLength(10);
+    expect(truncateForLedger("x".repeat(50), 3)).toHaveLength(3);
+    expect(truncateForLedger("x".repeat(50), 0)).toBe("");
   });
 });
 
@@ -262,10 +356,11 @@ describe("summarizeActionDetail", () => {
     expect(summarizeActionDetail("success", "\n\n  done\nmore\n", "")).toBe("done");
   });
 
-  it("truncates a very long line", () => {
+  it("truncates a very long line and says so", () => {
     const long = "x".repeat(500);
     const out = summarizeActionDetail("failure", "", long)!;
-    expect(out.length).toBeLessThanOrEqual(200);
+    expect(out).toHaveLength(AI_ACTION_DETAIL_MAX);
+    expect(out.endsWith(AI_ACTION_TRUNCATED_MARKER)).toBe(true);
   });
 
   it("returns undefined when both streams are empty", () => {
