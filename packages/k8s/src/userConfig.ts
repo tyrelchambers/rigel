@@ -32,7 +32,7 @@ export type UserConfigData = Record<UserConfigKey, string>;
 
 const MANAGED_BY = { "app.kubernetes.io/managed-by": "rigel" };
 
-/** A config with every key present and empty — "connected, nothing configured". */
+/** A config with every key present and empty: connected, nothing configured. */
 export function emptyUserConfigData(): UserConfigData {
   return { [VOICE_CONFIG_KEY]: "", [AGENTS_CONFIG_KEY]: "", [CLAUDE_TOKEN_KEY]: "" };
 }

@@ -18,7 +18,7 @@ function envToken(): string | null {
   return t ? t : null;
 }
 
-/** The token to launch `claude` with — env wins, else the cluster's Secret. */
+/** The token to launch `claude` with: env wins, else the cluster's Secret. */
 export async function effectiveClaudeToken(context: string | null): Promise<string | null> {
   const env = envToken();
   if (env) return env;

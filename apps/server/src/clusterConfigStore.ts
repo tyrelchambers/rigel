@@ -134,7 +134,7 @@ async function migrateLocalConfig(context: string | null): Promise<UserConfigDat
 
   if (local.undecryptable.length > 0) {
     io.log(
-      `rigel: moved local config into ${USER_CONFIG_SECRET} on ${context ?? "the current context"}, but ${local.undecryptable.join(", ")} could not be decrypted on this machine — ${local.files.join(", ")} were left in place`,
+      `rigel: moved local config into ${USER_CONFIG_SECRET} on ${context ?? "the current context"}, but ${local.undecryptable.join(", ")} could not be decrypted on this machine, so ${local.files.join(", ")} were left in place`,
     );
     return data;
   }

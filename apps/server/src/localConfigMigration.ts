@@ -5,7 +5,7 @@
 // Values written to a local file went through encryptSecret, which marks a real
 // keychain encryption with "enc:v1:". That marker is machine-specific, so a
 // marked value is decrypted here before it is pushed to the cluster. When the
-// keychain cannot decrypt it, decryptSecret yields "" — that field is left
+// keychain cannot decrypt it, decryptSecret yields "", so that field is left
 // behind and the file is KEPT, because an unrecoverable value must not be
 // silently replaced with an empty one.
 import { homedir } from "node:os";

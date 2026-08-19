@@ -8,7 +8,7 @@
 //
 // A field an env var supplies wins inside voiceConfig(), so it renders as
 // read-only and stays out of the patch. Accepting an edit the server would
-// ignore is the one thing this panel must not do — and with the values now
+// ignore is the one thing this panel must not do, and with the values now
 // living in a per-cluster Secret with no local fallback, the same applies when
 // no cluster is reachable: the form goes read-only rather than pretending a
 // save would land.
