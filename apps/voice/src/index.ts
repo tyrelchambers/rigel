@@ -9,6 +9,7 @@ import { voice, inference, initializeLogger } from "@livekit/agents";
 import { ParticipantKind, Room, RoomEvent } from "@livekit/rtc-node";
 import * as openai from "@livekit/agents-plugin-openai";
 import { buildAgent, refreshInstructions } from "./agent.js";
+import { attachSessionDiagnostics } from "./diagnostics.js";
 import { announceAgentState, endDesktopSession } from "./lifecycle.js";
 import { createServerClient, VoiceNotConfiguredError, type AgentConfig, type ServerClient } from "./serverClient.js";
 import { applyDataFrame, DESKTOP_IDENTITY, emptySessionState } from "./state.js";
@@ -107,6 +108,10 @@ async function main(): Promise<void> {
     },
     keytermsOptions: { keyterms: state.keyterms },
   });
+
+  attachSessionDiagnostics(session);
+
+  console.log(`models: llm=${cfg.model} stt=${cfg.sttModel} tts=${cfg.ttsModel}`);
 
   const decoder = new TextDecoder();
   room.on(RoomEvent.DataReceived, (payload: Uint8Array, participant, _kind, topic?: string) => {

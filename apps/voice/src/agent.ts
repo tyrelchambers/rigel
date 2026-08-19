@@ -36,6 +36,10 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
               try {
                 return await runRead(args, state.activeContext);
               } catch (err) {
+                // Handed back to the model as tool output rather than thrown,
+                // so nothing else ever sees it: without this line a failed read
+                // leaves no trace outside the model's own context.
+                console.error(`readCluster ${args.verb} failed:`, err);
                 return String(err);
               }
             },
