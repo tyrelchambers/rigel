@@ -37,6 +37,22 @@ describe("voiceSystemPrompt", () => {
     expect(p).toContain("readCluster");
   });
 
+  test("demands the count and forbids silently dropping results", () => {
+    const p = voiceSystemPrompt("prod");
+    expect(p).toContain("Always say the count");
+    expect(p).toContain("never drop results silently");
+  });
+
+  test("pins the turn to the question just asked", () => {
+    expect(voiceSystemPrompt("prod")).toContain("Answer the question just asked");
+  });
+
+  test("requires identifiers verbatim, and both names when two fit", () => {
+    const p = voiceSystemPrompt("prod");
+    expect(p).toContain("exactly as they are spelled");
+    expect(p).toContain("say both");
+  });
+
   test("does not modify the chat prompt", () => {
     expect(systemPrompt("prod", ["prod"])).not.toContain("You are SPEAKING aloud");
   });
