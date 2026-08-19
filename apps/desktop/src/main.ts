@@ -290,6 +290,7 @@ function forkServer(port: number): UtilityProcess {
   configureAuditSkillsEnv(env);
   env.RIGEL_SESSION_SECRET = SESSION_SECRET;
   env.RIGEL_VOICE_WORKER_TOKEN = VOICE_WORKER_TOKEN;
+  env.RIGEL_USER_DATA_DIR = app.getPath("userData");
 
   let entry: string;
   let cwd: string;

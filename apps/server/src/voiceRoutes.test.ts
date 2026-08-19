@@ -12,13 +12,16 @@ function decodeJwt(token: string): Record<string, unknown> {
   return JSON.parse(Buffer.from(token.split(".")[1]!, "base64url").toString("utf8"));
 }
 
-const ENV = ["LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "OPENROUTER_API_KEY", "RIGEL_VOICE_WORKER_TOKEN"];
+const ENV = [
+  "LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET", "OPENROUTER_API_KEY",
+  "RIGEL_VOICE_WORKER_TOKEN", "RIGEL_USER_DATA_DIR",
+];
 let prev: Record<string, string | undefined>;
 let prevHome: string | undefined;
 
 beforeEach(async () => {
   prev = Object.fromEntries(ENV.map((k) => [k, process.env[k]]));
-  // voiceConfig falls back to ~/.claude/rigel-voice.json for any field the env
+  // voiceConfig falls back to ~/.rigel/rigel-voice.json for any field the env
   // does not set, so a test that deletes one env var is otherwise answered by
   // whatever the developer has configured on this machine. Point HOME at an
   // empty directory so "unconfigured" means unconfigured.
