@@ -206,6 +206,9 @@ describe("proposeMutation routing", () => {
     expect(out).toMatch(/desktop/);
     expect(state.pending).toBeNull();
     expect(frames[0]!.payload.tier).toBe("click");
+    // Recorded so the desktop's rigel.action.result can be spoken. Nothing
+    // else on this side remembers a click-tier proposal.
+    expect(state.awaitingClick.get("call-1")).toBe("Delete web-1");
   });
 
   test("click-required kinds are never previewed, because /api/action cannot build them", async () => {
@@ -250,6 +253,7 @@ describe("proposeMutation routing", () => {
 
     expect(frames[0]!.payload.tier).toBe("click");
     expect(state.pending).toBeNull();
+    expect(state.awaitingClick.get("call-1")).toBe(restart.label);
   });
 
   test("a blocked command is refused rather than routed anywhere", async () => {

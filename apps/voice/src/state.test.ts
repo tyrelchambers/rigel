@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { buildKeyterms, STATIC_KEYTERMS } from "./keyterms.js";
-import { DESKTOP_IDENTITY, applyDataFrame, emptySessionState } from "./state.js";
+import { DESKTOP_IDENTITY, applyDataFrame, emptySessionState, resetSessionState } from "./state.js";
 
 describe("emptySessionState", () => {
   test("starts with no context and no pending mutation", () => {
@@ -8,6 +8,7 @@ describe("emptySessionState", () => {
       activeContext: null,
       contextLines: [],
       pending: null,
+      awaitingClick: new Map(),
       keyterms: STATIC_KEYTERMS,
     });
   });
@@ -86,7 +87,7 @@ describe("applyDataFrame", () => {
   test("rigel.keyterms from the desktop replaces the keyterms and reports the change", () => {
     const state = emptySessionState();
     const effect = applyDataFrame(state, DESKTOP_IDENTITY, "rigel.keyterms", JSON.stringify({ names: ["web", "cert-manager"] }));
-    expect(effect).toEqual({ contextChanged: false, keytermsChanged: true });
+    expect(effect).toEqual({ contextChanged: false, keytermsChanged: true, speak: null });
     expect(state.keyterms).toEqual(buildKeyterms(["web", "cert-manager"]));
   });
 
@@ -109,7 +110,7 @@ describe("applyDataFrame", () => {
   test("a rigel.keyterms frame from a non-desktop identity leaves the keyterms alone", () => {
     const state = emptySessionState();
     const effect = applyDataFrame(state, "rigel-phone", "rigel.keyterms", JSON.stringify({ names: ["evil"] }));
-    expect(effect).toEqual({ contextChanged: false, keytermsChanged: false });
+    expect(effect).toEqual({ contextChanged: false, keytermsChanged: false, speak: null });
     expect(state.keyterms).toEqual(STATIC_KEYTERMS);
   });
 
@@ -123,5 +124,81 @@ describe("applyDataFrame", () => {
     const state = emptySessionState();
     applyDataFrame(state, DESKTOP_IDENTITY, "rigel.keyterms", JSON.stringify({ names: ["web", 42, null] }));
     expect(state.keyterms).toEqual(buildKeyterms(["web"]));
+  });
+});
+
+describe("rigel.action.result", () => {
+  /** A click-tier proposal already sent to the desktop, as agent.ts records it. */
+  function awaiting(id = "call-1", label = "Delete pod web-1") {
+    const state = emptySessionState();
+    state.awaitingClick.set(id, label);
+    return state;
+  }
+
+  test("a successful desktop run gives the agent the line to speak and closes the slot", () => {
+    const state = awaiting();
+    const effect = applyDataFrame(
+      state,
+      DESKTOP_IDENTITY,
+      "rigel.action.result",
+      JSON.stringify({ id: "call-1", ok: true, summary: "ran" }),
+    );
+    expect(effect.speak).toBe("Done. Delete pod web-1 completed.");
+    expect(state.awaitingClick.size).toBe(0);
+  });
+
+  test("a failed desktop run speaks the reason the desktop reported", () => {
+    const effect = applyDataFrame(
+      awaiting(),
+      DESKTOP_IDENTITY,
+      "rigel.action.result",
+      JSON.stringify({ id: "call-1", ok: false, summary: 'Error from server (NotFound): pods "web-1" not found' }),
+    );
+    expect(effect.speak).toBe('That failed: Error from server (NotFound): pods "web-1" not found.');
+  });
+
+  test("a result carrying no summary still says something", () => {
+    const effect = applyDataFrame(
+      awaiting(),
+      DESKTOP_IDENTITY,
+      "rigel.action.result",
+      JSON.stringify({ id: "call-1", ok: false }),
+    );
+    expect(effect.speak).toBe("That failed: unknown error.");
+  });
+
+  test("a result for an id this worker never sent to the desktop says nothing", () => {
+    const effect = applyDataFrame(
+      awaiting(),
+      DESKTOP_IDENTITY,
+      "rigel.action.result",
+      JSON.stringify({ id: "call-99", ok: true, summary: "ran" }),
+    );
+    expect(effect.speak).toBeNull();
+  });
+
+  test("the same result arriving twice only speaks once", () => {
+    const state = awaiting();
+    const raw = JSON.stringify({ id: "call-1", ok: true, summary: "ran" });
+    expect(applyDataFrame(state, DESKTOP_IDENTITY, "rigel.action.result", raw).speak).not.toBeNull();
+    expect(applyDataFrame(state, DESKTOP_IDENTITY, "rigel.action.result", raw).speak).toBeNull();
+  });
+
+  test("a result from a phone cannot make the agent claim a change ran", () => {
+    const state = awaiting();
+    const effect = applyDataFrame(
+      state,
+      "rigel-phone-abc",
+      "rigel.action.result",
+      JSON.stringify({ id: "call-1", ok: true, summary: "ran" }),
+    );
+    expect(effect.speak).toBeNull();
+    expect(state.awaitingClick.get("call-1")).toBe("Delete pod web-1");
+  });
+
+  test("ending a desktop session drops proposals the operator never answered", () => {
+    const state = awaiting();
+    resetSessionState(state);
+    expect(state.awaitingClick.size).toBe(0);
   });
 });

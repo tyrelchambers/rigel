@@ -62,6 +62,7 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
                 if (!desktopPresent(room)) {
                   return "Refused: that change is irreversible and there is no desktop session to confirm it on. Tell the user this in one sentence.";
                 }
+                state.awaitingClick.set(id, a.label);
                 await publishJson(room, "rigel.action", { id, tier: "click", action: a, command: null });
                 return "Sent to the desktop popover. Tell the user this change is irreversible, so it needs a tap on the desktop button to run.";
               }
@@ -81,6 +82,7 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
                 return `Refused: ${decided.reason}. Tell the user this in one sentence.`;
               }
               if (decided.route === "click") {
+                state.awaitingClick.set(id, a.label);
                 await publishJson(room, "rigel.action", { id, tier: "click", action: a, command });
                 return "Sent to the desktop popover. Tell the user this change is irreversible, so it needs a tap on the desktop button to run.";
               }

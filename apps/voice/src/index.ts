@@ -13,6 +13,16 @@ import { announceAgentState, endDesktopSession } from "./lifecycle.js";
 import { createServerClient, type AgentConfig, type ServerClient } from "./serverClient.js";
 import { applyDataFrame, DESKTOP_IDENTITY, emptySessionState } from "./state.js";
 
+/**
+ * Node terminates a utility process on an unhandled rejection, so every
+ * fire-and-forget promise in the room handlers below needs a catch: a single
+ * transient failure would otherwise take the whole worker down, and voice with
+ * it.
+ */
+function logRejection(what: string): (err: unknown) => void {
+  return (err) => console.error(`${what} failed:`, err);
+}
+
 async function bootstrap(server: ServerClient): Promise<AgentConfig> {
   for (let i = 0; i < 30; i++) {
     try {
@@ -88,8 +98,12 @@ async function main(): Promise<void> {
   const decoder = new TextDecoder();
   room.on(RoomEvent.DataReceived, (payload: Uint8Array, participant, _kind, topic?: string) => {
     const effect = applyDataFrame(state, participant?.identity, topic, decoder.decode(payload));
-    if (effect.contextChanged) void refreshInstructions(agent, state);
+    if (effect.contextChanged) void refreshInstructions(agent, state).catch(logRejection("refreshing instructions"));
     if (effect.keytermsChanged) session.updateOptions({ keyterms: state.keyterms });
+    // The desktop ran (or refused) a click-tier change. say() defaults to
+    // addToChatCtx, so the agent both tells the operator and stops treating
+    // the proposal as outstanding.
+    if (effect.speak) session.say(effect.speak);
     // A rigel.state frame is the first thing the renderer publishes once its
     // own handlers are mounted, and the only proof this side gets of that.
     // ParticipantConnected fires earlier, so the announce there can land in a
@@ -113,7 +127,9 @@ async function main(): Promise<void> {
   room.on(RoomEvent.ParticipantDisconnected, (participant) => {
     if (participant.identity !== DESKTOP_IDENTITY) return;
     console.log("desktop left, scrubbing the session");
-    void endDesktopSession(state, agent).then(() => refreshInstructions(agent, state));
+    void endDesktopSession(state, agent)
+      .then(() => refreshInstructions(agent, state))
+      .catch(logRejection("scrubbing the session"));
   });
 
   // Diagnostic. Confirms whether the SDK's own lk.agent.state write lands:
