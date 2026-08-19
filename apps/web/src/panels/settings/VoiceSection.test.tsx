@@ -56,8 +56,34 @@ describe("VoiceSection", () => {
 
   it("reports the stored state of each secret without revealing a value", () => {
     render(<VoiceSection />);
-    expect(field(/livekit api secret/i).placeholder).toMatch(/set/i);
+    expect(field(/livekit api secret/i).placeholder).toMatch(/^\*+$/);
+    expect(field(/livekit api secret/i).value).toBe("");
     expect(field(/openrouter api key/i).placeholder).toMatch(/not set/i);
+  });
+
+  it("the mask is a placeholder, so an untouched stored key stays out of the patch", async () => {
+    render(<VoiceSection />);
+    fireEvent.change(field(/^model$/i), { target: { value: "openai/gpt-4.1" } });
+    fireEvent.click(save());
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith({ model: "openai/gpt-4.1" }));
+  });
+
+  it("points each model field at the list of ids it accepts, opening outside the app", () => {
+    render(<VoiceSection />);
+    const links = screen.getAllByRole("link", { name: /browse ids/i });
+    expect(links.map((l) => l.getAttribute("href"))).toEqual([
+      "https://openrouter.ai/models",
+      "https://docs.livekit.io/agents/models/stt/",
+      "https://docs.livekit.io/agents/models/tts/",
+    ]);
+    for (const l of links) expect(l).toHaveAttribute("target", "_blank");
+  });
+
+  it("offers the default id as each model field's placeholder", () => {
+    render(<VoiceSection />);
+    expect(field(/^model$/i).placeholder).toBe("openai/gpt-4.1-mini");
+    expect(field(/speech to text model/i).placeholder).toBe("deepgram/nova-3");
+    expect(field(/text to speech model/i).placeholder).toBe("cartesia/sonic-2");
   });
 
   it("surfaces the feature flag and whether voice is configured", () => {

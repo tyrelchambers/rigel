@@ -14,8 +14,14 @@
 // save would land.
 import { useId, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCheck, faLock, faTriangleExclamation } from "@awesome.me/kit-6050953220/icons/classic/solid";
+import {
+  faArrowUpRightFromSquare,
+  faCheck,
+  faLock,
+} from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Button } from "@/components/ui/button";
+import { SECRET_MASK } from "./secretMask";
+import { ClusterConfigNote, clusterLocked } from "./ClusterConfigNote";
 import {
   useVoiceConfig,
   useSaveVoiceConfig,
@@ -23,12 +29,29 @@ import {
   type VoiceField,
 } from "@/lib/api";
 
-const TEXT_FIELDS: { key: VoiceField; label: string; placeholder: string }[] = [
+/** Where the ids these fields accept are listed. Model strings are typed by
+ *  hand, so the list has to be one click away. */
+const TEXT_FIELDS: { key: VoiceField; label: string; placeholder: string; docs?: string }[] = [
   { key: "url", label: "LiveKit URL", placeholder: "wss://your-project.livekit.cloud" },
   { key: "apiKey", label: "LiveKit API key", placeholder: "APIxxxxxxxx" },
-  { key: "model", label: "Model", placeholder: "openai/gpt-4.1-mini" },
-  { key: "sttModel", label: "Speech to text model", placeholder: "deepgram/nova-3" },
-  { key: "ttsModel", label: "Text to speech model", placeholder: "cartesia/sonic-2" },
+  {
+    key: "model",
+    label: "Model",
+    placeholder: "openai/gpt-4.1-mini",
+    docs: "https://openrouter.ai/models",
+  },
+  {
+    key: "sttModel",
+    label: "Speech to text model",
+    placeholder: "deepgram/nova-3",
+    docs: "https://docs.livekit.io/agents/models/stt/",
+  },
+  {
+    key: "ttsModel",
+    label: "Text to speech model",
+    placeholder: "cartesia/sonic-2",
+    docs: "https://docs.livekit.io/agents/models/tts/",
+  },
 ];
 
 const SECRET_FIELDS: { key: VoiceField; label: string; set: (c: VoiceConfigView) => boolean }[] = [
@@ -55,12 +78,72 @@ function StatusPill({ on, label }: { on: boolean; label: string }) {
   );
 }
 
+/**
+ * target="_blank" is load-bearing: Electron's setWindowOpenHandler sends these
+ * to the system browser and denies the popup, while a same-window navigation
+ * would replace the SPA with the docs site.
+ */
+function DocsLink({ href }: { href: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-1 text-2xs text-primary transition-opacity hover:opacity-80"
+    >
+      Browse ids
+      <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="size-3" />
+    </a>
+  );
+}
+
 function EnvNote({ envVar }: { envVar: string }) {
   return (
     <span className="flex items-center gap-1 text-2xs text-[var(--fg-tertiary)]">
       <FontAwesomeIcon icon={faLock} className="size-3" />
       Set by <span className="font-mono">{envVar}</span>, which wins over anything saved here.
     </span>
+  );
+}
+
+/** A plain config input. Nests no link inside its label, so a docs link beside
+ *  it stays its own click target. */
+function TextField({
+  label,
+  placeholder,
+  docs,
+  value,
+  envVar,
+  locked,
+  onChange,
+}: {
+  label: string;
+  placeholder: string;
+  docs: string | undefined;
+  value: string;
+  envVar: string | undefined;
+  locked: boolean;
+  onChange: (value: string) => void;
+}) {
+  const id = useId();
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <label htmlFor={id} className="text-xs text-muted-foreground">
+          {label}
+        </label>
+        {docs && <DocsLink href={docs} />}
+      </div>
+      <input
+        id={id}
+        className={INPUT_CLASS}
+        placeholder={placeholder}
+        value={value}
+        disabled={!!envVar || locked}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {envVar && <EnvNote envVar={envVar} />}
+    </div>
   );
 }
 
@@ -93,7 +176,7 @@ function SecretField({
         id={id}
         type="password"
         className={INPUT_CLASS}
-        placeholder={envVar ? "Supplied by the environment" : stored ? "Set. Type to replace." : "Not set"}
+        placeholder={envVar ? "Supplied by the environment" : stored ? SECRET_MASK : "Not set"}
         value={edit?.value ?? ""}
         disabled={!!envVar || locked}
         onChange={(e) => onChange(e.target.value)}
@@ -134,8 +217,7 @@ function VoiceForm({ config }: { config: VoiceConfigView }) {
   const save = useSaveVoiceConfig();
   // No cluster reachable is NOT "nothing configured yet": there is nowhere to
   // read from and nowhere to save to, so the form is shown but locked.
-  const locked = config.cluster.state === "unavailable";
-  const clusterName = config.cluster.context ?? "the current kubeconfig context";
+  const locked = clusterLocked(config.cluster);
   const [text, setText] = useState<TextEdits>({});
   const [secrets, setSecrets] = useState<SecretEdits>({});
   const [saved, setSaved] = useState(false);
@@ -220,46 +302,21 @@ function VoiceForm({ config }: { config: VoiceConfigView }) {
         {!config.status.enabled && " Voice stays hidden until RIGEL_VOICE=1 is set."}
       </p>
 
-      {locked ? (
-        <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-foreground">
-          <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5 size-3.5 text-destructive" />
-          <span>
-            These settings live in the <span className="font-mono">{config.cluster.secret}</span>{" "}
-            Secret on <span className="font-medium">{clusterName}</span>, which could not be reached,
-            so nothing can be read or saved here. Connect a cluster and reopen this page.
-            {config.cluster.message && (
-              <span className="mt-1 block font-mono text-2xs text-muted-foreground">
-                {config.cluster.message}
-              </span>
-            )}
-          </span>
-        </div>
-      ) : (
-        <p className="text-xs leading-snug text-muted-foreground">
-          Saved in the <span className="font-mono">{config.cluster.secret}</span> Secret in the{" "}
-          <span className="font-mono">{config.cluster.namespace}</span> namespace on{" "}
-          <span className="font-medium">{clusterName}</span>. Each cluster keeps its own, and
-          nothing is written to this machine.
-        </p>
-      )}
+      <ClusterConfigNote cluster={config.cluster} />
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-3.5">
-        {TEXT_FIELDS.map(({ key, label, placeholder }) => {
-          const envVar = envOf(key);
-          return (
-            <label key={key} className="flex flex-col gap-1.5">
-              <span className="text-xs text-muted-foreground">{label}</span>
-              <input
-                className={INPUT_CLASS}
-                placeholder={placeholder}
-                value={valueOf(key)}
-                disabled={!!envVar || locked}
-                onChange={(e) => editText(key, e.target.value)}
-              />
-              {envVar && <EnvNote envVar={envVar} />}
-            </label>
-          );
-        })}
+        {TEXT_FIELDS.map(({ key, label, placeholder, docs }) => (
+          <TextField
+            key={key}
+            label={label}
+            placeholder={placeholder}
+            docs={docs}
+            value={valueOf(key)}
+            envVar={envOf(key)}
+            locked={locked}
+            onChange={(v) => editText(key, v)}
+          />
+        ))}
 
         {SECRET_FIELDS.map(({ key, label, set }) => (
           <SecretField
