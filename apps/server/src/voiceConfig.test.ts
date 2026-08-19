@@ -3,7 +3,8 @@ import { mkdtemp, mkdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  voiceConfig, voiceStatus, setVoiceConfig, DEFAULT_VOICE_MODEL, DEFAULT_STT_MODEL, DEFAULT_TTS_MODEL,
+  voiceConfig, voiceStatus, setVoiceConfig, envVoiceFields,
+  DEFAULT_VOICE_MODEL, DEFAULT_STT_MODEL, DEFAULT_TTS_MODEL, VOICE_FIELDS, VOICE_SECRET_FIELDS,
 } from "./voiceConfig";
 
 const ENV_KEYS = [
@@ -66,6 +67,12 @@ describe("voiceConfig", () => {
     expect(raw).toContain("wss://x");
   });
 
+  test("saves when the claude home does not exist yet", async () => {
+    process.env.HOME = await mkdtemp(join(tmpdir(), "rigel-voice-nohome-"));
+    await setVoiceConfig({ url: "wss://fresh" });
+    expect((await voiceConfig()).url).toBe("wss://fresh");
+  });
+
   test("an empty-string patch field clears the stored value", async () => {
     await setVoiceConfig({ url: "wss://x" });
     await setVoiceConfig({ url: "" });
@@ -79,5 +86,32 @@ describe("voiceStatus", () => {
     process.env.RIGEL_VOICE = "1";
     await setVoiceConfig({ url: "wss://x", apiKey: "k", apiSecret: "s", openrouterApiKey: "o" });
     expect(await voiceStatus()).toEqual({ enabled: true, configured: true });
+  });
+});
+
+describe("envVoiceFields", () => {
+  test("empty when no env var is set", async () => {
+    await setVoiceConfig({ url: "wss://file" });
+    expect(envVoiceFields()).toEqual({});
+  });
+
+  test("maps only the env-supplied fields to their variable names", () => {
+    process.env.LIVEKIT_URL = "wss://env";
+    process.env.RIGEL_VOICE_STT_MODEL = "deepgram/nova-2";
+    expect(envVoiceFields()).toEqual({ url: "LIVEKIT_URL", sttModel: "RIGEL_VOICE_STT_MODEL" });
+  });
+
+  test("a blank env var does not count as supplied", () => {
+    process.env.LIVEKIT_URL = "   ";
+    expect(envVoiceFields()).toEqual({});
+  });
+});
+
+describe("field lists", () => {
+  test("VOICE_FIELDS covers every config key and names the two secrets", () => {
+    expect([...VOICE_FIELDS].sort()).toEqual(
+      ["apiKey", "apiSecret", "model", "openrouterApiKey", "sttModel", "ttsModel", "url"],
+    );
+    expect([...VOICE_SECRET_FIELDS]).toEqual(["apiSecret", "openrouterApiKey"]);
   });
 });

@@ -2,8 +2,8 @@
 // chatConfig.ts: an explicit env var always wins; otherwise the file written
 // from Settings is used, with secret fields encrypted at rest via secretStore.
 import { homedir } from "node:os";
-import { join } from "node:path";
-import { readFile, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { decryptSecret, encryptSecret } from "./secretStore";
 
 export const DEFAULT_VOICE_MODEL = "openai/gpt-4.1-mini";
@@ -36,6 +36,26 @@ const ENV_KEYS: Record<keyof VoiceConfig, string> = {
 const SECRET_FIELDS = new Set<keyof VoiceConfig>(["apiSecret", "openrouterApiKey"]);
 
 const FIELDS = Object.keys(ENV_KEYS) as (keyof VoiceConfig)[];
+
+/** Every configurable field, in the order the Settings panel presents them. */
+export const VOICE_FIELDS: readonly (keyof VoiceConfig)[] = FIELDS;
+
+export const VOICE_SECRET_FIELDS: readonly (keyof VoiceConfig)[] = FIELDS.filter((k) =>
+  SECRET_FIELDS.has(k),
+);
+
+/**
+ * Fields an env var is currently supplying, mapped to the var's name. Env wins
+ * per field in voiceConfig(), so Settings must show these as not editable
+ * rather than accept an edit it would silently ignore.
+ */
+export function envVoiceFields(): Partial<Record<keyof VoiceConfig, string>> {
+  const out: Partial<Record<keyof VoiceConfig, string>> = {};
+  for (const k of FIELDS) {
+    if (process.env[ENV_KEYS[k]]?.trim()) out[k] = ENV_KEYS[k];
+  }
+  return out;
+}
 
 function configFile(): string {
   return join(homedir(), ".claude", "rigel-voice.json");
@@ -106,5 +126,7 @@ export async function setVoiceConfig(patch: Partial<VoiceConfig>): Promise<void>
     if (!t) delete existing[k];
     else existing[k] = SECRET_FIELDS.has(k) ? encryptSecret(t) : t;
   }
-  await writeFile(configFile(), JSON.stringify(existing, null, 2), { mode: 0o600 });
+  const file = configFile();
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, JSON.stringify(existing, null, 2), { mode: 0o600 });
 }

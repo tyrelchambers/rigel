@@ -6,7 +6,7 @@
 // sign its own requests to LiveKit's inference gateway).
 import { randomBytes } from "node:crypto";
 import { AccessToken } from "livekit-server-sdk";
-import { voiceConfig } from "./voiceConfig";
+import { envVoiceFields, voiceConfig, voiceStatus, VOICE_FIELDS, type VoiceConfig, type VoiceStatus } from "./voiceConfig";
 import { checkSessionSecret } from "./sessionAuth";
 
 export const VOICE_ROOM = "rigel-voice";
@@ -82,6 +82,55 @@ export async function agentConfigResponse(): Promise<AgentConfigResponse | null>
     apiSecret: c.apiSecret,
     openrouterApiKey: c.openrouterApiKey,
   };
+}
+
+/**
+ * What the Settings panel is allowed to see. The renderer holds only the
+ * session secret, so a stored secret never crosses this boundary: apiSecret and
+ * openrouterApiKey are reported as set/unset booleans.
+ */
+export interface MaskedVoiceConfig {
+  url: string;
+  apiKey: string;
+  model: string;
+  sttModel: string;
+  ttsModel: string;
+  apiSecretSet: boolean;
+  openrouterApiKeySet: boolean;
+  /** Field to the env var supplying it; those fields are not editable here. */
+  env: Partial<Record<keyof VoiceConfig, string>>;
+  status: VoiceStatus;
+}
+
+export async function maskedVoiceConfig(): Promise<MaskedVoiceConfig> {
+  const c = await voiceConfig();
+  return {
+    url: c.url,
+    apiKey: c.apiKey,
+    model: c.model,
+    sttModel: c.sttModel,
+    ttsModel: c.ttsModel,
+    apiSecretSet: !!c.apiSecret,
+    openrouterApiKeySet: !!c.openrouterApiKey,
+    env: envVoiceFields(),
+    status: await voiceStatus(),
+  };
+}
+
+/**
+ * The writable fields of a PUT body. An absent key means "leave alone" and an
+ * empty string means "clear", the distinction setVoiceConfig already draws, so
+ * unknown keys and non-strings are dropped rather than coerced to "".
+ */
+export function voiceConfigPatch(body: unknown): Partial<VoiceConfig> {
+  const patch: Partial<VoiceConfig> = {};
+  if (!body || typeof body !== "object") return patch;
+  const rec = body as Record<string, unknown>;
+  for (const k of VOICE_FIELDS) {
+    const v = rec[k];
+    if (typeof v === "string") patch[k] = v;
+  }
+  return patch;
 }
 
 /** Gate for /api/voice/agent-config. This is layered ON TOP of the global

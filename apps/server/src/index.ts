@@ -55,8 +55,8 @@ import type { CloudCluster } from "@rigel/cloud-connect/src/index";
 import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusMetrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
 import { chatConfig, setClaudeToken } from "./chatConfig";
-import { voiceStatus, voiceEnabled } from "./voiceConfig";
-import { mintVoiceToken, agentConfigResponse, checkWorkerToken, isVoiceWorkerRequest, VOICE_WORKER_HEADER, type VoiceRole } from "./voiceRoutes";
+import { voiceStatus, voiceEnabled, setVoiceConfig } from "./voiceConfig";
+import { mintVoiceToken, agentConfigResponse, checkWorkerToken, isVoiceWorkerRequest, maskedVoiceConfig, voiceConfigPatch, VOICE_WORKER_HEADER, type VoiceRole } from "./voiceRoutes";
 import { recordAiAction } from "./aiActionLedger";
 import { buildAiActionEntry, summarizeActionDetail } from "@rigel/k8s/src/aiActionLedger";
 import { agentsView, setAgentAuth, setActiveAgent } from "./agentConfig";
@@ -527,6 +527,25 @@ async function handler(req: Request): Promise<Response> {
     // GET /api/voice/status: is the voice feature flag on, and is it configured.
     if (url.pathname === "/api/voice/status" && req.method === "GET") {
       return Response.json(await voiceStatus());
+    }
+
+    // GET /api/voice/config: the Settings view of the credentials. Masked: the
+    // renderer holds the session secret, and stored secrets never cross to it.
+    // PUT /api/voice/config: a partial patch. An absent field is left alone, an
+    // empty string clears it. Env-supplied fields still win in voiceConfig(),
+    // so the panel reports them instead of offering them for edit.
+    if (url.pathname === "/api/voice/config" && req.method === "GET") {
+      return Response.json(await maskedVoiceConfig());
+    }
+    if (url.pathname === "/api/voice/config" && req.method === "PUT") {
+      let body: unknown;
+      try {
+        body = await req.json();
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      await setVoiceConfig(voiceConfigPatch(body));
+      return Response.json(await maskedVoiceConfig());
     }
 
     // POST /api/voice/token: mint a room JWT for the renderer (or a phone, for

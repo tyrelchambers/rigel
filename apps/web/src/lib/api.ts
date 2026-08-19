@@ -1557,6 +1557,56 @@ export function useVoiceStatus() {
   });
 }
 
+/** Voice fields the renderer may edit. Mirrors the server's VoiceConfig. */
+export type VoiceField =
+  | "url" | "apiKey" | "apiSecret" | "openrouterApiKey" | "model" | "sttModel" | "ttsModel";
+
+/** GET /api/voice/config. Secrets are set/unset booleans, never values. */
+export interface VoiceConfigView {
+  url: string;
+  apiKey: string;
+  model: string;
+  sttModel: string;
+  ttsModel: string;
+  apiSecretSet: boolean;
+  openrouterApiKeySet: boolean;
+  /** Field to the env var supplying it. Env wins, so these are not editable. */
+  env: Partial<Record<VoiceField, string>>;
+  status: VoiceStatus;
+}
+
+export function useVoiceConfig() {
+  return useQuery({
+    queryKey: ["voice-config"],
+    queryFn: async (): Promise<VoiceConfigView> => {
+      const res = await apiFetch("/api/voice/config");
+      if (!res.ok) throw new Error(`voice config failed: ${res.status}`);
+      return (await res.json()) as VoiceConfigView;
+    },
+    staleTime: 30_000,
+  });
+}
+
+/** Save a partial patch. An omitted field is left alone, "" clears it. */
+export function useSaveVoiceConfig() {
+  const qc = useQueryClient();
+  return useMutation<VoiceConfigView, Error, Partial<Record<VoiceField, string>>>({
+    mutationFn: async (patch) => {
+      const res = await apiFetch("/api/voice/config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) throw new Error((await res.text()) || "failed to save voice settings");
+      return (await res.json()) as VoiceConfigView;
+    },
+    onSuccess: (data) => {
+      qc.setQueryData(["voice-config"], data);
+      qc.setQueryData(["voice-status"], data.status);
+    },
+  });
+}
+
 export async function fetchVoiceToken(): Promise<{ url: string; token: string }> {
   const res = await apiFetch("/api/voice/token", {
     method: "POST",

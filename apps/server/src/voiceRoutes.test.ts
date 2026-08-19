@@ -4,8 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   identityFor, mintVoiceToken, agentConfigResponse, checkWorkerToken, isVoiceWorkerRequest,
-  VOICE_ROOM, VOICE_WORKER_HEADER,
+  maskedVoiceConfig, voiceConfigPatch, VOICE_ROOM, VOICE_WORKER_HEADER,
 } from "./voiceRoutes";
+import { setVoiceConfig } from "./voiceConfig";
 
 function decodeJwt(token: string): Record<string, unknown> {
   return JSON.parse(Buffer.from(token.split(".")[1]!, "base64url").toString("utf8"));
@@ -111,6 +112,56 @@ describe("agentConfigResponse", () => {
   test("null without an OpenRouter key", async () => {
     delete process.env.OPENROUTER_API_KEY;
     expect(await agentConfigResponse()).toBeNull();
+  });
+});
+
+describe("maskedVoiceConfig", () => {
+  test("reports secrets as set/unset booleans, never as values", async () => {
+    const m = await maskedVoiceConfig();
+    expect(m.url).toBe("wss://test.livekit.example");
+    expect(m.apiKey).toBe("APIkey");
+    expect(m.apiSecretSet).toBe(true);
+    expect(m.openrouterApiKeySet).toBe(true);
+    const secrets = [process.env.LIVEKIT_API_SECRET, process.env.OPENROUTER_API_KEY];
+    expect(JSON.stringify(m).includes(secrets[0]!)).toBe(false);
+    expect(JSON.stringify(m).includes(secrets[1]!)).toBe(false);
+  });
+
+  test("names the env var supplying each env-sourced field", async () => {
+    delete process.env.LIVEKIT_API_KEY;
+    await setVoiceConfig({ apiKey: "from-file" });
+    const m = await maskedVoiceConfig();
+    expect(m.env.url).toBe("LIVEKIT_URL");
+    expect(m.env.apiSecret).toBe("LIVEKIT_API_SECRET");
+    expect(m.env.apiKey).toBeUndefined();
+    expect(m.apiKey).toBe("from-file");
+  });
+
+  test("carries the models and the feature status", async () => {
+    delete process.env.OPENROUTER_API_KEY;
+    const m = await maskedVoiceConfig();
+    expect(m.model).toBeTruthy();
+    expect(m.sttModel).toBeTruthy();
+    expect(m.ttsModel).toBeTruthy();
+    expect(m.status).toEqual({ enabled: false, configured: false });
+  });
+});
+
+describe("voiceConfigPatch", () => {
+  test("keeps known string fields, including the empty string that clears one", () => {
+    expect(voiceConfigPatch({ url: "wss://x", apiSecret: "" })).toEqual({ url: "wss://x", apiSecret: "" });
+  });
+
+  test("drops unknown keys and non-string values rather than coercing them", () => {
+    expect(voiceConfigPatch({ url: 7, nope: "x", model: null, sttModel: "deepgram/nova-2" })).toEqual({
+      sttModel: "deepgram/nova-2",
+    });
+  });
+
+  test("an absent field stays absent, so setVoiceConfig leaves it alone", () => {
+    expect("apiKey" in voiceConfigPatch({ url: "wss://x" })).toBe(false);
+    expect(voiceConfigPatch(null)).toEqual({});
+    expect(voiceConfigPatch("not an object")).toEqual({});
   });
 });
 
