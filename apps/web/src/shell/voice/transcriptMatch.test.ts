@@ -84,11 +84,14 @@ describe("matchTranscript", () => {
     expect(matchTranscript("how is the cluster doing today", CANDS)).toEqual([]);
   });
 
-  test("a name spoken as five words matches, six does not", () => {
+  test("a name spoken as five words matches", () => {
     const five = [c("deployment", "one-two-three-four-five")];
-    const six = [c("deployment", "one-two-three-four-five-six")];
     expect(ids("scale one two three four five", five)).toEqual(["deployment-one-two-three-four-five"]);
-    expect(matchTranscript("scale one two three four five six", six)).toEqual([]);
+  });
+
+  test("a name longer than the window resolves from its leading five segments", () => {
+    const six = [c("deployment", "one-two-three-four-five-six")];
+    expect(ids("scale one two three four five six", six)).toEqual(["deployment-one-two-three-four-five-six"]);
     expect(ids("scale one-two-three-four-five-six", six)).toEqual(["deployment-one-two-three-four-five-six"]);
   });
 
@@ -115,5 +118,76 @@ describe("matchTranscript", () => {
 
   test("returns the candidate objects, so the context summary rides along", () => {
     expect(matchTranscript("check certmanager", CANDS)[0]?.context).toBe("deployment cert-manager summary");
+  });
+});
+
+describe("segment-prefix matching", () => {
+  const REDDEX: MentionCandidate[] = [
+    c("deployment", "reddex-custom-website-deploy"),
+    c("deployment", "reddex-deploy"),
+  ];
+
+  test("a bare prefix pins the least-padded candidate first, and keeps the runner-up", () => {
+    expect(ids("how is reddex doing", REDDEX)).toEqual([
+      "deployment-reddex-deploy",
+      "deployment-reddex-custom-website-deploy",
+    ]);
+  });
+
+  test("the full name spoken wins outright, with no ambiguous runner-up", () => {
+    expect(ids("how is reddex deploy doing", REDDEX)).toEqual(["deployment-reddex-deploy"]);
+    expect(ids("how is reddex-deploy doing", REDDEX)).toEqual(["deployment-reddex-deploy"]);
+    expect(ids("restart reddex custom website deploy", REDDEX)).toEqual([
+      "deployment-reddex-custom-website-deploy",
+    ]);
+  });
+
+  test("a longer prefix suppresses the shorter one it contains", () => {
+    expect(ids("check reddex custom", REDDEX)).toEqual(["deployment-reddex-custom-website-deploy"]);
+  });
+
+  test("a prefix that names nothing matches nothing", () => {
+    expect(ids("how is grafana doing", REDDEX)).toEqual([]);
+  });
+
+  test("a prefix only matches on a whole segment boundary", () => {
+    expect(ids("how is redd doing", REDDEX)).toEqual([]);
+  });
+
+  test("the three-character floor still holds for prefixes", () => {
+    const short = [c("deployment", "db-writer"), c("deployment", "db-reader")];
+    expect(ids("restart db", short)).toEqual([]);
+  });
+
+  test("a prefix shared by more of the cluster than a person would say is not a reference", () => {
+    const many = [
+      c("deployment", "rigel-api"),
+      c("deployment", "rigel-web"),
+      c("deployment", "rigel-agent"),
+      c("deployment", "rigel-voice"),
+    ];
+    expect(ids("how is rigel doing", many)).toEqual([]);
+    expect(ids("how is rigel doing", many.slice(0, 3))).toEqual([
+      "deployment-rigel-agent",
+      "deployment-rigel-api",
+      "deployment-rigel-web",
+    ]);
+  });
+
+  test("prefixes never outrank an exact name or a pod base name", () => {
+    const mixed = [c("deployment", "web-frontend"), c("deployment", "web"), c("pod", "web-7f9b64c8d-x2x4p")];
+    expect(ids("is web healthy", mixed)).toEqual(["deployment-web"]);
+    const pods = [c("pod", "redis-6d4cf56db6-hk29w"), c("deployment", "redis-cache")];
+    expect(ids("restart redis", pods)).toEqual(["pod-redis-6d4cf56db6-hk29w"]);
+  });
+
+  test("pod names are not prefix-indexed, so hash stripping keeps its limits", () => {
+    const pods = [c("pod", "web-abc123-def456-ghi789")];
+    expect(ids("look at web", pods)).toEqual([]);
+  });
+
+  test("nodes prefix-match too", () => {
+    const nodes = [c("node", "k3s-slave-two")];
+    expect(ids("cordon k3s slave", nodes)).toEqual(["node-k3s-slave-two"]);
   });
 });
