@@ -115,7 +115,7 @@ vi.mock("@/components/ConfirmSheet", () => ({
 
 import { useCluster } from "@/store/cluster";
 import { notReadyMessage, resultSummary, voiceButtonLabel, VoiceControl } from "./VoiceControl";
-import { confirmSecondsLeft, VoicePopoverBody } from "./VoicePopoverBody";
+import { VoicePopoverBody } from "./VoicePopoverBody";
 import { AGENT_REPORT_TIMEOUT_MS, isMicDenied, useAgentReport, useVoiceRoom } from "./useVoiceRoom";
 import { AGENT_STATE_TOPIC } from "./VoiceSessionEffects";
 
@@ -488,10 +488,9 @@ test("isMicDenied reads the DOMException name getUserMedia actually rejects with
 
 const AGENT = "rigel-agent";
 
-/** A click-tier proposal shaped exactly the way apps/voice/src/agent.ts sends it. */
+/** A proposal shaped exactly the way apps/voice/src/agent.ts sends it. */
 const CLICK_FRAME = {
   id: "call-1",
-  tier: "click",
   action: { kind: "deleteResource", label: "Delete pod web-1", name: "web-1", namespace: "default" },
   command: "kubectl delete pod web-1 -n default",
 };
@@ -523,22 +522,22 @@ async function openWithClickProposal() {
   deliver("rigel.action", CLICK_FRAME, AGENT);
 }
 
-test("a click-tier proposal renders its command and a button labelled by the action", async () => {
+test("a proposal renders its command and a button labelled by the action", async () => {
   await openWithClickProposal();
 
   expect(await screen.findByText("kubectl delete pod web-1 -n default")).toBeTruthy();
   expect(screen.getByRole("button", { name: "Delete pod web-1" })).toBeTruthy();
 });
 
-test("a voice-tier proposal renders the spoken-confirm hint instead of a button", async () => {
+test("no proposal can be run by speaking: every one carries a button and no spoken prompt", async () => {
   h.status.data = { enabled: true, configured: true };
   render(<VoiceControl />);
   await userEvent.click(screen.getByLabelText("Voice assistant"));
   await screen.findByText("End session");
-  deliver("rigel.action", { ...CLICK_FRAME, tier: "voice", action: { kind: "restart", label: "Restart web" } }, AGENT);
+  deliver("rigel.action", { ...CLICK_FRAME, action: { kind: "restart", label: "Restart web" } }, AGENT);
 
-  expect(await screen.findByText(/Say "confirm" to run/)).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "Restart web" })).toBeNull();
+  expect(await screen.findByRole("button", { name: "Restart web" })).toBeTruthy();
+  expect(screen.queryByText(/confirm/i)).toBeNull();
 });
 
 test("a proposal carrying no command renders its target rather than an empty command", async () => {
@@ -548,7 +547,7 @@ test("a proposal carrying no command renders its target rather than an empty com
   await screen.findByText("End session");
   deliver(
     "rigel.action",
-    { id: "call-2", tier: "click", action: { kind: "purge", label: "Remove memos", name: "memos", namespace: "default" }, command: null },
+    { id: "call-2", action: { kind: "purge", label: "Remove memos", name: "memos", namespace: "default" }, command: null },
     AGENT,
   );
 
@@ -615,18 +614,14 @@ test("a result publish that fails surfaces on the row instead of being swallowed
   consoleError.mockRestore();
 });
 
-test("a rigel.action.result from the worker marks a voice-tier proposal done", async () => {
-  h.status.data = { enabled: true, configured: true };
-  render(<VoiceControl />);
-  await userEvent.click(screen.getByLabelText("Voice assistant"));
-  await screen.findByText("End session");
-  deliver("rigel.action", { ...CLICK_FRAME, tier: "voice" }, AGENT);
-  expect(await screen.findByText(/Say "confirm" to run/)).toBeTruthy();
+test("a rigel.action.result marks the proposal done and retires its button", async () => {
+  await openWithClickProposal();
+  expect(await screen.findByRole("button", { name: "Delete pod web-1" })).toBeTruthy();
 
   deliver("rigel.action.result", { id: "call-1", ok: true, summary: "ran" }, AGENT);
 
   expect(await screen.findByText("Ran")).toBeTruthy();
-  expect(screen.queryByText(/Say "confirm" to run/)).toBeNull();
+  expect(screen.queryByRole("button", { name: "Delete pod web-1" })).toBeNull();
 });
 
 test("a new session starts with no proposals from the last one", async () => {
@@ -645,26 +640,6 @@ test("resultSummary caps a runaway stderr line so the packet cannot blow the 64K
   const { ok, summary } = resultSummary({ code: 1, stdout: "", stderr: "x".repeat(5000) });
   expect(ok).toBe(false);
   expect(summary).toHaveLength(400);
-});
-
-test("a voice-tier proposal counts its arming window down beside the command", async () => {
-  h.status.data = { enabled: true, configured: true };
-  render(<VoiceControl />);
-  await userEvent.click(screen.getByLabelText("Voice assistant"));
-  await screen.findByText("End session");
-  deliver("rigel.action", { ...CLICK_FRAME, tier: "voice" }, AGENT);
-
-  expect(await screen.findByText(/Say "confirm" to run/)).toBeTruthy();
-  expect(screen.getByText("45s")).toBeTruthy();
-});
-
-test("confirmSecondsLeft floors at zero and stays absent for an unstamped frame", () => {
-  const armed = 1_000_000;
-  expect(confirmSecondsLeft(armed, armed)).toBe(45);
-  expect(confirmSecondsLeft(armed, armed + 200)).toBe(45);
-  expect(confirmSecondsLeft(armed, armed + 30_000)).toBe(15);
-  expect(confirmSecondsLeft(armed, armed + 90_000)).toBe(0);
-  expect(confirmSecondsLeft(undefined, armed)).toBeNull();
 });
 
 test("the waveform rests at a baseline instead of vanishing when no track is published", async () => {

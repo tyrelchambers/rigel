@@ -13,12 +13,6 @@ export interface AgentConfig {
   openrouterApiKey: string;
 }
 
-export interface ActionResult {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
 /**
  * The server answers /api/voice/agent-config with 409 (never thrown as a
  * generic HTTP error) when voice is reachable but not configured: missing a
@@ -37,8 +31,9 @@ export class VoiceNotConfiguredError extends Error {
 
 export interface ServerClient {
   agentConfig(): Promise<AgentConfig>;
+  /** Preview only. The worker deliberately cannot run a mutation: every change
+   *  is executed by the desktop's confirm sheet after a tap. */
   previewAction(action: SuggestedAction, context: string | null): Promise<string[]>;
-  runAction(action: SuggestedAction, context: string | null): Promise<ActionResult>;
 }
 
 export function createServerClient(
@@ -71,15 +66,6 @@ export function createServerClient(
       });
       if (!res.ok) throw new Error(`action preview failed: ${res.status}`);
       return ((await res.json()) as { command: string[] }).command;
-    },
-    async runAction(action, context) {
-      const res = await fetchFn(`${base}/api/action`, {
-        method: "POST",
-        headers: headers(context),
-        body: JSON.stringify(action),
-      });
-      if (!res.ok) throw new Error(`action failed: ${res.status}`);
-      return (await res.json()) as ActionResult;
     },
   };
 }

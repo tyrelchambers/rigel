@@ -44,9 +44,14 @@ Special kinds:
   Never list resources to delete one-by-one for a full removal.
 - `command` — escape hatch for kubectl (incl. plugins like `cnpg`) the typed
   kinds don't model.
-- `annotate` / `label` — metadata edits. `annotate` is voice-confirmable;
-  `label` is click-required, because labels feed selectors and a wrong one can
-  break routing silently.
+- `annotate` / `label` — metadata edits. `label` carries more risk than it
+  looks: labels feed Service selectors, NetworkPolicies and ArgoCD tracking, so
+  a wrong one breaks routing with nothing visible to see.
+
+Confirmation: EVERY action, from every surface including voice, is executed by
+a human clicking through the confirm sheet. The voice agent proposes and
+nothing more; no spoken word runs a change, because anyone within earshot can
+say one.
 
 Additional kinds:
 - `applyManifest` — install/self-host a new app. The `action` block is

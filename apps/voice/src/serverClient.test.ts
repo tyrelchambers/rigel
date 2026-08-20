@@ -39,11 +39,4 @@ describe("createServerClient", () => {
     expect(urlArg).toBe(`${BASE}/api/action?preview=1`);
     expect((init as RequestInit).headers).toMatchObject({ "X-Rigel-Context": "prod" });
   });
-
-  test("runAction returns the kubectl result and throws on HTTP failure", async () => {
-    const ok = createServerClient(BASE, "s", "w", fakeFetch(200, { code: 0, stdout: "restarted", stderr: "" }));
-    expect((await ok.runAction({ kind: "restart", label: "x", name: "web" }, null)).code).toBe(0);
-    const bad = createServerClient(BASE, "s", "w", fakeFetch(422, { error: "nope" }));
-    await expect(bad.runAction({ kind: "restart", label: "x", name: "web" }, null)).rejects.toThrow("422");
-  });
 });

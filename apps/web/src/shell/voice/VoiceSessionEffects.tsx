@@ -43,7 +43,6 @@ const MAX_PILLS = 60;
 /** A mutation the worker proposed, exactly as it arrives on `rigel.action`. */
 export interface VoiceActionFrame {
   id: string;
-  tier: "voice" | "click";
   action: ActionBlock;
   /**
    * Null for purge, applyManifest and proposeRepoFix: /api/action cannot
@@ -54,12 +53,9 @@ export interface VoiceActionFrame {
   done?: { ok: boolean; summary: string };
 }
 
-/** A frame plus renderer-only state. Neither field crosses the wire;
- *  `receivedAt` is stamped on arrival so the popover can count the voice
- *  confirmation's TTL down, which the frame itself does not carry. */
+/** A frame plus renderer-only state, which does not cross the wire. */
 export interface VoiceAction extends VoiceActionFrame {
   unreported?: string;
-  receivedAt?: number;
 }
 
 /**
@@ -93,20 +89,17 @@ export function toVoiceActionFrame(topic: string | undefined, body: unknown): Vo
   if (topic === ACTION_RESULT_TOPIC) {
     return {
       id: m.id,
-      tier: "voice",
       action: { kind: "" },
       command: null,
       done: { ok: m.ok === true, summary: typeof m.summary === "string" ? m.summary : "" },
     };
   }
   if (topic !== ACTION_TOPIC) return null;
-  if (m.tier !== "voice" && m.tier !== "click") return null;
   if (!m.action || typeof m.action !== "object") return null;
   const action = m.action as ActionBlock;
   if (typeof action.kind !== "string") return null;
   return {
     id: m.id,
-    tier: m.tier,
     action,
     command: typeof m.command === "string" ? m.command : null,
   };

@@ -5,12 +5,12 @@
  * RoomContext.Provider.
  */
 import { useEffect, useRef, useState } from "react";
-import { differenceInSeconds } from "date-fns";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronDown, faCircleExclamation } from "@awesome.me/kit-6050953220/icons/classic/solid";
+import { faChevronDown } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useMultibandTrackVolume, useTranscriptions, type AgentState } from "@livekit/components-react";
 import { MessageScroller, useMessageScroller } from "@shadcn/react/message-scroller";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { isDestructiveAction } from "@/lib/actionBlocks";
 import { MENTION_KIND_LABEL, type MentionCandidate } from "@/panels/chat/mentions";
 import { useCluster } from "@/store/cluster";
 import { useAssistantState, useMicTrackRef } from "./useVoiceRoom";
@@ -40,9 +40,6 @@ const STATE_LABEL: Record<AgentState, string> = {
   thinking: "Thinking",
   speaking: "Speaking",
 };
-
-/** Must stay in step with PENDING_TTL_MS in apps/voice/src/mutationFlow.ts. */
-const CONFIRM_TTL_MS = 45_000;
 
 const DOT_HALO_ALPHA = "66";
 
@@ -140,17 +137,17 @@ function StateRow({ onEnd, report }: { onEnd: () => void; report: AgentReport })
   );
 }
 
-/** Reveals the transcript's bottom whenever a voice-tier action arms,
- *  overriding a reader's scroll-up: a spoken "confirm" is about to run a
- *  cluster mutation, so it must surface regardless of where they're reading. */
+/** Reveals the transcript's bottom whenever a proposal arrives, overriding a
+ *  reader's scroll-up: the operator has to see what is waiting for them
+ *  regardless of where they are reading. */
 function TranscriptFollow({ actions }: { actions: VoiceAction[] }) {
   const { scrollToEnd } = useMessageScroller();
   const reducedMotion = usePrefersReducedMotion();
-  const armedRef = useRef<Set<string>>(new Set());
+  const openRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    const armed = new Set(actions.filter((a) => a.tier === "voice" && !a.done).map((a) => a.id));
-    const isNew = [...armed].some((id) => !armedRef.current.has(id));
-    armedRef.current = armed;
+    const open = new Set(actions.filter((a) => !a.done).map((a) => a.id));
+    const isNew = [...open].some((id) => !openRef.current.has(id));
+    openRef.current = open;
     if (isNew) scrollToEnd({ behavior: reducedMotion ? "auto" : "smooth" });
   }, [actions, reducedMotion, scrollToEnd]);
   return null;
@@ -262,124 +259,80 @@ function actionTarget(action: VoiceAction["action"]): string {
   return [action.kind, name, action.namespace && `in ${action.namespace}`].filter(Boolean).join(" ");
 }
 
-/** Seconds left before the worker drops the arming, or null if it never stamped.
- *  Rounded up so the first tick reads the full window rather than one short. */
-export function confirmSecondsLeft(receivedAt: number | undefined, now: number): number | null {
-  if (receivedAt == null) return null;
-  return Math.max(0, differenceInSeconds(receivedAt + CONFIRM_TTL_MS, now, { roundingMethod: "ceil" }));
-}
-
-/** The remaining share of the confirmation window, drawn rather than counted:
- *  a spoken confirm is a two-second decision and a number has to be read. */
-function CountdownRing({ left }: { left: number }) {
-  const radius = 11;
-  const circumference = 2 * Math.PI * radius;
-  const fraction = Math.min(1, Math.max(0, (left * 1000) / CONFIRM_TTL_MS));
-  return (
-    <svg viewBox="0 0 26 26" className="size-[26px] shrink-0 -rotate-90" aria-hidden>
-      <circle
-        cx="13"
-        cy="13"
-        r={radius}
-        fill="none"
-        strokeWidth="2.5"
-        stroke="color-mix(in oklab, var(--status-pending) 22%, transparent)"
-      />
-      <circle
-        cx="13"
-        cy="13"
-        r={radius}
-        fill="none"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        stroke="var(--status-pending)"
-        strokeDasharray={circumference}
-        strokeDashoffset={circumference * (1 - fraction)}
-      />
-    </svg>
-  );
-}
-
-function PendingConfirm({
+/**
+ * A proposal, command first. Nothing here can run by voice: the operator reads
+ * the exact kubectl and taps Review and run, which opens the same confirm
+ * sheet the chat panel uses. The meta line above it names the context and the
+ * kind, so the blast radius is legible before the command is parsed.
+ */
+function ProposalCard({
   action,
-  now,
   onRunClick,
-  onCancel,
+  onDismiss,
 }: {
   action: VoiceAction;
-  now: number;
   onRunClick: (a: VoiceAction) => void;
-  onCancel: (a: VoiceAction) => void;
+  onDismiss: (a: VoiceAction) => void;
 }) {
-  const left = confirmSecondsLeft(action.receivedAt, now);
+  const destructive = isDestructiveAction(action.action);
+  const accent = destructive ? "var(--status-failed)" : "var(--status-pending)";
   return (
     <div
       className="flex shrink-0 flex-col gap-2 border-t px-4 pt-3.5 pb-4"
       style={{ borderColor: "var(--border-subtle)" }}
     >
       <div
-        className="flex flex-col gap-2.5 rounded-[10px] border p-3"
+        className="flex flex-col overflow-hidden rounded-[10px] border"
         style={{
-          background: "color-mix(in oklab, var(--status-pending) 6%, transparent)",
-          borderColor: "color-mix(in oklab, var(--status-pending) 30%, transparent)",
+          background: `color-mix(in oklab, ${accent} 6%, transparent)`,
+          borderColor: `color-mix(in oklab, ${accent} 30%, transparent)`,
         }}
       >
-        <div className="flex items-center gap-2.5">
-          {left == null ? (
-            <FontAwesomeIcon
-              icon={faCircleExclamation}
-              className="size-[13px] shrink-0"
-              style={{ color: "var(--status-pending)" }}
-            />
-          ) : (
-            <CountdownRing left={left} />
-          )}
-          <span className="flex min-w-0 flex-col gap-0.5">
-            <span className="text-xs font-semibold" style={{ color: "var(--status-pending)" }}>
-              Say "confirm" to run
-            </span>
-            <span className="truncate text-2xs" style={{ color: "var(--fg-secondary)" }}>
-              {action.action.label ?? actionTarget(action.action)}
-            </span>
-          </span>
-          {left != null && (
-            <span className="ml-auto font-mono text-2xs" style={{ color: "var(--fg-tertiary)" }}>
-              {`${left}s`}
-            </span>
-          )}
-        </div>
-        <code
-          className="rounded-[7px] border px-2.5 py-2 font-mono text-2xs leading-[17px] break-all"
-          style={{
-            background: "var(--surface-sunken)",
-            borderColor: "var(--border-subtle)",
-            color: "var(--fg-secondary)",
-          }}
-        >
-          {action.command ?? actionTarget(action.action)}
-        </code>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => onRunClick(action)}
-            className="cursor-pointer rounded-lg px-3 py-1.5 text-2xs font-semibold transition-opacity hover:opacity-90"
-            style={{ background: "var(--accent-primary)", color: "var(--fg-inverse)" }}
-          >
-            Run on desktop
-          </button>
-          <button
-            onClick={() => onCancel(action)}
-            className="cursor-pointer rounded-lg border px-3 py-1.5 text-2xs font-semibold transition-opacity hover:opacity-90"
+        <div className="flex flex-col gap-2.5 p-3">
+          <code
+            className="rounded-[7px] border px-2.5 py-2 font-mono text-2xs leading-[17px] break-all"
             style={{
-              background: "var(--surface-elevated)",
-              borderColor: "var(--border-strong)",
-              color: "var(--fg-secondary)",
+              background: "var(--surface-sunken)",
+              borderColor: "var(--border-subtle)",
+              color: "var(--fg-primary)",
             }}
           >
-            Cancel
-          </button>
-          <span className="ml-auto text-3xs" style={{ color: "var(--fg-tertiary)" }}>
-            or say "cancel"
-          </span>
+            {action.command ?? actionTarget(action.action)}
+          </code>
+          <div className="flex items-center gap-2">
+            {action.done ? (
+              <span
+                className="text-2xs font-semibold"
+                style={{ color: action.done.ok ? "var(--status-running)" : "var(--status-failed)" }}
+              >
+                {action.done.ok ? "Ran" : action.done.summary || "Failed"}
+              </span>
+            ) : (
+              <>
+                <button
+                  onClick={() => onRunClick(action)}
+                  className="cursor-pointer rounded-lg px-3 py-1.5 text-2xs font-semibold transition-opacity hover:opacity-90"
+                  style={{ background: "var(--accent-primary)", color: "var(--fg-inverse)" }}
+                >
+                  {action.action.label ?? "Review and run"}
+                </button>
+                <button
+                  onClick={() => onDismiss(action)}
+                  className="cursor-pointer rounded-lg border px-3 py-1.5 text-2xs font-semibold transition-opacity hover:opacity-90"
+                  style={{
+                    background: "var(--surface-elevated)",
+                    borderColor: "var(--border-strong)",
+                    color: "var(--fg-secondary)",
+                  }}
+                >
+                  Dismiss
+                </button>
+                <span className="ml-auto text-3xs" style={{ color: "var(--fg-tertiary)" }}>
+                  {destructive ? "irreversible" : "reversible"}
+                </span>
+              </>
+            )}
+          </div>
         </div>
       </div>
       {action.unreported && (
@@ -391,56 +344,6 @@ function PendingConfirm({
   );
 }
 
-function ActionRow({ action, onRunClick }: { action: VoiceAction; onRunClick: (a: VoiceAction) => void }) {
-  return (
-    <div
-      className="flex shrink-0 flex-col gap-1.5 border-t px-4 py-2.5"
-      style={{ borderColor: "var(--border-subtle)" }}
-    >
-      {action.command ? (
-        <code
-          className="rounded-[7px] px-2 py-1 font-mono text-3xs break-all"
-          style={{ background: "var(--surface-sunken)", color: "var(--fg-secondary)" }}
-        >
-          {action.command}
-        </code>
-      ) : (
-        <span className="text-2xs" style={{ color: "var(--fg-secondary)" }}>
-          {actionTarget(action.action)}
-        </span>
-      )}
-      {action.done ? (
-        <span
-          className="text-2xs font-semibold"
-          style={{ color: action.done.ok ? "var(--status-running)" : "var(--status-failed)" }}
-        >
-          {action.done.ok ? "Ran" : action.done.summary || "Failed"}
-        </span>
-      ) : (
-        <button
-          onClick={() => onRunClick(action)}
-          className="cursor-pointer self-start rounded-lg border px-2.5 py-1 text-2xs font-semibold transition-opacity hover:opacity-90"
-          style={{
-            borderColor: "var(--border-subtle)",
-            color: "var(--fg-primary)",
-            background: "var(--surface-sunken)",
-          }}
-        >
-          {action.action.label ?? "Review and run"}
-        </button>
-      )}
-      {action.unreported && (
-        <span className="text-2xs" style={{ color: "var(--status-pending)" }}>
-          {action.unreported}
-        </span>
-      )}
-    </div>
-  );
-}
-
-/** Every resource named this session, behind an accordion. The list is
- *  uncapped, so a long session would otherwise push the proposal out of view;
- *  the header keeps the count visible while collapsed. */
 function Pills({ pills }: { pills: MentionCandidate[] }) {
   const [open, setOpen] = useState(true);
   if (pills.length === 0) return null;
@@ -507,14 +410,6 @@ export function VoicePopoverBody({
   onRunClick: (a: VoiceAction) => void;
   onCancel: (a: VoiceAction) => void;
 }) {
-  const counting = actions.some((a) => a.tier === "voice" && !a.done);
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!counting) return;
-    setNow(Date.now());
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, [counting]);
   return (
     <>
       <SignalEdge />
@@ -522,13 +417,9 @@ export function VoicePopoverBody({
       <Waveform report={report} />
       <Transcript actions={actions} />
       <Pills pills={pills} />
-      {actions.map((a) =>
-        a.tier === "voice" && !a.done ? (
-          <PendingConfirm key={a.id} action={a} now={now} onRunClick={onRunClick} onCancel={onCancel} />
-        ) : (
-          <ActionRow key={a.id} action={a} onRunClick={onRunClick} />
-        ),
-      )}
+      {actions.map((a) => (
+        <ProposalCard key={a.id} action={a} onRunClick={onRunClick} onDismiss={onCancel} />
+      ))}
     </>
   );
 }

@@ -44,16 +44,11 @@ describe("announceAgentState", () => {
 });
 
 describe("endDesktopSession", () => {
-  test("drops the armed mutation so a later 'confirm' cannot reach it", async () => {
+  test("drops proposals outstanding from the last session", async () => {
     const state = emptySessionState();
-    state.pending = {
-      id: "call-1",
-      action: { kind: "deleteResource", label: "Delete pod web-1", name: "web-1", namespace: "default" },
-      command: "kubectl delete pod web-1 -n default",
-      armedAt: Date.now(),
-    };
+    state.awaitingClick.set("call-1", "Delete pod web-1");
     await endDesktopSession(state, { updateChatCtx: vi.fn(async () => {}) });
-    expect(state.pending).toBeNull();
+    expect(state.awaitingClick.size).toBe(0);
   });
 
   test("drops the spoken context and the cluster keyterms", async () => {

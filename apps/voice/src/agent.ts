@@ -1,11 +1,10 @@
 // The voice Agent: instructions, tools, and the per-turn hook that carries both
 // context injection and the spoken-confirmation gate.
 import { llm, voice } from "@livekit/agents";
-import { ACTION_KINDS, isVoiceConfirmable, type SuggestedAction } from "@rigel/k8s/src/actionBlocks";
+import { ACTION_KINDS, type SuggestedAction } from "@rigel/k8s/src/actionBlocks";
 import { voiceSystemPrompt } from "@rigel/server/src/systemPrompt";
 import { z } from "zod";
-import { matchConfirmPhrase } from "./confirmPhrase.js";
-import { decideMutationRoute, isPendingLive } from "./mutationFlow.js";
+import { decideMutationRoute } from "./mutationFlow.js";
 import { desktopPresent, publishJson, type PublishRoom } from "./publish.js";
 import { runRead } from "./readTool.js";
 import type { ServerClient } from "./serverClient.js";
@@ -13,7 +12,15 @@ import type { SessionState } from "./state.js";
 
 export const CONTEXT_HEADING = "[Live cluster context]";
 
-export const CONFIRM_PROMPT = "Say confirm to run it, or cancel.";
+/** Kinds /api/action refuses to preview; they carry no command string. */
+const UNPREVIEWABLE_KINDS = new Set(["purge", "applyManifest", "proposeRepoFix"]);
+const PREVIEWABLE = (a: SuggestedAction) => !UNPREVIEWABLE_KINDS.has(a.kind);
+
+export const SENT_TO_DESKTOP =
+  "Sent to the desktop popover. Tell the user it is waiting there for them to review and run it. Never say you have run it, and never ask them to confirm out loud: a spoken word cannot run a change.";
+
+export const NO_DESKTOP =
+  "Refused: every change needs a tap in the desktop app, and no desktop session is connected. Tell the user this in one sentence.";
 
 /**
  * The refusal a wrong `kind` gets. It names the escape hatch and lists the
@@ -71,20 +78,17 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
               }
               const id = opts.toolCallId;
 
-              // Three click-required kinds cannot be previewed at all:
-              // /api/action short-circuits purge to {purge,name,namespace} with
-              // no command field, and throws outright for applyManifest and
-              // proposeRepoFix, which route to /api/apply and
-              // /api/git/propose-fix. Skipping the preview is safe because the
-              // kind table already pins these to click and classifyTier can
-              // only agree.
-              if (!isVoiceConfirmable(a)) {
-                if (!desktopPresent(room)) {
-                  return "Refused: that change is irreversible and there is no desktop session to confirm it on. Tell the user this in one sentence.";
-                }
+              // purge, applyManifest and proposeRepoFix cannot be previewed at
+              // all: /api/action short-circuits purge to {purge,name,namespace}
+              // with no command field, and throws outright for the other two,
+              // which route to /api/apply and /api/git/propose-fix. They go to
+              // the desktop without a command string; the ConfirmSheet builds
+              // its own preview there.
+              if (!PREVIEWABLE(a)) {
+                if (!desktopPresent(room)) return NO_DESKTOP;
                 state.awaitingClick.set(id, a.label);
-                await publishJson(room, "rigel.action", { id, tier: "click", action: a, command: null });
-                return "Sent to the desktop popover. Tell the user this change is irreversible, so it needs a tap on the desktop button to run.";
+                await publishJson(room, "rigel.action", { id, action: a, command: null });
+                return SENT_TO_DESKTOP;
               }
 
               let argv: string[];
@@ -97,34 +101,13 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
                 return "Refused: the app could not build that command.";
               }
               const command = argv.join(" ");
-              const decided = decideMutationRoute(a, command, desktopPresent(room));
+              const decided = decideMutationRoute(command, desktopPresent(room));
               if (decided.route === "refuse") {
                 return `Refused: ${decided.reason}. Tell the user this in one sentence.`;
               }
-              if (decided.route === "click") {
-                state.awaitingClick.set(id, a.label);
-                await publishJson(room, "rigel.action", { id, tier: "click", action: a, command });
-                return "Sent to the desktop popover. Tell the user this change is irreversible, so it needs a tap on the desktop button to run.";
-              }
-
-              state.pending = { id, action: a, command, armedAt: Date.now() };
-              // The slot opens now so a confirmation spoken over the readback
-              // still lands, but the TTL clock is restarted once the readback
-              // has actually played: reading a long kubectl command aloud would
-              // otherwise eat most of the window. addDoneCallback rather than
-              // speechHandle.waitForPlayout(), which throws
-              // SpeechHandleCircularWaitError when awaited from inside the tool
-              // that owns the handle.
-              //
-              // Never call opts.ctx.disallowInterruptions() here. A
-              // non-interruptible readback makes agent_activity drop user input
-              // before onUserTurnCompleted runs, so the confirm word would be
-              // unhearable.
-              opts.ctx.speechHandle.addDoneCallback(() => {
-                if (state.pending?.id === id) state.pending.armedAt = Date.now();
-              });
-              await publishJson(room, "rigel.action", { id, tier: "voice", action: a, command });
-              return `Proposed and awaiting a spoken confirmation. Read this command back to the user verbatim: ${command}. Then say exactly: ${CONFIRM_PROMPT}`;
+              state.awaitingClick.set(id, a.label);
+              await publishJson(room, "rigel.action", { id, action: a, command });
+              return SENT_TO_DESKTOP;
             },
           }),
         },
@@ -132,34 +115,6 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
     }
 
     override async onUserTurnCompleted(_chatCtx: llm.ChatContext, newMessage: llm.ChatMessage): Promise<void> {
-      const pending = state.pending;
-      // Applied to the FINAL transcript of the NEXT user turn only. Any
-      // utterance that is not a confirmation clears the slot, so a stale
-      // proposal can never be executed by a later turn.
-      state.pending = null;
-      if (isPendingLive(pending, Date.now())) {
-        const verdict = matchConfirmPhrase(newMessage.textContent ?? "");
-        if (verdict === "confirm") {
-          let spoken: string;
-          try {
-            const res = await server.runAction(pending.action, state.activeContext);
-            const ok = res.code === 0;
-            const firstErr = res.stderr.split("\n").find(Boolean) ?? "unknown error";
-            await publishJson(room, "rigel.action.result", { id: pending.id, ok, summary: ok ? "ran" : firstErr });
-            spoken = ok ? `Done. ${pending.action.label} completed.` : `That failed: ${firstErr}.`;
-          } catch (err) {
-            await publishJson(room, "rigel.action.result", { id: pending.id, ok: false, summary: String(err) });
-            spoken = "That failed to reach the app. Nothing was changed.";
-          }
-          this.session.say(spoken);
-          throw new voice.StopResponse();
-        }
-        if (verdict === "cancel") {
-          await publishJson(room, "rigel.action.result", { id: pending.id, ok: false, summary: "cancelled" });
-          this.session.say("Cancelled. Nothing was changed.");
-          throw new voice.StopResponse();
-        }
-      }
       if (state.contextLines.length === 0) return;
       newMessage.content.push(`${CONTEXT_HEADING}\n${state.contextLines.join("\n")}`);
       state.contextLines = [];

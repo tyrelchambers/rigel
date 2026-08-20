@@ -3,11 +3,10 @@ import { buildKeyterms, STATIC_KEYTERMS } from "./keyterms.js";
 import { DESKTOP_IDENTITY, applyDataFrame, emptySessionState, resetSessionState } from "./state.js";
 
 describe("emptySessionState", () => {
-  test("starts with no context and no pending mutation", () => {
+  test("starts with no context and nothing outstanding", () => {
     expect(emptySessionState()).toEqual({
       activeContext: null,
       contextLines: [],
-      pending: null,
       awaitingClick: new Map(),
       keyterms: STATIC_KEYTERMS,
     });
@@ -200,40 +199,5 @@ describe("rigel.action.result", () => {
     const state = awaiting();
     resetSessionState(state);
     expect(state.awaitingClick.size).toBe(0);
-  });
-});
-
-describe("cancelling a voice-tier proposal from the popover", () => {
-  const armed = () => ({
-    ...emptySessionState(),
-    pending: {
-      id: "call-1",
-      action: { kind: "restart", label: "Restart web", name: "web", namespace: "default" },
-      command: "kubectl rollout restart deployment/web -n default",
-      armedAt: Date.now(),
-    },
-  });
-
-  test("disarms the slot, so a later spoken confirm cannot run it", () => {
-    const state = armed();
-    const effect = applyDataFrame(
-      state,
-      DESKTOP_IDENTITY,
-      "rigel.action.result",
-      JSON.stringify({ id: "call-1", ok: false, summary: "cancelled" }),
-    );
-    expect(state.pending).toBeNull();
-    expect(effect.speak).toBeNull();
-  });
-
-  test("a result for a different id leaves the slot armed", () => {
-    const state = armed();
-    applyDataFrame(
-      state,
-      DESKTOP_IDENTITY,
-      "rigel.action.result",
-      JSON.stringify({ id: "call-other", ok: false, summary: "cancelled" }),
-    );
-    expect(state.pending?.id).toBe("call-1");
   });
 });

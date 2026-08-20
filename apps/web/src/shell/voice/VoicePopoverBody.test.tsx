@@ -60,10 +60,8 @@ function stubMatchMedia(matches: boolean) {
 function pendingAction(id: string): VoiceAction {
   return {
     id,
-    tier: "voice",
     action: { kind: "restart", label: "Restart web", name: "web", namespace: "default" },
     command: "kubectl rollout restart deployment/web -n default",
-    receivedAt: Date.now(),
   };
 }
 
@@ -255,22 +253,42 @@ test("the header keeps the count while the list is collapsed", async () => {
   expect(screen.getByText("2")).toBeInTheDocument();
 });
 
-test("cancelling a pending confirmation reports it rather than only dimming the card", async () => {
+test("dismissing a proposal reports it rather than only dimming the card", async () => {
   const onCancel = vi.fn();
   const action = pendingAction("a1");
   render(
     <VoicePopoverBody report={REPORT} pills={[]} actions={[action]} onRunClick={vi.fn()} onCancel={onCancel} onEnd={vi.fn()} />,
   );
-  await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  await userEvent.click(screen.getByRole("button", { name: "Dismiss" }));
   expect(onCancel).toHaveBeenCalledWith(action);
 });
 
-test("the pending card offers the desktop as the fallback route", async () => {
+test("running a proposal goes through the confirm sheet, never a spoken word", async () => {
   const onRunClick = vi.fn();
   const action = pendingAction("a1");
   render(
     <VoicePopoverBody report={REPORT} pills={[]} actions={[action]} onRunClick={onRunClick} onCancel={vi.fn()} onEnd={vi.fn()} />,
   );
-  await userEvent.click(screen.getByRole("button", { name: "Run on desktop" }));
+  expect(screen.queryByText(/confirm/i)).toBeNull();
+  await userEvent.click(screen.getByRole("button", { name: "Restart web" }));
   expect(onRunClick).toHaveBeenCalledWith(action);
+});
+
+test("a reversible proposal is marked as such, and a destructive one is not", () => {
+  const { rerender } = render(
+    <VoicePopoverBody report={REPORT} pills={[]} actions={[pendingAction("a1")]} onRunClick={vi.fn()} onCancel={vi.fn()} onEnd={vi.fn()} />,
+  );
+  expect(screen.getByText("reversible")).toBeInTheDocument();
+
+  rerender(
+    <VoicePopoverBody
+      report={REPORT}
+      pills={[]}
+      actions={[{ ...pendingAction("a1"), action: { kind: "deletePod", label: "Delete web-1", pod: "web-1" } }]}
+      onRunClick={vi.fn()}
+      onCancel={vi.fn()}
+      onEnd={vi.fn()}
+    />,
+  );
+  expect(screen.getByText("irreversible")).toBeInTheDocument();
 });

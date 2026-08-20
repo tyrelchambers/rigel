@@ -1,4 +1,5 @@
 import { test, it, expect, describe } from "vitest";
+import * as actionBlocks from "./actionBlocks";
 import {
   extractActionBlocks,
   stripActionBlocks,
@@ -8,8 +9,6 @@ import {
   extractAlertBlocks,
   parseSuggestedActions,
   ACTION_KINDS,
-  VOICE_CONFIRMABLE_KINDS,
-  isVoiceConfirmable,
 } from "./actionBlocks";
 
 function questionBlock(json: unknown): string {
@@ -265,56 +264,13 @@ describe("extractAlertBlocks", () => {
   });
 });
 
-describe("voice-confirmable tiers", () => {
-  const CLICK_REQUIRED_KINDS = ACTION_KINDS.filter((k) => !VOICE_CONFIRMABLE_KINDS.has(k));
-
-  test("the voice tier is exactly the reversible-undoable set", () => {
-    expect([...VOICE_CONFIRMABLE_KINDS].sort()).toEqual(
-      ["annotate", "cordon", "pause", "restart", "resume", "resumeCronJob", "scale", "setEnv", "setImage", "setResources", "suspendCronJob", "uncordon"].sort(),
-    );
-  });
-
-  // Locks the click-required complement to an explicit list. A kind added to
-  // ACTION_KINDS without a matching edit here fails this test — drift cannot
-  // silently fall through to either tier by default.
-  test("the click-required tier is exactly ACTION_KINDS minus the voice tier", () => {
-    expect(CLICK_REQUIRED_KINDS.sort()).toEqual(
-      [
-        "applyManifest", "command", "createNamespace", "deleteNamespace", "deletePod",
-        "deleteResource", "deleteWorkload", "drain", "label", "proposeRepoFix", "purge",
-        "rollback", "setEnvRef", "setImagePullSecrets", "triggerCronJob",
-      ].sort(),
-    );
-    expect(CLICK_REQUIRED_KINDS.length + VOICE_CONFIRMABLE_KINDS.size).toBe(ACTION_KINDS.length);
-  });
-
-  test("every action kind maps to exactly one tier (no orphans)", () => {
-    for (const kind of ACTION_KINDS) {
-      const voice = isVoiceConfirmable({ kind });
-      expect(typeof voice).toBe("boolean");
-      expect(voice).toBe(VOICE_CONFIRMABLE_KINDS.has(kind));
-    }
-  });
-
-  test("every kind in VOICE_CONFIRMABLE_KINDS is a real ACTION_KINDS member", () => {
-    for (const kind of VOICE_CONFIRMABLE_KINDS) {
-      expect((ACTION_KINDS as readonly string[]).includes(kind)).toBe(true);
-    }
-  });
-
-  test("an unknown kind is not voice-confirmable", () => {
-    expect(isVoiceConfirmable({ kind: "notARealKind" })).toBe(false);
-  });
-
-  test("annotate is voice-confirmable but label is not", () => {
-    expect(isVoiceConfirmable({ kind: "annotate" })).toBe(true);
-    expect(isVoiceConfirmable({ kind: "label" })).toBe(false);
-  });
-
-  test("a destructive hint always downgrades to click", () => {
-    expect(isVoiceConfirmable({ kind: "restart" })).toBe(true);
-    expect(isVoiceConfirmable({ kind: "restart", destructive: true })).toBe(false);
-    expect(isVoiceConfirmable({ kind: "deletePod" })).toBe(false);
-    expect(isVoiceConfirmable({ kind: "command" })).toBe(false);
+describe("confirmation", () => {
+  test("no kind can be executed by voice: every mutation needs a click", () => {
+    // Deliberately absent rather than empty. A spoken word is not a
+    // confirmation, because anyone within earshot can say it, so the tier
+    // table and the phrase matcher were removed rather than emptied.
+    const api = Object.keys(actionBlocks);
+    expect(api).not.toContain("isVoiceConfirmable");
+    expect(api).not.toContain("VOICE_CONFIRMABLE_KINDS");
   });
 });

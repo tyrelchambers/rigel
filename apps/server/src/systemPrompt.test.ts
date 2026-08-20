@@ -63,3 +63,10 @@ test("the voice prompt routes unmodelled changes to a real kind, not an invented
   expect(p).toContain("annotate");
   expect(p).toContain("never invent a kind of your own");
 });
+
+test("the voice prompt never asks for a spoken confirmation", () => {
+  const p = voiceSystemPrompt("prod");
+  expect(p).toContain("nothing you hear can run a change");
+  expect(p).toContain("NEVER ask the user to say confirm");
+  expect(p).not.toMatch(/ask the user to say confirm[^,]/);
+});

@@ -1,25 +1,15 @@
-import type { SuggestedAction } from "@rigel/k8s/src/actionBlocks";
 import { buildKeyterms, sameKeyterms } from "./keyterms.js";
 
 export const DESKTOP_IDENTITY = "rigel-desktop";
-
-export interface PendingMutation {
-  id: string;
-  action: SuggestedAction;
-  command: string;
-  armedAt: number;
-}
 
 /** Mutable per-session state, shared by the tools and the turn hook. */
 export interface SessionState {
   activeContext: string | null;
   contextLines: string[];
-  pending: PendingMutation | null;
   /**
-   * Click-tier proposals sent to the desktop, by tool-call id, holding the
-   * label to speak when the desktop reports back. The worker has no other
-   * record of a click-tier proposal: unlike a voice-tier one it never lands in
-   * `pending`, because the agent is not the thing that runs it.
+   * Proposals sent to the desktop, by tool-call id, holding the label to speak
+   * when the desktop reports back. It is the worker's only record of one: the
+   * agent is not the thing that runs a mutation.
    */
   awaitingClick: Map<string, string>;
   /** The STT keyterm list: static vocabulary plus the live cluster's names. */
@@ -30,7 +20,6 @@ export function emptySessionState(): SessionState {
   return {
     activeContext: null,
     contextLines: [],
-    pending: null,
     awaitingClick: new Map(),
     keyterms: buildKeyterms([]),
   };
@@ -40,15 +29,14 @@ export function emptySessionState(): SessionState {
  * Scrubs a finished session in place. The state object is captured by the
  * agent's tools and turn hook, so it is mutated rather than replaced.
  *
- * `pending` is the reason this exists: an armed mutation surviving into the
- * next session would let a reconnecting operator run a proposal they never
- * heard, just by saying "confirm". The rest goes with it because the desktop
- * republishes rigel.state and rigel.keyterms the moment it reconnects.
+ * A proposal outstanding from a previous session would otherwise be answered
+ * by a desktop that reconnected after it, so the agent would report an outcome
+ * for a change the operator never saw offered. The rest goes with it because
+ * the desktop republishes rigel.state and rigel.keyterms on reconnect.
  */
 export function resetSessionState(state: SessionState): void {
   state.activeContext = null;
   state.contextLines = [];
-  state.pending = null;
   state.awaitingClick.clear();
   state.keyterms = buildKeyterms([]);
 }
@@ -57,7 +45,7 @@ export function resetSessionState(state: SessionState): void {
 export interface FrameEffect {
   contextChanged: boolean;
   keytermsChanged: boolean;
-  /** A line the agent must speak, or null. Set only by a click-tier result. */
+  /** A line the agent must speak, or null. Set only by a desktop result. */
   speak: string | null;
 }
 
@@ -102,13 +90,6 @@ export function applyDataFrame(
     // An id we never proposed is ignored, which also drops the echo of the
     // worker's own voice-tier results.
     if (topic === "rigel.action.result" && typeof msg.id === "string") {
-      // A voice-tier proposal cancelled from the popover. The slot has to be
-      // disarmed here: otherwise the button only greys itself out locally and
-      // a "confirm" spoken for any reason on the next turn still runs it.
-      if (state.pending?.id === msg.id) {
-        state.pending = null;
-        return NO_EFFECT;
-      }
       const label = state.awaitingClick.get(msg.id);
       if (label === undefined) return NO_EFFECT;
       state.awaitingClick.delete(msg.id);

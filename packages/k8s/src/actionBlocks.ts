@@ -143,40 +143,6 @@ export function isDestructiveAction(action: Pick<SuggestedAction, "kind" | "dest
 }
 
 /**
- * Action kinds a VOICE confirmation may execute: reversible operations only
- * (scale re-scales, cordon has uncordon, setImage has rollout undo). Everything
- * else, and anything carrying a destructive hint, needs the click-confirmed
- * ConfirmSheet. Single source for the worker and the web UI.
- */
-export const VOICE_CONFIRMABLE_KINDS = new Set<string>([
-  "restart",
-  "scale",
-  "setImage",
-  "setEnv",
-  "setResources",
-  "cordon",
-  "uncordon",
-  "pause",
-  "resume",
-  "suspendCronJob",
-  "resumeCronJob",
-  // Annotations select nothing, so a wrong one cannot silently break routing
-  // the way a wrong label can. `label` stays click-confirmed for that reason.
-  "annotate",
-]);
-
-/**
- * Whether a spoken "confirm" may execute this action. Deny-by-default: a kind
- * absent from VOICE_CONFIRMABLE_KINDS — including any kind added to
- * ACTION_KINDS later without an explicit opt-in here — falls through `.has()`
- * to false, never true. The `destructive` hint can only downgrade a
- * voice-eligible kind to click, never upgrade one.
- */
-export function isVoiceConfirmable(action: Pick<SuggestedAction, "kind" | "destructive">): boolean {
-  return VOICE_CONFIRMABLE_KINDS.has(action.kind) && !isDestructiveAction(action);
-}
-
-/**
  * Extract fenced action blocks from markdown.
  * Mirrors apps/server/src/claudeBridge.ts extractActionBlocks().
  * Malformed JSON blocks are skipped. For `applyManifest` actions, the

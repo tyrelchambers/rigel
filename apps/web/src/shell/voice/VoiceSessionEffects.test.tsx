@@ -47,7 +47,6 @@ const AGENT = "rigel-agent";
 /** A click-tier proposal shaped exactly the way apps/voice/src/agent.ts sends it. */
 const CLICK_FRAME = {
   id: "call-1",
-  tier: "click",
   action: { kind: "deleteResource", label: "Delete pod web-1", name: "web-1", namespace: "default" },
   command: "kubectl delete pod web-1 -n default",
 };
@@ -368,7 +367,7 @@ test("two separate room mounts record under two separate session ids", () => {
   expect(new Set(sessions.map((s) => s.id)).size).toBe(2);
 });
 
-test("a click-tier frame from the agent reaches onAction intact", () => {
+test("a frame from the agent reaches onAction intact", () => {
   const room = fakeRoom();
   const onAction = vi.fn();
   render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={onAction} onAgentState={() => {}} />);
@@ -463,16 +462,16 @@ test("toVoiceActionFrame keeps a null command as null", () => {
   expect(frame).toEqual({ ...CLICK_FRAME, command: null } as VoiceActionFrame);
 });
 
-test("toVoiceActionFrame rejects a frame with an unknown tier", () => {
-  expect(toVoiceActionFrame(ACTION_TOPIC, { ...CLICK_FRAME, tier: "auto" })).toBeNull();
+test("a stray field on the wire is ignored rather than rejected", () => {
+  expect(toVoiceActionFrame(ACTION_TOPIC, { ...CLICK_FRAME, tier: "voice" })).toEqual(CLICK_FRAME);
 });
 
 test("toVoiceActionFrame rejects a frame with no action block", () => {
-  expect(toVoiceActionFrame(ACTION_TOPIC, { id: "call-1", tier: "click", command: null })).toBeNull();
+  expect(toVoiceActionFrame(ACTION_TOPIC, { id: "call-1", command: null })).toBeNull();
 });
 
 test("toVoiceActionFrame rejects a frame with no id", () => {
-  expect(toVoiceActionFrame(ACTION_TOPIC, { tier: "click", action: { kind: "restart" }, command: null })).toBeNull();
+  expect(toVoiceActionFrame(ACTION_TOPIC, { action: { kind: "restart" }, command: null })).toBeNull();
 });
 
 test("toVoiceActionFrame rejects an unknown topic", () => {
