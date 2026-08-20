@@ -348,3 +348,25 @@ test("a proposal with no command names its target instead of rendering an empty 
   expect(screen.getByText("purge memos in default")).toBeInTheDocument();
   expect(document.querySelector("pre")).toBeNull();
 });
+
+test("a long action label truncates instead of pushing Dismiss out of the card", () => {
+  render(
+    <VoicePopoverBody
+      report={REPORT}
+      pills={[]}
+      actions={[
+        {
+          id: "a1",
+          action: { kind: "deletePod", label: "Delete pod canada-hires-web-6f8c94d7-qm2xz", pod: "canada-hires-web-6f8c94d7-qm2xz" },
+          command: "kubectl delete pod canada-hires-web-6f8c94d7-qm2xz -n default",
+        },
+      ]}
+      onRunClick={vi.fn()}
+      onCancel={vi.fn()}
+      onEnd={vi.fn()}
+    />,
+  );
+  const run = screen.getByRole("button", { name: "Delete pod canada-hires-web-6f8c94d7-qm2xz" });
+  expect(run.className).toContain("truncate");
+  expect(screen.getByRole("button", { name: "Dismiss" }).className).toContain("shrink-0");
+});

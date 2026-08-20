@@ -320,14 +320,19 @@ function ProposalCard({
               <>
                 <button
                   onClick={() => onRunClick(action)}
-                  className="cursor-pointer rounded-lg px-3 py-1.5 text-2xs font-semibold transition-opacity hover:opacity-90"
+                  // The label is the model's, so its length is not ours to
+                  // assume: "Delete pod canada-hires-web-6f8c94" alone is
+                  // wider than the card. It truncates rather than pushing
+                  // Dismiss out of a card that clips its overflow.
+                  className="min-w-0 shrink cursor-pointer truncate rounded-lg px-3 py-1.5 text-2xs font-semibold transition-opacity hover:opacity-90"
                   style={{ background: "var(--accent-primary)", color: "var(--fg-inverse)" }}
+                  title={action.action.label ?? "Review and run"}
                 >
                   {action.action.label ?? "Review and run"}
                 </button>
                 <button
                   onClick={() => onDismiss(action)}
-                  className="cursor-pointer rounded-lg border px-3 py-1.5 text-2xs font-semibold transition-opacity hover:opacity-90"
+                  className="shrink-0 cursor-pointer rounded-lg border px-3 py-1.5 text-2xs font-semibold transition-opacity hover:opacity-90"
                   style={{
                     background: "var(--surface-elevated)",
                     borderColor: "var(--border-strong)",
@@ -336,7 +341,7 @@ function ProposalCard({
                 >
                   Dismiss
                 </button>
-                <span className="ml-auto text-3xs" style={{ color: "var(--fg-tertiary)" }}>
+                <span className="ml-auto shrink-0 text-3xs" style={{ color: "var(--fg-tertiary)" }}>
                   {destructive ? "needs your approval" : "reversible"}
                 </span>
               </>
