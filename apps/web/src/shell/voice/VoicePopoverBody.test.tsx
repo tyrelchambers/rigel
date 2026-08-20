@@ -274,11 +274,11 @@ test("running a proposal goes through the confirm sheet, never a spoken word", a
   expect(onRunClick).toHaveBeenCalledWith(action);
 });
 
-test("a destructive change says it needs approval; a reversible one says it is reversible", () => {
+test("only a destructive change is tagged, and it is tagged with what to do about it", () => {
   const { rerender } = render(
     <VoicePopoverBody report={REPORT} pills={[]} actions={[pendingAction("a1")]} onRunClick={vi.fn()} onCancel={vi.fn()} onEnd={vi.fn()} />,
   );
-  expect(screen.getByText("reversible")).toBeInTheDocument();
+  expect(screen.queryByText("reversible")).toBeNull();
 
   rerender(
     <VoicePopoverBody

@@ -341,9 +341,11 @@ function ProposalCard({
                 >
                   Dismiss
                 </button>
-                <span className="ml-auto shrink-0 text-3xs" style={{ color: "var(--fg-tertiary)" }}>
-                  {destructive ? "needs your approval" : "reversible"}
-                </span>
+                {destructive && (
+                  <span className="ml-auto shrink-0 text-3xs" style={{ color: "var(--fg-tertiary)" }}>
+                    needs your approval
+                  </span>
+                )}
               </>
             )}
           </div>
