@@ -16,7 +16,8 @@ Action JSON (`SuggestedAction`):
   `restart`, `scale`, `rollback`, `setEnv`, `setImage`, `setResources`,
   `pause`, `resume`, `deletePod`, `deleteWorkload`, `cordon`, `uncordon`,
   `drain`, `suspendCronJob`, `resumeCronJob`, `triggerCronJob`,
-  `createNamespace`, `deleteNamespace`, `deleteResource`, `purge`, `command`.
+  `createNamespace`, `deleteNamespace`, `deleteResource`, `annotate`, `label`,
+  `purge`, `command`.
 - Target fields (presence depends on kind):
   - `name` — controller / cronjob / namespace / resource target.
     (`deployment` is accepted as a back-compat alias; `target = name ?? deployment`.)
@@ -27,6 +28,10 @@ Action JSON (`SuggestedAction`):
     (kubectl quantity strings, e.g. `cpu=250m,memory=512Mi`).
   - `resourceKind` — deleteResource (e.g. `service`, `configmap`, `secret`,
     `pvc`, `pv`, `ingress`, `clusterrole`).
+  - `annotations` / `labels` (object string→string|null) — `annotate` / `label`.
+    A `null` value removes the key (kubectl `key-`). Targets any resource via
+    `resourceKind` (defaults to `deployment`); both build
+    `kubectl <annotate|label> <kind>/<name> -n <ns> --overwrite <pairs…>`.
   - `args` (string[]) — `command` only: literal kubectl args WITHOUT the `kubectl`
     binary or `--context` (app prepends both), e.g. `["cnpg","destroy","pg","pg-1","-n","default"]`.
   - `destructive` (bool) — `command` only: Claude's hint. App also infers from
@@ -39,6 +44,25 @@ Special kinds:
   Never list resources to delete one-by-one for a full removal.
 - `command` — escape hatch for kubectl (incl. plugins like `cnpg`) the typed
   kinds don't model.
+- `annotate` / `label` — metadata edits. `label` carries more risk than it
+  looks: labels feed Service selectors, NetworkPolicies and ArgoCD tracking, so
+  a wrong one breaks routing with nothing visible to see.
+
+Confirmation, voice surface: no spoken word ever runs a change, and the agent
+never asks for one — anyone within earshot could say it. What the agent may do
+is keyed on the ACTION, not on what it hears:
+- Non-destructive kinds (`AUTO_RUNNABLE_KINDS`: restart, rollback, pause,
+  resume, suspend/resumeCronJob, uncordon, scale, setImage, setEnv,
+  setResources, annotate, createNamespace) run on the operator's own
+  instruction. They destroy nothing and can be undone.
+- Everything else is surfaced in the desktop popover for the operator to
+  approve: the delete family, drain, cordon, purge, raw patches (setEnvRef,
+  setImagePullSecrets), `command`, `applyManifest`, `proposeRepoFix`, plus
+  `label` (feeds selectors) and `triggerCronJob` (starts arbitrary work).
+- A destructive hint downgrades any kind, `scale` to 0 replicas is treated as
+  an outage rather than a scale, and `classifyTier` on the built command is the
+  second, stricter gate: a kind that would otherwise run is surfaced when its
+  actual command tiers destructive.
 
 Additional kinds:
 - `applyManifest` — install/self-host a new app. The `action` block is

@@ -19,6 +19,13 @@ describe("decideRestart", () => {
     expect(decideRestart([1, 2, 3, 4], 100_000).restart).toBe(true);
   });
 
+  it("gives the voice worker its own tighter limit without a second policy", () => {
+    const crashes = [1_000, 2_000, 3_000];
+    expect(decideRestart(crashes, 4_000, { maxInWindow: 3 }).restart).toBe(false);
+    // The server, on the same list, is still inside its own allowance.
+    expect(decideRestart(crashes, 4_000).restart).toBe(true);
+  });
+
   it("honors custom window / max overrides", () => {
     expect(decideRestart([1_000, 1_500], 2_000, { maxInWindow: 2 }).restart).toBe(false);
     expect(decideRestart([1_000, 1_500], 2_000, { maxInWindow: 3 }).restart).toBe(true);

@@ -1,7 +1,11 @@
 import { test, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { AGENTS_CONFIG_KEY, emptyUserConfigData } from "@rigel/k8s/src/userConfig";
+import {
+  __resetClusterConfigCache,
+  __setClusterConfigIO,
+  __useFakeClusterConfig,
+  type FakeClusterConfig,
+} from "./clusterConfigStore";
 import { runAgent } from "./runAgent";
 import { runCodex } from "./codexBridge";
 import { runGemini } from "./geminiBridge";
@@ -38,75 +42,70 @@ vi.mock("./geminiBridge", () => ({
   }),
 }));
 
-let home: string;
-const ORIG_HOME = process.env.HOME;
+let fake: FakeClusterConfig;
+/** The agents config lives in the cluster, so routing reads it per context. */
+const CTX = "test-cluster";
 
-beforeEach(async () => {
-  home = await mkdtemp(join(tmpdir(), "rigel-runagent-"));
-  process.env.HOME = home;
-  await mkdir(join(home, ".claude"), { recursive: true });
+/** Seed the cluster's stored agents config. */
+function seedActiveAgent(activeAgentId: string): void {
+  fake.secrets.set(CTX, {
+    ...emptyUserConfigData(),
+    [AGENTS_CONFIG_KEY]: JSON.stringify({ activeAgentId, agents: {} }),
+  });
+  __resetClusterConfigCache();
+}
+
+beforeEach(() => {
+  fake = __useFakeClusterConfig();
 });
-afterEach(async () => {
-  if (ORIG_HOME === undefined) delete process.env.HOME;
-  else process.env.HOME = ORIG_HOME;
-  await rm(home, { recursive: true, force: true });
+afterEach(() => {
+  __setClusterConfigIO(null);
+  __resetClusterConfigCache();
 });
 
 test("an unknown active agent yields a single 'not available' error event", async () => {
   // No coming-soon agents remain, so the fallback is only hit when the active id
   // doesn't match any known runner. Force that by writing an unknown id.
-  await writeFile(
-    join(home, ".claude", "rigel-agents.json"),
-    JSON.stringify({ activeAgentId: "openrouter", agents: {} }),
-  );
+  seedActiveAgent("openrouter");
   const events: ChatEvent[] = [];
-  for await (const ev of runAgent("hi", null)) events.push(ev);
+  for await (const ev of runAgent("hi", CTX)) events.push(ev);
   expect(events).toHaveLength(1);
   expect(events[0].type).toBe("error");
   expect(events[0].text).toMatch(/isn't available/i);
 });
 
 test("active agent codex routes to the codex runner, not the 'not available' path", async () => {
-  await writeFile(
-    join(home, ".claude", "rigel-agents.json"),
-    JSON.stringify({ activeAgentId: "codex", agents: {} }),
-  );
+  seedActiveAgent("codex");
   const events: ChatEvent[] = [];
-  for await (const ev of runAgent("hi", null)) events.push(ev);
+  for await (const ev of runAgent("hi", CTX)) events.push(ev);
   // POSITIVE assertion: it genuinely entered the codex runner. We assert via the
   // spy because `codex` can be resolvable on this machine, so a real spawn would
   // not reliably produce a spawn error to match on.
   expect(runCodex).toHaveBeenCalledTimes(1);
-  expect(runCodex).toHaveBeenCalledWith("hi", null, undefined, undefined);
+  expect(runCodex).toHaveBeenCalledWith("hi", CTX, undefined, undefined);
   // And it did NOT short-circuit to the "isn't available yet" fallback.
   expect(events.some((ev) => /isn't available/i.test(ev.text ?? ""))).toBe(false);
 });
 
 test("active agent gemini routes to the gemini runner, not the 'not available' path", async () => {
-  await writeFile(
-    join(home, ".claude", "rigel-agents.json"),
-    JSON.stringify({ activeAgentId: "gemini", agents: {} }),
-  );
+  seedActiveAgent("gemini");
   const events: ChatEvent[] = [];
-  for await (const ev of runAgent("hi", null)) events.push(ev);
+  for await (const ev of runAgent("hi", CTX)) events.push(ev);
   // POSITIVE assertion: it genuinely entered the gemini runner (asserted via the spy).
   expect(runGemini).toHaveBeenCalledTimes(1);
-  expect(runGemini).toHaveBeenCalledWith("hi", null, undefined, undefined);
+  expect(runGemini).toHaveBeenCalledWith("hi", CTX, undefined, undefined);
   expect(events.some((ev) => /isn't available/i.test(ev.text ?? ""))).toBe(false);
 });
 
 test("active agent opencode routes to the opencode runner, not the 'not available' path", async () => {
-  await writeFile(
-    join(home, ".claude", "rigel-agents.json"),
-    JSON.stringify({ activeAgentId: "opencode", agents: {} }),
-  );
+  seedActiveAgent("opencode");
   const events: ChatEvent[] = [];
-  for await (const ev of runAgent("hi", null)) events.push(ev);
+  for await (const ev of runAgent("hi", CTX)) events.push(ev);
   // POSITIVE assertion: it genuinely entered the opencode runner. We assert via the
   // spy because `opencode` IS resolvable on this machine, so a real spawn would not
   // reliably produce a spawn error to match on.
   expect(runOpencode).toHaveBeenCalledTimes(1);
-  expect(runOpencode).toHaveBeenCalledWith("hi", null, undefined, undefined);
+  expect(runOpencode).toHaveBeenCalledWith("hi", CTX, undefined, undefined);
   // And it did NOT short-circuit to the "isn't available yet" fallback.
   expect(events.some((ev) => /isn't available/i.test(ev.text ?? ""))).toBe(false);
 });

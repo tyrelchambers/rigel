@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAgents, type AgentId } from "@/lib/api";
+import { ClusterConfigNote, clusterLocked } from "../ClusterConfigNote";
 import { AgentCard } from "./AgentCard";
 import { AgentSetup } from "./AgentSetup";
 
@@ -11,14 +12,23 @@ export function AgentsTab({ hideHeading = false }: { hideHeading?: boolean }) {
     return <p className="text-xs" style={{ color: "#8C8C95" }}>Loading agents…</p>;
   }
 
+  // Agent credentials live in the same per-cluster Secret the voice settings do,
+  // so an unreachable cluster is nowhere to save a key either.
+  const locked = clusterLocked(data.cluster);
+  const note = data.cluster && <ClusterConfigNote cluster={data.cluster} />;
+
   const current = selected ? data.agents.find((a) => a.id === selected) : null;
   if (current) {
     return (
-      <AgentSetup
-        agent={current}
-        isActive={current.id === data.activeAgentId}
-        onBack={() => setSelected(null)}
-      />
+      <div className="flex flex-col" style={{ gap: 16 }}>
+        {note}
+        <AgentSetup
+          agent={current}
+          isActive={current.id === data.activeAgentId}
+          locked={locked}
+          onBack={() => setSelected(null)}
+        />
+      </div>
     );
   }
 
@@ -32,6 +42,7 @@ export function AgentsTab({ hideHeading = false }: { hideHeading?: boolean }) {
           </p>
         </div>
       )}
+      {note}
       <div className="grid" style={{ gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>
         {data.agents.map((a) => (
           <AgentCard key={a.id} agent={a} isActive={a.id === data.activeAgentId} onOpen={setSelected} />

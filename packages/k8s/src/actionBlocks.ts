@@ -51,6 +51,10 @@ export interface SuggestedAction {
   body?: string;
   /** proposeRepoFix only — the paired NEW file content, attached by the parser. */
   content?: string;
+  /** annotate only — desired annotations; a null value removes the key. */
+  annotations?: Record<string, string | null>;
+  /** label only — desired labels; a null value removes the key. */
+  labels?: Record<string, string | null>;
 }
 
 /**
@@ -107,6 +111,8 @@ export const ACTION_KINDS = [
   "createNamespace",
   "deleteNamespace",
   "deleteResource",
+  "annotate",
+  "label",
   "purge",
   "command",
   "applyManifest",
@@ -134,6 +140,51 @@ const ALWAYS_DESTRUCTIVE_KINDS = new Set<string>([
  */
 export function isDestructiveAction(action: Pick<SuggestedAction, "kind" | "destructive">): boolean {
   return action.destructive === true || ALWAYS_DESTRUCTIVE_KINDS.has(action.kind);
+}
+
+/**
+ * Kinds the voice agent may run itself, on the operator's own instruction.
+ *
+ * This is NOT a confirmation gate: no spoken word runs anything, and the agent
+ * never asks for one. The trigger is the request itself ("restart reddex"),
+ * and the set is limited to changes that destroy nothing and can be undone:
+ * a rollout, a scale, a metadata edit, an uncordon.
+ *
+ * Everything else surfaces a card the operator taps. That includes the kinds
+ * the user named as destructive (delete, drain, cordon, raw patches), the
+ * arbitrary ones (command, applyManifest), and two that are not destructive
+ * but fail silently: `label`, because labels feed selectors, and
+ * `triggerCronJob`, because the job it starts can do anything.
+ *
+ * Deny-by-default: a kind added to ACTION_KINDS later without an explicit
+ * opt-in here falls through `.has()` to false. The command classifier in
+ * commandPolicy is the second, stricter gate, run on the built command.
+ */
+export const AUTO_RUNNABLE_KINDS = new Set<string>([
+  "restart",
+  "rollback",
+  "pause",
+  "resume",
+  "suspendCronJob",
+  "resumeCronJob",
+  "uncordon",
+  "scale",
+  "setImage",
+  "setEnv",
+  "setResources",
+  "annotate",
+  "createNamespace",
+]);
+
+/**
+ * Whether the voice agent may run this without surfacing it first. A
+ * destructive hint always downgrades, and scaling to zero is an outage rather
+ * than a scale, so it is surfaced however it was flagged.
+ */
+export function isAutoRunnable(action: Pick<SuggestedAction, "kind" | "destructive" | "replicas">): boolean {
+  if (isDestructiveAction(action)) return false;
+  if (action.kind === "scale" && action.replicas === 0) return false;
+  return AUTO_RUNNABLE_KINDS.has(action.kind);
 }
 
 /**

@@ -12,6 +12,7 @@ import {
   type AgentAuthMethod,
   type AgentView,
 } from "@/lib/api";
+import { SECRET_MASK } from "../secretMask";
 import { AgentGlyph } from "./agentGlyphs";
 
 const MUTED = "#8C8C95";
@@ -35,10 +36,12 @@ const METHOD_COPY: Record<
 export function AgentSetup({
   agent,
   isActive = false,
+  locked = false,
   onBack,
 }: {
   agent: AgentView;
   isActive?: boolean;
+  locked?: boolean;
   onBack: () => void;
 }) {
   const comingSoon = agent.status === "comingSoon";
@@ -48,8 +51,10 @@ export function AgentSetup({
   const [secret, setSecret] = useState("");
 
   const needsSecret = method === "apiKey";
+  // A stored key is never sent back, so an untouched field is empty and there is
+  // nothing to save: the key can only be replaced by typing a new one.
   const saveDisabled =
-    comingSoon || save.isPending || (needsSecret && !secret.trim());
+    comingSoon || locked || save.isPending || (needsSecret && !secret.trim());
   const connected = agent.connection === "connected";
   // Guide the two steps off the real status: installed once the CLI is on PATH
   // (notSignedIn means installed-but-unauthenticated), signed in once connected.
@@ -140,7 +145,7 @@ export function AgentSetup({
               <div key={m}>
                 <button
                   type="button"
-                  disabled={comingSoon}
+                  disabled={comingSoon || locked}
                   onClick={() => setMethod(m)}
                   className="flex w-full items-center rounded-lg border text-left transition-colors disabled:cursor-not-allowed"
                   style={{
@@ -171,18 +176,32 @@ export function AgentSetup({
                 </button>
 
                 {needsSecret && selected && (
-                  <input
-                    type="password"
-                    value={secret}
-                    disabled={comingSoon}
-                    onChange={(e) => setSecret(e.target.value)}
-                    placeholder={agent.id === "claude" ? "sk-ant-…" : "API key"}
-                    className="mt-2 w-full rounded-lg border border-white/[0.08] bg-black/20 font-mono outline-none focus:border-[#3B9BE8] text-xs"
-                    style={{
-                      padding: "9px 12px",
-                      color: "#FFFFFF",
-                    }}
-                  />
+                  <>
+                    <input
+                      type="password"
+                      aria-label={`${agent.label} API key`}
+                      value={secret}
+                      disabled={comingSoon || locked}
+                      onChange={(e) => setSecret(e.target.value)}
+                      placeholder={
+                        agent.apiKeySet
+                          ? SECRET_MASK
+                          : agent.id === "claude"
+                            ? "sk-ant-…"
+                            : "API key"
+                      }
+                      className="mt-2 w-full rounded-lg border border-white/[0.08] bg-black/20 font-mono outline-none focus:border-[#3B9BE8] text-xs disabled:cursor-not-allowed disabled:opacity-60"
+                      style={{
+                        padding: "9px 12px",
+                        color: "#FFFFFF",
+                      }}
+                    />
+                    {agent.apiKeySet && (
+                      <p className="mt-1.5 text-xs" style={{ color: MUTED }}>
+                        A key is saved. Type a new one to replace it.
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             );

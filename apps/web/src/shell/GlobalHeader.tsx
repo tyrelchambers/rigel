@@ -12,6 +12,7 @@ import { faArrowLeft, faArrowRight, faMagnifyingGlass, faUser } from "@awesome.m
 import { NamespaceSelector } from "./NamespaceBar";
 import { AppUpdateChip } from "./AppUpdateChip";
 import { ToolIssues } from "./ToolIssues";
+import { VoiceControl } from "./voice/VoiceControl";
 import { useNavHistory } from "./useNavHistory";
 import { isMacDesktop, isWindowsDesktop } from "@/lib/desktop";
 import { WINDOWS_CONTROLS_WIDTH } from "./WindowControls";
@@ -109,6 +110,9 @@ export function GlobalHeader({
 
       {/* Missing kubectl/helm — shown only while a required binary is gone */}
       <ToolIssues style={NO_DRAG} />
+
+      {/* Voice assistant: renders nothing unless the server has RIGEL_VOICE on */}
+      <VoiceControl style={NO_DRAG} />
 
       {/* Global search — opens the existing ⌘K CommandPalette */}
       <button

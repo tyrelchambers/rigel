@@ -15,6 +15,13 @@ vi.mock("@/store/cluster", () => ({
   useCluster: (select?: (s: { connected: boolean; missingTools: unknown[] }) => unknown) =>
     select ? select({ connected: false, missingTools: [] }) : false,
 }));
+const voiceProps = vi.hoisted(() => ({ style: undefined as React.CSSProperties | undefined }));
+vi.mock("./voice/VoiceControl", () => ({
+  VoiceControl: (props: { style?: React.CSSProperties }) => {
+    voiceProps.style = props.style;
+    return null;
+  },
+}));
 
 import { GlobalHeader } from "./GlobalHeader";
 
@@ -23,6 +30,11 @@ afterEach(cleanup);
 test("shows no Account affordance: local use needs no sign-in", () => {
   render(<GlobalHeader onOpenSearch={vi.fn()} onOpenAccount={vi.fn()} />);
   expect(screen.queryByLabelText("Account")).toBeNull();
+});
+
+test("the voice control gets no-drag, or the header would swallow its clicks", () => {
+  render(<GlobalHeader onOpenSearch={vi.fn()} onOpenAccount={vi.fn()} />);
+  expect(voiceProps.style).toEqual({ WebkitAppRegion: "no-drag" });
 });
 
 test("still renders the search button", () => {

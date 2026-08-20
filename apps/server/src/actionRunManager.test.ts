@@ -5,6 +5,7 @@ import { ActionRunManager } from "./actionRunManager";
 import { buildCommand } from "./actions";
 import { buildKubectlArgs } from "@rigel/k8s/src/run";
 import type { ActionBlock } from "./actions";
+import type { AiActionEntry } from "@rigel/k8s/src/aiActionLedger";
 
 function fakeProc() {
   const p = new EventEmitter() as any;
@@ -284,4 +285,152 @@ test("an action with no kind emits action.error without spawning", () => {
 
   expect(spawnFn).not.toHaveBeenCalled();
   expect(ws.sent.find((m: any) => m.type === "action.error" && m.id === "bad2")).toBeTruthy();
+});
+
+// ---------------------------------------------------------------------------
+// AI-action ledger (HELM-18) — every completed run is recorded, tagged `chat`.
+// ---------------------------------------------------------------------------
+
+function ledgerHarness(context: string | null = null) {
+  const recorded: Array<{ context: string | null; entry: AiActionEntry }> = [];
+  const proc = fakeProc();
+  const ws = fakeWs();
+  const mgr = new ActionRunManager(
+    ws as any,
+    context,
+    (() => proc) as any,
+    (ctx, entry) => recorded.push({ context: ctx, entry }),
+  );
+  return { recorded, proc, ws, mgr };
+}
+
+const settle = () => new Promise((r) => setImmediate(r));
+
+test("a successful run is recorded in the ledger with its exact command", async () => {
+  const { recorded, proc, mgr } = ledgerHarness("prod-cluster");
+  const action: ActionBlock = { kind: "restart", label: "Restart api", name: "api", namespace: "web" };
+  mgr.run({ id: "r1", action });
+
+  proc.stdout.end("deployment.apps/api restarted\n");
+  await settle();
+  proc.emit("close", 0);
+  await settle();
+
+  expect(recorded).toHaveLength(1);
+  expect(recorded[0]!.context).toBe("prod-cluster");
+  expect(recorded[0]!.entry).toMatchObject({
+    source: "chat",
+    kind: "Restarted",
+    target: { kind: "Deployment", name: "api", namespace: "web" },
+    command: `kubectl ${buildKubectlArgs("prod-cluster", buildCommand(action)).join(" ")}`,
+    trigger: "Restart api",
+    outcome: "success",
+    detail: "deployment.apps/api restarted",
+  });
+});
+
+test("a non-zero exit is recorded as a failure with the stderr detail", async () => {
+  const { recorded, proc, mgr } = ledgerHarness();
+  mgr.run({ id: "r2", action: { kind: "deletePod", pod: "api-1", namespace: "web" } });
+
+  proc.stderr.end('Error from server (NotFound): pods "api-1" not found\n');
+  await settle();
+  proc.emit("close", 1);
+  await settle();
+
+  expect(recorded[0]!.entry).toMatchObject({
+    kind: "Deleted",
+    target: { kind: "Pod", name: "api-1", namespace: "web" },
+    outcome: "failure",
+    detail: 'Error from server (NotFound): pods "api-1" not found',
+  });
+});
+
+test("the per-request context override is the context the entry is written to", async () => {
+  const { recorded, proc, mgr } = ledgerHarness("boot-cluster");
+  mgr.run({ id: "r3", action: { kind: "restart", name: "api" }, context: "other-cluster" });
+
+  proc.emit("close", 0);
+  await settle();
+
+  expect(recorded[0]!.context).toBe("other-cluster");
+  expect(recorded[0]!.entry.command).toContain("--context other-cluster");
+});
+
+test("a rejected action never reaches the ledger", () => {
+  const { recorded, mgr } = ledgerHarness();
+  mgr.run({ id: "p1", action: { kind: "purge", name: "app" } });
+  mgr.run({ id: "p2", action: { kind: "applyManifest", manifest: "x" } });
+  mgr.run({ id: "p3", action: { kind: "proposeRepoFix", source: "s" } });
+  mgr.run({ id: "p4", action: {} as any });
+
+  expect(recorded).toHaveLength(0);
+});
+
+test("a spawn failure is not recorded — no command reached the cluster", async () => {
+  const recorded: AiActionEntry[] = [];
+  const proc = fakeProc();
+  const ws = fakeWs();
+  const mgr = new ActionRunManager(ws as any, null, (() => proc) as any, (_c, e) => recorded.push(e));
+  mgr.run({ id: "e1", action: { kind: "restart", name: "api" } });
+
+  proc.emit("error", new Error("spawn kubectl ENOENT"));
+  await settle();
+
+  expect(recorded).toHaveLength(0);
+  expect(ws.sent.find((m: any) => m.type === "action.error" && m.id === "e1")).toBeTruthy();
+});
+
+test("captured output is bounded, and only its first line is stored", async () => {
+  const { recorded, proc, mgr } = ledgerHarness();
+  mgr.run({ id: "r4", action: { kind: "drain", node: "worker-1" } });
+
+  proc.stdout.write("node/worker-1 cordoned\n");
+  for (let i = 0; i < 5000; i++) proc.stdout.write(`evicting pod default/p-${i}\n`);
+  proc.stdout.end();
+  await settle();
+  proc.emit("close", 0);
+  await settle();
+
+  expect(recorded[0]!.entry.detail).toBe("node/worker-1 cordoned");
+  expect(recorded[0]!.entry.target).toEqual({ kind: "Node", name: "worker-1", namespace: "" });
+});
+
+test("output with no trailing newline still reaches the ledger detail", async () => {
+  const { recorded, proc, mgr } = ledgerHarness();
+  mgr.run({ id: "r5", action: { kind: "pause", name: "api", namespace: "web" } });
+
+  proc.stdout.end("deployment.apps/api paused");
+  await settle();
+  proc.emit("close", 0);
+  await settle();
+
+  expect(recorded[0]!.entry).toMatchObject({ kind: "Paused", detail: "deployment.apps/api paused" });
+});
+
+test("concurrent runs on one connection each get their own entry", async () => {
+  const recorded: AiActionEntry[] = [];
+  const procs: any[] = [];
+  const ws = fakeWs();
+  const mgr = new ActionRunManager(
+    ws as any,
+    null,
+    (() => { const p = fakeProc(); procs.push(p); return p; }) as any,
+    (_c, e) => recorded.push(e),
+  );
+  mgr.run({ id: "a", action: { kind: "restart", name: "api", namespace: "web" } });
+  mgr.run({ id: "b", action: { kind: "scale", name: "web", namespace: "web", replicas: 2 } });
+
+  procs[0].stdout.end("deployment.apps/api restarted\n");
+  procs[1].stdout.end("deployment.apps/web scaled\n");
+  await settle();
+  procs[0].emit("close", 0);
+  procs[1].emit("close", 0);
+  await settle();
+
+  expect(recorded.map((e) => e.kind)).toEqual(["Restarted", "Scaled"]);
+  expect(recorded.map((e) => e.detail)).toEqual([
+    "deployment.apps/api restarted",
+    "deployment.apps/web scaled",
+  ]);
 });

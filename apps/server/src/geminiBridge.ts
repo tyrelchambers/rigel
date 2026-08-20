@@ -191,7 +191,7 @@ export async function* runGemini(
     const env: Record<string, string> = {
       ...(process.env as Record<string, string>),
       ...(context ? { KUBECONFIG_CONTEXT: context } : {}),
-      ...(await geminiAuthEnv()),
+      ...(await geminiAuthEnv(context)),
       // Guard shim FIRST on PATH so kubectl/helm (and any child like `sh -c …`)
       // resolve to the read-only-enforcing wrappers, not the real binaries.
       PATH: `${guardBin}${path.delimiter}${process.env.PATH ?? ""}`,

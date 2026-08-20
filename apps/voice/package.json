@@ -1,0 +1,24 @@
+{
+  "name": "@rigel/voice",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@livekit/agents": "latest",
+    "@livekit/agents-plugin-openai": "latest",
+    "@livekit/rtc-node": "latest",
+    "@rigel/k8s": "workspace:*",
+    "@rigel/server": "workspace:*",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "tsx": "latest",
+    "typescript": "latest",
+    "vitest": "^4.1.8"
+  }
+}

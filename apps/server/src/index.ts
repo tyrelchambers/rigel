@@ -5,7 +5,7 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "./staticFiles";
 import { WebSocketServer } from "ws";
 import { resolveKubeconfigPath } from "./kubeconfig";
-import { kubectl, onSpawnFailure, runProcess } from "@rigel/k8s/src/run";
+import { kubectl, onSpawnFailure, runProcess, buildKubectlArgs } from "@rigel/k8s/src/run";
 import { WatchManager } from "./watchManager";
 import { makeWsHandlers } from "./ws";
 import { resolveRequestContext } from "./requestContext";
@@ -56,6 +56,10 @@ import type { CloudCluster } from "@rigel/cloud-connect/src/index";
 import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusMetrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
 import { chatConfig, setClaudeToken } from "./chatConfig";
+import { voiceStatus, voiceEnabled, setVoiceConfig, voiceConfig, missingVoiceFields } from "./voiceConfig";
+import { mintVoiceToken, agentConfigResponse, checkWorkerToken, isVoiceWorkerRequest, maskedVoiceConfig, voiceConfigPatch, VOICE_WORKER_HEADER, type VoiceRole } from "./voiceRoutes";
+import { recordAiAction } from "./aiActionLedger";
+import { buildAiActionEntry, summarizeActionDetail } from "@rigel/k8s/src/aiActionLedger";
 import { agentsView, setAgentAuth, setActiveAgent } from "./agentConfig";
 import { agentModels } from "./agentModels";
 import { getAgent, type AgentAuthMethod } from "./agentRegistry";
@@ -159,6 +163,12 @@ const bootAccessReady = accessFor(bootContext).then((a) => {
 // for the server's lifetime; killed wholesale on shutdown so no zombie kubectl
 // survives. The forwards bind the SERVER's 127.0.0.1 — see the module caveat.
 const portForwards = new PortForwardManager(bootContext);
+
+// Config writes land in a per-cluster Secret, so an unreachable cluster is the
+// expected failure and must reach the UI as its own message, not a bare 500.
+function errorText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
 
 async function handler(req: Request): Promise<Response> {
   {
@@ -401,16 +411,20 @@ async function handler(req: Request): Promise<Response> {
     // take precedence and are not overwritten. Lets a self-hoster enable chat
     // from the Settings screen without an env restart.
     if (url.pathname === "/api/chat-config" && req.method === "GET") {
-      return Response.json(await chatConfig());
+      return Response.json(await chatConfig(context));
     }
     if (url.pathname === "/api/chat-config" && req.method === "POST") {
       const body = (await req.json().catch(() => ({}))) as { token?: unknown };
-      await setClaudeToken(typeof body.token === "string" ? body.token : "");
-      return Response.json(await chatConfig());
+      try {
+        await setClaudeToken(context, typeof body.token === "string" ? body.token : "");
+      } catch (err) {
+        return Response.json({ error: errorText(err) }, { status: 503 });
+      }
+      return Response.json(await chatConfig(context));
     }
 
     if (url.pathname === "/api/agents" && req.method === "GET") {
-      return Response.json(await agentsView());
+      return Response.json(await agentsView(context));
     }
 
     // POST /api/agents/active  { id } — switch the active agent.
@@ -422,7 +436,11 @@ async function handler(req: Request): Promise<Response> {
       if (agent.status === "comingSoon") {
         return Response.json({ error: "agent not available yet" }, { status: 409 });
       }
-      return Response.json(await setActiveAgent(agent.id));
+      try {
+        return Response.json(await setActiveAgent(agent.id, context));
+      } catch (err) {
+        return Response.json({ error: errorText(err) }, { status: 503 });
+      }
     }
 
     // POST /api/agents/<id>/auth  { authMethod, secret? }
@@ -449,8 +467,11 @@ async function handler(req: Request): Promise<Response> {
       if (authMethod === "apiKey" && !secret.trim()) {
         return Response.json({ error: "an API key is required" }, { status: 400 });
       }
-      const view = await setAgentAuth(agent.id, { authMethod, secret });
-      return Response.json(view);
+      try {
+        return Response.json(await setAgentAuth(agent.id, { authMethod, secret }, context));
+      } catch (err) {
+        return Response.json({ error: errorText(err) }, { status: 503 });
+      }
     }
 
     // GET /api/agents/<id>/models — the models + efforts this agent can run, for
@@ -504,9 +525,79 @@ async function handler(req: Request): Promise<Response> {
         return Response.json({ command: fullCommand });
       }
 
-      // Execute mode: run kubectl and return the result
+      // Execute mode: run kubectl and return the result. Preview returned
+      // above, so only a command that actually ran reaches the ledger.
       const result = await kubectl(context, argv);
+      const outcome = result.code === 0 ? "success" : "failure";
+      void recordAiAction(
+        context,
+        buildAiActionEntry({
+          action: body,
+          source: isVoiceWorkerRequest(req) ? "voice" : "chat",
+          command: ["kubectl", ...buildKubectlArgs(context, argv)].join(" "),
+          outcome,
+          detail: summarizeActionDetail(outcome, result.stdout, result.stderr),
+        }),
+      );
       return Response.json(result);
+    }
+
+    // GET /api/voice/status: is the voice feature flag on, and is it configured.
+    if (url.pathname === "/api/voice/status" && req.method === "GET") {
+      return Response.json(await voiceStatus(context));
+    }
+
+    // GET /api/voice/config: the Settings view of the credentials. Masked: the
+    // renderer holds the session secret, and stored secrets never cross to it.
+    // PUT /api/voice/config: a partial patch. An absent field is left alone, an
+    // empty string clears it. Env-supplied fields still win in voiceConfig(),
+    // so the panel reports them instead of offering them for edit.
+    if (url.pathname === "/api/voice/config" && req.method === "GET") {
+      return Response.json(await maskedVoiceConfig(context));
+    }
+    if (url.pathname === "/api/voice/config" && req.method === "PUT") {
+      let body: unknown;
+      try {
+        body = await req.json();
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      try {
+        await setVoiceConfig(context, voiceConfigPatch(body));
+      } catch (err) {
+        return Response.json({ error: errorText(err) }, { status: 503 });
+      }
+      return Response.json(await maskedVoiceConfig(context));
+    }
+
+    // POST /api/voice/token: mint a room JWT for the renderer (or a phone, for
+    // the spike). The LiveKit API secret never leaves this process.
+    if (url.pathname === "/api/voice/token" && req.method === "POST") {
+      if (!voiceEnabled()) return Response.json({ error: "voice is disabled" }, { status: 404 });
+      const body = (await req.json().catch(() => ({}))) as { role?: string };
+      const role: VoiceRole = body.role === "phone" ? "phone" : "desktop";
+      const minted = await mintVoiceToken(role, context);
+      if (!minted) return Response.json({ error: "voice is not configured" }, { status: 409 });
+      return Response.json(minted);
+    }
+
+    // GET /api/voice/agent-config: the worker's bootstrap, a room JWT + provider
+    // keys. Gated by the worker token so the renderer (which holds only the
+    // session secret) can never read provider keys.
+    if (url.pathname === "/api/voice/agent-config" && req.method === "GET") {
+      if (!voiceEnabled()) return Response.json({ error: "voice is disabled" }, { status: 404 });
+      if (!checkWorkerToken(req.headers.get(VOICE_WORKER_HEADER))) {
+        return Response.json({ error: "forbidden" }, { status: 403 });
+      }
+      const cfg = await agentConfigResponse(context);
+      if (!cfg) {
+        const { config } = await voiceConfig(context);
+        return Response.json(
+          { error: "voice is not configured", missing: missingVoiceFields(config) },
+          { status: 409 },
+        );
+      }
+      return Response.json(cfg);
     }
 
     // POST /api/apply — MANIFEST apply, used by the catalog wizard and the

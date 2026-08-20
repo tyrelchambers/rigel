@@ -1,57 +1,35 @@
 // AI copilot credentials. The `claude` CLI authenticates via the
 // CLAUDE_CODE_OAUTH_TOKEN env var (from `claude setup-token`). To let a
 // self-hosting user configure it in-app (no YAML edit / restart), we ALSO accept
-// a token persisted to the writable claude home and inject it at spawn time.
+// a token saved in the cluster's rigel-user-config Secret and inject it at spawn
+// time.
 //
 // Precedence: an explicit env var ALWAYS wins (set by Helm/compose); otherwise
-// the file written from the Settings screen is used.
-import { homedir } from "node:os";
-import { join } from "node:path";
-import { readFile, unlink, writeFile } from "node:fs/promises";
-import { decryptSecret, encryptSecret } from "./secretStore";
-
-function tokenFile(): string {
-  return join(homedir(), ".claude", "rigel-oauth-token");
-}
+// the token saved from the Settings screen against the active cluster is used.
+import { CLAUDE_TOKEN_KEY } from "@rigel/k8s/src/userConfig";
+import {
+  readUserConfig,
+  writeUserConfig,
+  type ClusterConfigStatus,
+} from "./clusterConfigStore";
 
 function envToken(): string | null {
   const t = process.env.CLAUDE_CODE_OAUTH_TOKEN?.trim();
   return t ? t : null;
 }
 
-async function fileToken(): Promise<string | null> {
-  try {
-    const t = decryptSecret((await readFile(tokenFile(), "utf8")).trim());
-    return t || null;
-  } catch {
-    // ENOENT (file absent) or any read error → treat as no token.
-    return null;
-  }
+/** The token to launch `claude` with: env wins, else the cluster's Secret. */
+export async function effectiveClaudeToken(context: string | null): Promise<string | null> {
+  const env = envToken();
+  if (env) return env;
+  const stored = (await readUserConfig(context)).data[CLAUDE_TOKEN_KEY].trim();
+  return stored || null;
 }
 
-/** The token to launch `claude` with — env wins, else the persisted file. */
-export async function effectiveClaudeToken(): Promise<string | null> {
-  return envToken() ?? (await fileToken());
-}
-
-/** Persist a token to the claude home (chmod 600). Empty string clears it. */
-export async function setClaudeToken(token: string): Promise<void> {
-  const t = token.trim();
-  if (!t) {
-    await clearClaudeToken();
-    return;
-  }
-  // mode 0o600 replaces the prior chmod-spawn: owner read/write only. Encrypted
-  // at rest with the OS keychain on desktop; plaintext fallback in dev/tests.
-  await writeFile(tokenFile(), encryptSecret(t), { mode: 0o600 });
-}
-
-export async function clearClaudeToken(): Promise<void> {
-  try {
-    await unlink(tokenFile());
-  } catch {
-    /* already absent */
-  }
+/** Persist a token to the cluster's Secret. Empty string clears it. Throws when
+ *  there is no cluster to save to. */
+export async function setClaudeToken(context: string | null, token: string): Promise<void> {
+  await writeUserConfig(context, () => ({ [CLAUDE_TOKEN_KEY]: token.trim() }));
 }
 
 // When the token env var is fed by a k8s Secret (Helm sets these), point the UI
@@ -61,16 +39,22 @@ const SECRET_NS = process.env.POD_NAMESPACE?.trim() || null;
 
 export interface ChatConfigStatus {
   configured: boolean;
-  /** "env" = deployment-managed (read-only here); "file" = set in-app (editable). */
-  source: "env" | "file" | null;
+  /** "env" = deployment-managed (read-only here); "cluster" = saved in-app. */
+  source: "env" | "cluster" | null;
   /** The Secret backing the token env var, when known — for a deep link. */
   secret: { name: string; namespace: string } | null;
+  /** Where an in-app save would go, and whether that cluster is reachable. */
+  cluster: ClusterConfigStatus;
 }
 
 /** Chat-config status for the Settings screen / onboarding. */
-export async function chatConfig(): Promise<ChatConfigStatus> {
-  const secret = SECRET_NAME ? { name: SECRET_NAME, namespace: SECRET_NS ?? "default" } : null;
-  if (envToken()) return { configured: true, source: "env", secret };
-  if (await fileToken()) return { configured: true, source: "file", secret: null };
-  return { configured: false, source: null, secret: null };
+export async function chatConfig(context: string | null): Promise<ChatConfigStatus> {
+  const envSecret = SECRET_NAME ? { name: SECRET_NAME, namespace: SECRET_NS ?? "default" } : null;
+  const read = await readUserConfig(context);
+  const { data, ...cluster } = read;
+  if (envToken()) return { configured: true, source: "env", secret: envSecret, cluster };
+  if (data[CLAUDE_TOKEN_KEY].trim()) {
+    return { configured: true, source: "cluster", secret: null, cluster };
+  }
+  return { configured: false, source: null, secret: null, cluster };
 }

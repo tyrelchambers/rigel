@@ -16,6 +16,7 @@
     "@rigel/k8s": "workspace:*",
     "date-fns": "^4.4.0",
     "hono": "latest",
+    "livekit-server-sdk": "^2.17.0",
     "node-pty": "1.1.0",
     "ws": "latest"
   },

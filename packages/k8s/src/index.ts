@@ -109,6 +109,21 @@ export {
 } from "./gitSources";
 
 export {
+  USER_CONFIG_SECRET,
+  VOICE_CONFIG_KEY,
+  AGENTS_CONFIG_KEY,
+  CLAUDE_TOKEN_KEY,
+  USER_CONFIG_KEYS,
+  type UserConfigKey,
+  type UserConfigData,
+  emptyUserConfigData,
+  isUserConfigEmpty,
+  parseUserConfigSecret,
+  userConfigSecretJSON,
+  isSecretAbsent,
+} from "./userConfig";
+
+export {
   type MetricsInstallBackend,
   type InstalledBackend,
   METRICS_SERVICE_NAME,
@@ -124,6 +139,8 @@ export {
   type SuggestedQuestion,
   type QuestionField,
   ACTION_KINDS,
+  AUTO_RUNNABLE_KINDS,
+  isAutoRunnable,
   extractActionBlocks,
   extractAlertBlocks,
   extractQuestionBlocks,
@@ -374,6 +391,30 @@ export {
   PULL_REQUESTS_DATA_KEY,
   type ChatPrRecord,
 } from "./pullRequestLedger";
+
+export {
+  AI_ACTIONS_CONFIGMAP,
+  AI_ACTIONS_DATA_KEY,
+  AI_ACTIONS_LABEL_VALUE,
+  AI_ACTIONS_MAX,
+  AI_ACTIONS_MAX_BYTES,
+  AI_ACTION_COMMAND_MAX,
+  AI_ACTION_DETAIL_MAX,
+  AI_ACTION_TRIGGER_MAX,
+  AI_ACTION_TRUNCATED_MARKER,
+  aiActionsConfigMapJSON,
+  truncateForLedger,
+  appendAiAction,
+  buildAiActionEntry,
+  parseAiActions,
+  summarizeActionDetail,
+  type AiActionEntry,
+  type AiActionInput,
+  type AiActionOutcome,
+  type AiActionSource,
+  type AiActionSubject,
+  type AiActionTarget,
+} from "./aiActionLedger";
 
 /** Kubernetes ObjectMeta (subset used by the web panels). */
 export interface ObjectMeta {

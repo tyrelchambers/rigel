@@ -1,4 +1,5 @@
 import { test, it, expect, describe } from "vitest";
+import * as actionBlocks from "./actionBlocks";
 import {
   extractActionBlocks,
   stripActionBlocks,
@@ -7,6 +8,9 @@ import {
   buildQuestionAnswer,
   extractAlertBlocks,
   parseSuggestedActions,
+  ACTION_KINDS,
+  AUTO_RUNNABLE_KINDS,
+  isAutoRunnable,
 } from "./actionBlocks";
 
 function questionBlock(json: unknown): string {
@@ -259,5 +263,59 @@ describe("extractAlertBlocks", () => {
   });
   it("parseSuggestedActions returns alerts alongside actions/questions", () => {
     expect(parseSuggestedActions(md).alerts).toHaveLength(1);
+  });
+});
+
+describe("what the voice agent may run itself", () => {
+  test("no spoken word runs anything: the confirmation gate stays deleted", () => {
+    // Deliberately absent rather than empty. Anyone within earshot can say a
+    // word, so the tier table and the phrase matcher were removed, and what
+    // replaced them is keyed on the ACTION, never on what the agent hears.
+    const api = Object.keys(actionBlocks);
+    expect(api).not.toContain("isVoiceConfirmable");
+    expect(api).not.toContain("VOICE_CONFIRMABLE_KINDS");
+  });
+
+  test("rollouts, scales and metadata edits run on the operator's instruction", () => {
+    for (const kind of ["restart", "rollback", "pause", "resume", "scale", "setImage", "setEnv", "annotate"]) {
+      expect(isAutoRunnable({ kind })).toBe(true);
+    }
+  });
+
+  test("everything destructive is surfaced instead", () => {
+    for (const kind of ["deletePod", "deleteWorkload", "deleteResource", "deleteNamespace", "drain", "cordon", "purge"]) {
+      expect(isAutoRunnable({ kind })).toBe(false);
+    }
+  });
+
+  test("raw patches, arbitrary commands and manifests are surfaced", () => {
+    for (const kind of ["command", "applyManifest", "proposeRepoFix", "setEnvRef", "setImagePullSecrets"]) {
+      expect(isAutoRunnable({ kind })).toBe(false);
+    }
+  });
+
+  test("label and triggerCronJob are surfaced despite not destroying anything", () => {
+    expect(isAutoRunnable({ kind: "label" })).toBe(false);
+    expect(isAutoRunnable({ kind: "triggerCronJob" })).toBe(false);
+  });
+
+  test("a destructive hint downgrades an auto-runnable kind", () => {
+    expect(isAutoRunnable({ kind: "restart" })).toBe(true);
+    expect(isAutoRunnable({ kind: "restart", destructive: true })).toBe(false);
+  });
+
+  test("scaling to zero is an outage, not a scale, so it is surfaced", () => {
+    expect(isAutoRunnable({ kind: "scale", replicas: 3 })).toBe(true);
+    expect(isAutoRunnable({ kind: "scale", replicas: 0 })).toBe(false);
+  });
+
+  test("an unknown kind is never auto-runnable", () => {
+    expect(isAutoRunnable({ kind: "notARealKind" })).toBe(false);
+  });
+
+  test("every auto-runnable kind is a real ACTION_KINDS member", () => {
+    for (const kind of AUTO_RUNNABLE_KINDS) {
+      expect(ACTION_KINDS as readonly string[]).toContain(kind);
+    }
   });
 });

@@ -9,7 +9,7 @@
 // Trust model: the server has no built-in auth. It's bound to loopback
 // (HOST=127.0.0.1) and is only ever reachable by this desktop app on the same
 // machine.
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, safeStorage, shell, utilityProcess, type BrowserWindowConstructorOptions, type UtilityProcess } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, safeStorage, session, shell, utilityProcess, type BrowserWindowConstructorOptions, type UtilityProcess } from "electron";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { readFileSync, writeFileSync, chmodSync, mkdirSync } from "node:fs";
@@ -22,6 +22,7 @@ import { createPollLoop } from "./pollLoop";
 import { createBillingClient, type EntitlementPayload } from "./billingClient";
 import { createEntitlementProvider, type EntitlementProvider } from "./entitlementProvider";
 import { decideRestart } from "./restartPolicy";
+import { decideMicPermission } from "./micPermission";
 import {
   initAutoUpdater,
   getUpdateState,
@@ -45,6 +46,9 @@ const SIGNUP_APP_KEY = "3f0be9f2807280c51284681d4424e3883dab9650c1ae081c";
 // Minted once per launch; delivered to the forked server via env and to the
 // renderer via argv (see forkServer + createWindow). Gates /api/* + /ws.
 const SESSION_SECRET = randomBytes(24).toString("hex");
+// Minted once per launch; delivered to the forked voice worker via env, gating
+// its calls back into the server's /api/voice routes.
+const VOICE_WORKER_TOKEN = randomBytes(24).toString("hex");
 
 // ── Layout ────────────────────────────────────────────────────────────────
 // In dev, __dirname is apps/desktop/dist. The server source and built web SPA
@@ -57,6 +61,9 @@ const APPS_DIR = join(DESKTOP_DIR, ".."); // apps
 // wrapper that imports server.mjs) so the server self-terminates if the Electron
 // main process is killed with SIGKILL. Both files live in dist/ next to main.js.
 const SERVER_BUNDLE_DEV = join(__dirname, "server-entry.mjs");
+// The voice worker is bundled the same way (see build.mjs). Dev-only: forked
+// only when RIGEL_VOICE=1 (see forkVoiceWorker); packaging is a later task.
+const VOICE_BUNDLE_DEV = join(__dirname, "voice-entry.mjs");
 const WEB_DIST_DEV = join(APPS_DIR, "web", "dist");
 // The Rigel app icon. The packaged .app embeds build/icon.icns via
 // electron-builder, but `electron .` (dev) shows the default Electron dock icon
@@ -66,6 +73,7 @@ const APP_ICON = join(DESKTOP_DIR, "build", "icon.png");
 const SMOKE = process.env.HELMSMAN_SMOKE === "1";
 
 let serverProc: UtilityProcess | null = null;
+let voiceProc: UtilityProcess | null = null;
 // postMessage to the forked server (entitlement pushes; see setEntitlement there).
 function pushServerMessage(msg: unknown): void {
   serverProc?.postMessage(msg);
@@ -113,6 +121,23 @@ const serverCrashes: number[] = [];
 // Settle delay before respawning a crashed server. The renderer's WebSocket
 // reconnect (apps/web/src/lib/ws.ts) re-establishes once the new server binds.
 const SERVER_RESTART_DELAY_MS = 800;
+// The same, for the voice worker. Its own list and delay: a voice crash loop
+// says nothing about the server's health, and the worker has to rejoin the
+// LiveKit room rather than rebind a port.
+const voiceCrashes: number[] = [];
+const VOICE_RESTART_DELAY_MS = 1_000;
+// Tighter than the server's default of 5. Voice is optional, so a worker that
+// cannot stay up is given up on sooner and quietly: the popover already tells
+// the user the agent is unavailable.
+const VOICE_MAX_CRASHES = 3;
+// sysexits.h EX_CONFIG, matching apps/voice/src/index.ts's NOT_CONFIGURED_EXIT_CODE.
+// A 409 from /api/voice/agent-config means "not configured", which restarting
+// faster cannot fix, so this exit code is kept OUT of the crash-loop guard
+// entirely (never pushed to voiceCrashes, never subject to VOICE_MAX_CRASHES)
+// and retried on its own slow, indefinite cadence instead: the user may fix
+// Settings at any time while the app keeps running.
+const VOICE_NOT_CONFIGURED_EXIT_CODE = 78;
+const VOICE_NOT_CONFIGURED_RETRY_MS = 30_000;
 
 // ── Free-port helper ────────────────────────────────────────────────────────
 // Ask the OS for an ephemeral port (listen(0)), read it, release it. There's a
@@ -272,6 +297,8 @@ function forkServer(port: number): UtilityProcess {
   // Expose the audit skills + rigel-audit CLI to the chat claude (see helper).
   configureAuditSkillsEnv(env);
   env.RIGEL_SESSION_SECRET = SESSION_SECRET;
+  env.RIGEL_VOICE_WORKER_TOKEN = VOICE_WORKER_TOKEN;
+  env.RIGEL_USER_DATA_DIR = app.getPath("userData");
 
   let entry: string;
   let cwd: string;
@@ -346,6 +373,85 @@ function forkServer(port: number): UtilityProcess {
   return child;
 }
 
+// ── Voice worker fork ────────────────────────────────────────────────────────
+// Dev-only, flag-gated: forks the desktop-bundled voice.mjs (see build.mjs)
+// alongside the server when RIGEL_VOICE=1. Packaging (resourcesPath layout,
+// crash-restart, etc.) is a later task — a packaged app never forks this.
+//
+// utilityProcess.fork relaunches the SAME Electron helper binary with
+// --type=utility, so this child still links Electron Framework (which
+// embeds its own copy of Chromium's libwebrtc/ObjC layer) even though it
+// only runs our Node code. @livekit/rtc-node embeds a second, independently
+// built copy of the same upstream webrtc for its native audio pipeline, so
+// macOS logs ~9 "Class X is implemented in both ... Electron Framework and
+// ... rtc-node.darwin-arm64.node" warnings at this child's startup — dyld
+// keeps whichever definition loaded first and the loser's code becomes
+// unreachable for that class name. Electron's own webrtc classes and
+// rtc-node's are never handed objects by each other here (two unrelated
+// call graphs), and a live session has run clean on this pairing, but the
+// warning is real and Apple's docs are right that it's a latent
+// crash/UB class of bug in general — there's no fix available from this
+// repo short of running the voice worker under a real, separate Node
+// binary instead of Electron's own executable, which is a bigger call
+// than a log-noise cleanup.
+function forkVoiceWorker(port: number): UtilityProcess | null {
+  if (process.env.RIGEL_VOICE !== "1" || app.isPackaged) return null;
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PORT: String(port),
+    RIGEL_SESSION_SECRET: SESSION_SECRET,
+    RIGEL_VOICE_WORKER_TOKEN: VOICE_WORKER_TOKEN,
+  };
+  if (process.env.PATH) env.PATH = process.env.PATH;
+
+  const child = utilityProcess.fork(VOICE_BUNDLE_DEV, [], {
+    env: env as Record<string, string>,
+    cwd: DESKTOP_DIR,
+    stdio: "pipe",
+  });
+
+  child.stdout?.on("data", (b: Buffer) => process.stdout.write(`[voice] ${b}`));
+  child.stderr?.on("data", (b: Buffer) => process.stderr.write(`[voice] ${b}`));
+  child.on("exit", (code) => {
+    console.log(`[rigel] voice worker exited (code=${code})`);
+    voiceProc = null;
+    // Without this the worker's death is permanent for the app run, and the
+    // only sign of it is the popover reaching "Agent unavailable" 15 s after
+    // the user next opens it. Same exclusions as the server: an intentional
+    // quit, the headless smoke run, and the pre-window boot phase.
+    if (quitting || SMOKE || mainWindow === null) return;
+    if (code === VOICE_NOT_CONFIGURED_EXIT_CODE) {
+      console.log(`[rigel] voice is not configured; retrying in ${VOICE_NOT_CONFIGURED_RETRY_MS}ms`);
+      setTimeout(() => {
+        if (quitting || mainWindow === null) return;
+        voiceProc = forkVoiceWorker(serverPort);
+      }, VOICE_NOT_CONFIGURED_RETRY_MS);
+      return;
+    }
+    scheduleVoiceRestart();
+  });
+
+  return child;
+}
+
+// Respawn the crashed voice worker against the same server port. Capped by the
+// shared crash-loop policy, and silent when it gives up: unlike the server,
+// nothing else in the app stops working.
+function scheduleVoiceRestart(): void {
+  const now = Date.now();
+  voiceCrashes.push(now);
+  const decision = decideRestart(voiceCrashes, now, { maxInWindow: VOICE_MAX_CRASHES });
+  if (!decision.restart) {
+    console.error(`[rigel] giving up on the voice worker: ${decision.reason}`);
+    return;
+  }
+  console.log(`[rigel] voice worker crashed, restarting in ${VOICE_RESTART_DELAY_MS}ms`);
+  setTimeout(() => {
+    if (quitting || mainWindow === null) return;
+    voiceProc = forkVoiceWorker(serverPort);
+  }, VOICE_RESTART_DELAY_MS);
+}
+
 // Respawn the crashed server on the SAME port so the renderer's existing origin
 // (and its WebSocket reconnect) keep working with no window reload. A crash loop
 // is capped — past the limit we surface the failure instead of hot-looping.
@@ -388,6 +494,41 @@ async function waitForHealth(port: number, timeoutMs = 15_000): Promise<void> {
     await new Promise((r) => setTimeout(r, 250));
   }
   throw new Error(`server health timeout after ${timeoutMs}ms${lastErr ? `: ${String(lastErr)}` : ""}`);
+}
+
+// ── Media permission (voice) ────────────────────────────────────────────────
+// Electron denies every permission request by default. The voice assistant's
+// `room.localParticipant.setMicrophoneEnabled(true)` goes through
+// `getUserMedia`, which Chromium routes through both of these handlers: the
+// check handler for synchronous permission-state queries, the request handler
+// for the actual prompt. Registered once on the default session (the one
+// `createWindow` uses); the allow/deny decision itself lives in
+// micPermission.ts so it's unit-testable without mocking `session`.
+function configureMicPermissionHandlers(): void {
+  const ses = session.defaultSession;
+  const ownOrigin = () => `http://127.0.0.1:${serverPort}`;
+
+  ses.setPermissionRequestHandler((_webContents, permission, callback, details) => {
+    callback(
+      decideMicPermission({
+        permission,
+        requestingUrl: details.requestingUrl,
+        mediaTypes: "mediaTypes" in details ? details.mediaTypes : undefined,
+        voiceEnabled: process.env.RIGEL_VOICE === "1",
+        ownOriginPrefix: ownOrigin(),
+      }),
+    );
+  });
+
+  ses.setPermissionCheckHandler((_webContents, permission, _requestingOrigin, details) =>
+    decideMicPermission({
+      permission,
+      requestingUrl: details.requestingUrl,
+      mediaTypes: details.mediaType ? [details.mediaType] : undefined,
+      voiceEnabled: process.env.RIGEL_VOICE === "1",
+      ownOriginPrefix: ownOrigin(),
+    }),
+  );
 }
 
 // ── Window ───────────────────────────────────────────────────────────────
@@ -640,6 +781,7 @@ async function boot(): Promise<void> {
 
   serverPort = await resolveServerPort();
   savePreferredPort(serverPort); // remember it so the origin stays stable next launch
+  configureMicPermissionHandlers(); // needs serverPort resolved (own-origin check)
   console.log(`[rigel] starting server on 127.0.0.1:${serverPort}`);
   serverProc = forkServer(serverPort);
 
@@ -654,6 +796,8 @@ async function boot(): Promise<void> {
   await Promise.race([waitForHealth(serverPort), exited]);
 
   console.log(`[rigel] server healthy on :${serverPort}`);
+
+  voiceProc = forkVoiceWorker(serverPort);
 
   mainWindow = createWindow(serverPort);
 
@@ -753,7 +897,10 @@ if (SMOKE || gotLock) {
 // C2: best-effort sync cleanup for catchable main-process exits (uncaught
 // exceptions, normal exit). Does NOT cover SIGKILL of the Electron main —
 // see the parent-death watchdog in dist/server-entry.mjs for that case.
-process.on("exit", () => { try { serverProc?.kill(); } catch { /* noop */ } });
+process.on("exit", () => {
+  try { serverProc?.kill(); } catch { /* noop */ }
+  try { voiceProc?.kill(); } catch { /* noop */ }
+});
 
 // macOS: stay in the dock when all windows close (do NOT quit).
 app.on("window-all-closed", () => {
@@ -781,6 +928,7 @@ app.on("activate", () => {
 app.on("before-quit", (event) => {
   if (quitting) return;
   quitting = true; // suppress any in-flight server-restart timer
+  try { voiceProc?.kill(); } catch { /* noop */ }
   if (!serverProc) return; // nothing to drain; let the quit proceed
   event.preventDefault();
   const child = serverProc;

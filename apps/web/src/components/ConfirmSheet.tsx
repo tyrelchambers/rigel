@@ -35,6 +35,7 @@ import {
 } from "@/lib/api";
 import { listResources } from "@rigel/catalog";
 import { isDestructiveAction } from "@/lib/actionBlocks";
+import { CommandBlock } from "@/components/CommandBlock";
 import { runActionInBackground } from "@/lib/actionRunner";
 import { DiffView } from "@/components/DiffView";
 import { useCluster } from "@/store/cluster";
@@ -537,36 +538,25 @@ export function ConfirmSheet({
                 {previewError}
               </p>
             ) : commandString ? (
-              <div
-                className="relative overflow-hidden rounded-xl"
-                style={{ background: "#08080A", border: "1px solid #26272B" }}
-              >
-                <button
-                  type="button"
-                  onClick={handleCopy}
-                  aria-label={copied ? "Copied" : "Copy command"}
-                  className="absolute right-2.5 top-2.5 flex items-center gap-1 rounded-md px-2 py-1 text-3xs font-medium text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
-                >
-                  {copied ? (
-                    <FontAwesomeIcon icon={faCheck} className="size-3" style={{ color: "#28C840" }} />
-                  ) : (
-                    <FontAwesomeIcon icon={faCopy} className="size-3" />
-                  )}
-                  {copied ? "Copied" : "Copy"}
-                </button>
-                <pre className="overflow-x-auto px-4 py-3.5 pr-16 font-mono text-xs leading-6 whitespace-pre-wrap break-all">
-                  <span
-                    className="select-none font-semibold"
-                    style={{ color: accentColor }}
+              <CommandBlock
+                command={commandString}
+                accent={accentColor}
+                trailing={
+                  <button
+                    type="button"
+                    onClick={handleCopy}
+                    aria-label={copied ? "Copied" : "Copy command"}
+                    className="absolute right-2.5 top-2.5 z-10 flex items-center gap-1 rounded-md px-2 py-1 text-3xs font-medium text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
                   >
-                    ${" "}
-                  </span>
-                  <HighlightedCommand
-                    command={commandString}
-                    accent={accentColor}
-                  />
-                </pre>
-              </div>
+                    {copied ? (
+                      <FontAwesomeIcon icon={faCheck} className="size-3" style={{ color: "#28C840" }} />
+                    ) : (
+                      <FontAwesomeIcon icon={faCopy} className="size-3" />
+                    )}
+                    {copied ? "Copied" : "Copy"}
+                  </button>
+                }
+              />
             ) : (
               // Skeleton sized like the command block so the layout doesn't jump.
               <div
@@ -660,44 +650,3 @@ export function ConfirmSheet({
   );
 }
 
-/**
- * Renders a shell command with light syntax emphasis: the binary in the accent
- * color, flags dimmed, everything else in the foreground. Whitespace is
- * preserved so the `pre` still wraps/breaks naturally.
- */
-function HighlightedCommand({
-  command,
-  accent,
-}: {
-  command: string;
-  accent: string;
-}) {
-  const parts = command.split(/(\s+)/);
-  let sawBinary = false;
-  return (
-    <>
-      {parts.map((tok, i) => {
-        if (/^\s+$/.test(tok) || tok === "") return <span key={i}>{tok}</span>;
-        if (!sawBinary) {
-          sawBinary = true;
-          return (
-            <span key={i} style={{ color: accent }} className="font-medium">
-              {tok}
-            </span>
-          );
-        }
-        if (tok.startsWith("-"))
-          return (
-            <span key={i} className="text-muted-foreground">
-              {tok}
-            </span>
-          );
-        return (
-          <span key={i} className="text-foreground/90">
-            {tok}
-          </span>
-        );
-      })}
-    </>
-  );
-}

@@ -3,10 +3,18 @@ packages:
   - "packages/*"
 allowBuilds:
   esbuild: true
-  sharp: true
+  # Transitive only (astro's optional image service, and @livekit/agents, whose
+  # sharp import the voice bundle stubs out). Both resolve the prebuilt @img/*
+  # binaries at runtime, so nothing needs sharp's install script, which used to
+  # fall through to a libvips source build.
+  sharp: false
   node-pty: true
   # Windows-only installer pulled in by electron-builder; never built on macOS.
   electron-winstaller: false
+  # The voice worker's VAD (and the local turn-detector fallback) runs on this
+  # native binding, so it MUST stay loadable. Its "install" script is a no-op
+  # (`node -e ""`); allowing it just stops pnpm re-adding an ignored-build entry.
+  '@livekit/local-inference': true
 minimumReleaseAgeExclude:
   - '@iconify-json/lucide@1.2.113'
   - '@awesome.me/kit-6050953220@1.0.4'
@@ -16,3 +24,4 @@ minimumReleaseAgeExclude:
   - '@fortawesome/fontawesome-common-types@7.3.1'
   - '@fortawesome/fontawesome-svg-core@7.3.1'
   - '@fortawesome/react-fontawesome@3.4.0'
+  - livekit-client@2.22.0

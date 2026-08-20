@@ -14,7 +14,7 @@ export async function* runAgent(
   signal?: AbortSignal,
   opts?: RunClaudeOpts,
 ): AsyncGenerator<ChatEvent> {
-  const { activeAgentId } = await readAgentsConfig();
+  const { activeAgentId } = await readAgentsConfig(context);
   const agent = getAgent(activeAgentId);
 
   if (agent?.id === "claude") {

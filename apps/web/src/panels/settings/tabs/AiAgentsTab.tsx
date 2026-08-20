@@ -5,6 +5,7 @@ import { useAgents, useAssistantAction, type AssistantRequest } from "@/lib/api"
 import { useAssistant } from "../../assistant/useAssistant";
 import { AssistantConfigSection } from "../../assistant/agents/AssistantConfigSection";
 import { AgentsTab as ConnectAgents } from "../agents/AgentsTab";
+import { VoiceSection } from "../VoiceSection";
 
 export function AiAgentsTab() {
   const { data: agents } = useAgents();
@@ -60,6 +61,8 @@ export function AiAgentsTab() {
           />
         </div>
       </section>
+
+      <VoiceSection />
     </div>
   );
 }

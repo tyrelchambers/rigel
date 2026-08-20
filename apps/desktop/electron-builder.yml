@@ -101,6 +101,10 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.inherit.plist
   notarize: true
+  # Shown in macOS's microphone permission dialog when the voice assistant
+  # (RIGEL_VOICE=1) first requests mic access.
+  extendInfo:
+    NSMicrophoneUsageDescription: Rigel uses your microphone so you can talk to the voice assistant and ask questions about your cluster.
 
 # UNSIGNED Windows build: NSIS installer, x64 only. No Authenticode cert, so
 # users see a SmartScreen warning (More info -> Run anyway) on first launch.
