@@ -9,6 +9,7 @@ import { voice, inference, initializeLogger } from "@livekit/agents";
 import { ParticipantKind, Room, RoomEvent } from "@livekit/rtc-node";
 import * as openai from "@livekit/agents-plugin-openai";
 import { buildAgent, refreshInstructions } from "./agent.js";
+import { VOICE_SAMPLE_RATE, voiceOutputOptions } from "./audio.js";
 import { attachSessionDiagnostics } from "./diagnostics.js";
 import { announceAgentState, endDesktopSession } from "./lifecycle.js";
 import { createServerClient, VoiceNotConfiguredError, type AgentConfig, type ServerClient } from "./serverClient.js";
@@ -90,6 +91,7 @@ async function main(): Promise<void> {
       model: cfg.ttsModel,
       apiKey: cfg.apiKey,
       apiSecret: cfg.apiSecret,
+      sampleRate: VOICE_SAMPLE_RATE,
     }),
     // No `vad:` on purpose. AgentSession auto-provisions the bundled
     // inference.VAD({ model: "silero" }), which runs in-process via
@@ -172,6 +174,7 @@ async function main(): Promise<void> {
     // in the room would otherwise be eligible, and the desktop is the only
     // participant whose audio this agent is allowed to act on.
     inputOptions: { closeOnDisconnect: false, participantIdentity: DESKTOP_IDENTITY },
+    outputOptions: voiceOutputOptions(),
   });
   console.log("session started");
   void announceAgentState(room, session.agentState);
