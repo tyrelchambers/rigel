@@ -14,6 +14,7 @@
 // this does not.
 
 import { buildKubectlArgs } from "@rigel/k8s/src/run";
+import { requiredTools } from "./requiredTools";
 import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { connect } from "node:net";
@@ -210,6 +211,7 @@ export class PortForwardManager {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       // ENOENT etc. — kubectl not on PATH.
+      requiredTools.noteSpawnFailure("kubectl", message);
       return { kind: "error", status: 500, message: `kubectl not found: ${message}` };
     }
 
@@ -295,6 +297,7 @@ export class PortForwardManager {
     // spawn delivers ENOENT (kubectl missing) asynchronously as an "error" event
     // (no "close" follows when the child never started), so flip to "failed" here.
     proc.on("error", (err: Error) => {
+      requiredTools.noteSpawnFailure("kubectl", err.message);
       stderrChunks.push(err.message);
       fail();
     });

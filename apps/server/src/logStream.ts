@@ -14,6 +14,7 @@
 // when present (multi-pod `-l` streams), else echoed from the target.
 
 import { buildKubectlArgs } from "@rigel/k8s/src/run";
+import { requiredTools } from "./requiredTools";
 import { spawn, type ChildProcess } from "node:child_process";
 
 /** Minimal sink for outbound JSON frames (a ServerWebSocket satisfies this). */
@@ -158,6 +159,7 @@ export class LogStreamManager {
   }
 
   private sendError(namespace: string, message: string): void {
+    requiredTools.noteSpawnFailure("kubectl", message);
     this.ws.send(JSON.stringify({ type: "logs.error", namespace, message }));
   }
 

@@ -8,6 +8,7 @@ import { ClusterCreateManager } from "./clusterCreateManager";
 import { ActionRunManager } from "./actionRunManager";
 import { parseChatScope, resolveReadContexts } from "./chatScope";
 import { listContexts } from "./contexts";
+import { requiredTools } from "./requiredTools";
 import { isCloudContext } from "./cloudGate";
 import { cloudEnabled } from "./entitlements";
 import type { Access } from "./access";
@@ -134,6 +135,8 @@ export function makeWsHandlers(
       const bootKey = context ?? "";
       ctxAccessByWs.get(ws)!.set(bootKey, resolvedAccess);
       announceAccess(ws, bootKey, resolvedAccess);
+      // A client that connects after a binary went missing still learns about it.
+      ws.send(JSON.stringify({ type: "tools.status", missing: requiredTools.state() }));
     },
     close(ws: WebSocket) {
       unsubs.get(ws)?.forEach((u) => u());
@@ -180,6 +183,14 @@ export function makeWsHandlers(
               if (map.get(key) !== token) return;
               fanOut(ws, map, subCtx, key, m, access);
             });
+          }
+        });
+      } else if (m.type === "tools.recheck") {
+        // Always answer the asker, even when nothing changed — a subscribe-only
+        // reply would leave "Check again" looking dead when the tool is still gone.
+        void requiredTools.probeAll().then((missing) => {
+          if (ws.readyState === ws.OPEN) {
+            ws.send(JSON.stringify({ type: "tools.status", missing }));
           }
         });
       } else if (m.type === "unsubscribe") {
