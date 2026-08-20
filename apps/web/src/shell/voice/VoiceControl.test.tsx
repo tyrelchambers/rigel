@@ -262,8 +262,13 @@ test("agent lines and user lines land on opposite sides of the transcript", asyn
   ];
   render(<VoiceControl />);
   await userEvent.click(screen.getByLabelText("Voice assistant"));
+  // The user's bubble aligns itself to the right; the agent's is left by
+  // structure, sharing a row with the mark that attributes it.
   expect((await screen.findByText("scale the api")).className).toContain("self-end");
-  expect(screen.getByText("scaled to three").className).toContain("self-start");
+  const agent = screen.getByText("scaled to three");
+  expect(agent.className).not.toContain("self-end");
+  expect(agent.className).toContain("rounded-tl-[4px]");
+  expect(screen.getByText("Rigel")).toBeTruthy();
 });
 
 test("a resource the user named shows up as a pill and its summary reaches the worker", async () => {
@@ -735,6 +740,7 @@ test("a timed-out report reaches the popover's failure label, which the hook cou
       pills={[]}
       actions={[]}
       onRunClick={() => {}}
+      onCancel={() => {}}
     />,
   );
   expect(screen.getByText("Agent unavailable")).toBeTruthy();

@@ -102,6 +102,13 @@ export function applyDataFrame(
     // An id we never proposed is ignored, which also drops the echo of the
     // worker's own voice-tier results.
     if (topic === "rigel.action.result" && typeof msg.id === "string") {
+      // A voice-tier proposal cancelled from the popover. The slot has to be
+      // disarmed here: otherwise the button only greys itself out locally and
+      // a "confirm" spoken for any reason on the next turn still runs it.
+      if (state.pending?.id === msg.id) {
+        state.pending = null;
+        return NO_EFFECT;
+      }
       const label = state.awaitingClick.get(msg.id);
       if (label === undefined) return NO_EFFECT;
       state.awaitingClick.delete(msg.id);

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { AgentReport } from "./VoiceMark";
 import type { VoiceAction } from "./VoiceSessionEffects";
 
@@ -73,6 +74,7 @@ function renderPopover(actions: VoiceAction[]) {
       pills={[]}
       actions={actions}
       onRunClick={vi.fn()}
+      onCancel={vi.fn()}
       onEnd={vi.fn()}
     />,
   );
@@ -113,7 +115,7 @@ test("forces a smooth reveal the moment a voice confirmation arms", () => {
   expect(h.scrollToEnd).not.toHaveBeenCalled();
 
   rerender(
-    <VoicePopoverBody report={REPORT} pills={[]} actions={[pendingAction("a1")]} onRunClick={vi.fn()} onEnd={vi.fn()} />,
+    <VoicePopoverBody report={REPORT} pills={[]} actions={[pendingAction("a1")]} onRunClick={vi.fn()} onCancel={vi.fn()} onEnd={vi.fn()} />,
   );
   expect(h.scrollToEnd).toHaveBeenCalledTimes(1);
   expect(h.scrollToEnd).toHaveBeenLastCalledWith({ behavior: "smooth" });
@@ -129,6 +131,7 @@ test("does not re-reveal for the same confirmation on unrelated re-renders", () 
       pills={[]}
       actions={[pendingAction("a1")]}
       onRunClick={vi.fn()}
+      onCancel={vi.fn()}
       onEnd={vi.fn()}
     />,
   );
@@ -145,6 +148,7 @@ test("reveals again for a second confirmation later in the same session", () => 
       pills={[]}
       actions={[{ ...pendingAction("a1"), done: { ok: true, summary: "ran" } }, pendingAction("a2")]}
       onRunClick={vi.fn()}
+      onCancel={vi.fn()}
       onEnd={vi.fn()}
     />,
   );
@@ -157,7 +161,7 @@ test("reveals instantly instead of smoothly when the reader prefers reduced moti
   const { rerender } = renderPopover([]);
 
   rerender(
-    <VoicePopoverBody report={REPORT} pills={[]} actions={[pendingAction("a1")]} onRunClick={vi.fn()} onEnd={vi.fn()} />,
+    <VoicePopoverBody report={REPORT} pills={[]} actions={[pendingAction("a1")]} onRunClick={vi.fn()} onCancel={vi.fn()} onEnd={vi.fn()} />,
   );
   expect(h.scrollToEnd).toHaveBeenCalledWith({ behavior: "auto" });
 });
@@ -221,4 +225,52 @@ test("a fragmented agent answer renders as one bubble, not one per segment", () 
   ];
   renderPopover([]);
   expect(screen.getByText("Canada hires web is running one replica.")).toBeInTheDocument();
+});
+
+// ---------------------------------------------------------------------------
+// referenced-resources accordion + proposal card
+// ---------------------------------------------------------------------------
+const PILLS = [
+  { id: "u-1", kind: "deployment" as const, name: "canada-hires-web", context: "1/1 ready" },
+  { id: "u-2", kind: "pod" as const, name: "canada-hires-web-6f8c94", context: "Running" },
+];
+
+test("referenced resources open as an accordion, with the count on the header", async () => {
+  render(
+    <VoicePopoverBody report={REPORT} pills={PILLS} actions={[]} onRunClick={vi.fn()} onCancel={vi.fn()} onEnd={vi.fn()} />,
+  );
+  const trigger = screen.getByRole("button", { name: /Referenced this session/ });
+  expect(trigger.getAttribute("aria-expanded")).toBe("true");
+  expect(screen.getByText("canada-hires-web")).toBeInTheDocument();
+
+  await userEvent.click(trigger);
+  expect(trigger.getAttribute("aria-expanded")).toBe("false");
+});
+
+test("the header keeps the count while the list is collapsed", async () => {
+  render(
+    <VoicePopoverBody report={REPORT} pills={PILLS} actions={[]} onRunClick={vi.fn()} onCancel={vi.fn()} onEnd={vi.fn()} />,
+  );
+  await userEvent.click(screen.getByRole("button", { name: /Referenced this session/ }));
+  expect(screen.getByText("2")).toBeInTheDocument();
+});
+
+test("cancelling a pending confirmation reports it rather than only dimming the card", async () => {
+  const onCancel = vi.fn();
+  const action = pendingAction("a1");
+  render(
+    <VoicePopoverBody report={REPORT} pills={[]} actions={[action]} onRunClick={vi.fn()} onCancel={onCancel} onEnd={vi.fn()} />,
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(onCancel).toHaveBeenCalledWith(action);
+});
+
+test("the pending card offers the desktop as the fallback route", async () => {
+  const onRunClick = vi.fn();
+  const action = pendingAction("a1");
+  render(
+    <VoicePopoverBody report={REPORT} pills={[]} actions={[action]} onRunClick={onRunClick} onCancel={vi.fn()} onEnd={vi.fn()} />,
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Run on desktop" }));
+  expect(onRunClick).toHaveBeenCalledWith(action);
 });

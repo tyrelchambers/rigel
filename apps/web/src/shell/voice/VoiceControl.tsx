@@ -185,7 +185,7 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
         </PopoverTrigger>
         <PopoverContent
           align="end"
-          className="w-[380px] gap-0 overflow-hidden rounded-xl p-0"
+          className="w-[420px] gap-0 overflow-hidden rounded-xl p-0"
           style={{ borderColor: "var(--border-strong)" }}
         >
           {room ? (
@@ -195,6 +195,7 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
                 pills={pills}
                 actions={actions}
                 onRunClick={setConfirmAction}
+                onCancel={(a) => void reportResult(a, false, "cancelled")}
                 onEnd={closeSession}
               />
             </RoomContext.Provider>

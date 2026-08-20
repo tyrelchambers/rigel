@@ -7,10 +7,12 @@
 import { useEffect, useRef, useState } from "react";
 import { differenceInSeconds } from "date-fns";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCircleExclamation } from "@awesome.me/kit-6050953220/icons/classic/solid";
+import { faChevronDown, faCircleExclamation } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useMultibandTrackVolume, useTranscriptions, type AgentState } from "@livekit/components-react";
 import { MessageScroller, useMessageScroller } from "@shadcn/react/message-scroller";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { MENTION_KIND_LABEL, type MentionCandidate } from "@/panels/chat/mentions";
+import { useCluster } from "@/store/cluster";
 import { useAssistantState, useMicTrackRef } from "./useVoiceRoom";
 import {
   markAppearance,
@@ -93,6 +95,7 @@ function Waveform({ report }: { report: AgentReport }) {
 
 function StateRow({ onEnd, report }: { onEnd: () => void; report: AgentReport }) {
   const { state } = useAssistantState(report);
+  const context = useCluster((s) => s.activeContext);
   const reducedMotion = usePrefersReducedMotion();
   const { color, glow } = markAppearance(visualStateFor(state, true), 0, reducedMotion);
   return (
@@ -109,6 +112,18 @@ function StateRow({ onEnd, report }: { onEnd: () => void; report: AgentReport })
       <span className="text-xs font-semibold" style={{ color: "var(--fg-primary)" }}>
         {STATE_LABEL[state]}
       </span>
+      {context && (
+        <span
+          className="truncate rounded-md border px-1.5 py-0.5 font-mono text-3xs"
+          style={{
+            background: "var(--surface-sunken)",
+            borderColor: "var(--border-subtle)",
+            color: "var(--fg-tertiary)",
+          }}
+        >
+          {context}
+        </span>
+      )}
       <button
         onClick={onEnd}
         className="ml-auto cursor-pointer rounded-lg border px-2.5 py-1 text-2xs font-medium transition-opacity hover:opacity-90"
@@ -138,6 +153,27 @@ function TranscriptFollow({ actions }: { actions: VoiceAction[] }) {
     if (isNew) scrollToEnd({ behavior: reducedMotion ? "auto" : "smooth" });
   }, [actions, reducedMotion, scrollToEnd]);
   return null;
+}
+
+/** The voice mark at conversation scale, so an answer is attributable at a
+ *  glance rather than by bubble colour alone. */
+function AgentMark() {
+  return (
+    <span className="relative mt-4 size-5 shrink-0">
+      <span
+        className="absolute inset-0 rounded-full border"
+        style={{ borderColor: `${VOICE_SPECTRUM[0]}3d` }}
+      />
+      <span
+        className="absolute inset-1 rounded-full border"
+        style={{ borderColor: `${VOICE_SPECTRUM[0]}94` }}
+      />
+      <span
+        className="absolute inset-[7px] rounded-full"
+        style={{ background: "var(--accent-primary)" }}
+      />
+    </span>
+  );
 }
 
 export interface TranscriptTurn {
@@ -181,31 +217,44 @@ function Transcript({ actions }: { actions: VoiceAction[] }) {
               Say something. Your words appear here as you speak.
             </span>
           ) : (
-            <MessageScroller.Content className="flex flex-col gap-2.5">
-              {recent.map(({ id, fromAgent, text }) => {
-                return (
+            <MessageScroller.Content className="flex flex-col gap-3.5">
+              {recent.map(({ id, fromAgent, text }) =>
+                fromAgent ? (
+                  <MessageScroller.Item key={id} messageId={id} className="flex gap-2.5">
+                    <AgentMark />
+                    <span className="flex min-w-0 flex-col gap-1">
+                      <span className="flex items-center gap-1.5">
+                        <span className="text-3xs font-semibold" style={{ color: "var(--accent-soft)" }}>
+                          Rigel
+                        </span>
+                      </span>
+                      <span
+                        className="max-w-[300px] rounded-[12px] rounded-tl-[4px] border px-[13px] py-2.5 text-xs leading-[18px]"
+                        style={{
+                          background: `${VOICE_SPECTRUM[0]}14`,
+                          borderColor: `${VOICE_SPECTRUM[0]}3d`,
+                          color: "var(--fg-primary)",
+                        }}
+                      >
+                        {text}
+                      </span>
+                    </span>
+                  </MessageScroller.Item>
+                ) : (
                   <MessageScroller.Item key={id} messageId={id} className="flex flex-col">
                     <span
-                      className={`rounded-[9px] border px-[11px] py-2 text-xs leading-[18px] ${fromAgent ? "max-w-[260px] self-start" : "max-w-[90%] self-end"}`}
-                      style={
-                        fromAgent
-                          ? {
-                              background: `${VOICE_SPECTRUM[0]}14`,
-                              borderColor: `${VOICE_SPECTRUM[0]}3d`,
-                              color: "var(--fg-primary)",
-                            }
-                          : {
-                              background: "var(--surface-sunken)",
-                              borderColor: "var(--border-subtle)",
-                              color: "var(--fg-secondary)",
-                            }
-                      }
+                      className="max-w-[90%] self-end rounded-[12px] rounded-br-[4px] border px-[13px] py-2.5 text-xs leading-[18px]"
+                      style={{
+                        background: "var(--surface-sunken)",
+                        borderColor: "var(--border-subtle)",
+                        color: "var(--fg-secondary)",
+                      }}
                     >
                       {text}
                     </span>
                   </MessageScroller.Item>
-                );
-              })}
+                ),
+              )}
             </MessageScroller.Content>
           )}
         </MessageScroller.Viewport>
@@ -227,41 +276,119 @@ export function confirmSecondsLeft(receivedAt: number | undefined, now: number):
   return Math.max(0, differenceInSeconds(receivedAt + CONFIRM_TTL_MS, now, { roundingMethod: "ceil" }));
 }
 
-function PendingConfirm({ action, now }: { action: VoiceAction; now: number }) {
+/** The remaining share of the confirmation window, drawn rather than counted:
+ *  a spoken confirm is a two-second decision and a number has to be read. */
+function CountdownRing({ left }: { left: number }) {
+  const radius = 11;
+  const circumference = 2 * Math.PI * radius;
+  const fraction = Math.min(1, Math.max(0, (left * 1000) / CONFIRM_TTL_MS));
+  return (
+    <svg viewBox="0 0 26 26" className="size-[26px] shrink-0 -rotate-90" aria-hidden>
+      <circle
+        cx="13"
+        cy="13"
+        r={radius}
+        fill="none"
+        strokeWidth="2.5"
+        stroke="color-mix(in oklab, var(--status-pending) 22%, transparent)"
+      />
+      <circle
+        cx="13"
+        cy="13"
+        r={radius}
+        fill="none"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        stroke="var(--status-pending)"
+        strokeDasharray={circumference}
+        strokeDashoffset={circumference * (1 - fraction)}
+      />
+    </svg>
+  );
+}
+
+function PendingConfirm({
+  action,
+  now,
+  onRunClick,
+  onCancel,
+}: {
+  action: VoiceAction;
+  now: number;
+  onRunClick: (a: VoiceAction) => void;
+  onCancel: (a: VoiceAction) => void;
+}) {
   const left = confirmSecondsLeft(action.receivedAt, now);
   return (
     <div
-      className="flex shrink-0 flex-col gap-2 border-t px-4 pt-3 pb-3.5"
-      style={{
-        background: "color-mix(in oklab, var(--status-pending) 6%, transparent)",
-        borderColor: "var(--status-pending)",
-      }}
+      className="flex shrink-0 flex-col gap-2 border-t px-4 pt-3.5 pb-4"
+      style={{ borderColor: "var(--border-subtle)" }}
     >
-      <div className="flex items-center gap-[7px]">
-        <FontAwesomeIcon
-          icon={faCircleExclamation}
-          className="size-[13px] shrink-0"
-          style={{ color: "var(--status-pending)" }}
-        />
-        <span className="text-2xs font-semibold" style={{ color: "var(--status-pending)" }}>
-          Say "confirm" to run
-        </span>
-        {left != null && (
-          <span className="ml-auto font-mono text-2xs" style={{ color: "var(--fg-tertiary)" }}>
-            {`${left}s`}
-          </span>
-        )}
-      </div>
-      <code
-        className="rounded-[7px] border px-2.5 py-2 font-mono text-2xs leading-[17px] break-all"
+      <div
+        className="flex flex-col gap-2.5 rounded-[10px] border p-3"
         style={{
-          background: "var(--surface-sunken)",
-          borderColor: "var(--border-subtle)",
-          color: "var(--fg-secondary)",
+          background: "color-mix(in oklab, var(--status-pending) 6%, transparent)",
+          borderColor: "color-mix(in oklab, var(--status-pending) 30%, transparent)",
         }}
       >
-        {action.command ?? actionTarget(action.action)}
-      </code>
+        <div className="flex items-center gap-2.5">
+          {left == null ? (
+            <FontAwesomeIcon
+              icon={faCircleExclamation}
+              className="size-[13px] shrink-0"
+              style={{ color: "var(--status-pending)" }}
+            />
+          ) : (
+            <CountdownRing left={left} />
+          )}
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <span className="text-xs font-semibold" style={{ color: "var(--status-pending)" }}>
+              Say "confirm" to run
+            </span>
+            <span className="truncate text-2xs" style={{ color: "var(--fg-secondary)" }}>
+              {action.action.label ?? actionTarget(action.action)}
+            </span>
+          </span>
+          {left != null && (
+            <span className="ml-auto font-mono text-2xs" style={{ color: "var(--fg-tertiary)" }}>
+              {`${left}s`}
+            </span>
+          )}
+        </div>
+        <code
+          className="rounded-[7px] border px-2.5 py-2 font-mono text-2xs leading-[17px] break-all"
+          style={{
+            background: "var(--surface-sunken)",
+            borderColor: "var(--border-subtle)",
+            color: "var(--fg-secondary)",
+          }}
+        >
+          {action.command ?? actionTarget(action.action)}
+        </code>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onRunClick(action)}
+            className="cursor-pointer rounded-lg px-3 py-1.5 text-2xs font-semibold transition-opacity hover:opacity-90"
+            style={{ background: "var(--accent-primary)", color: "var(--fg-inverse)" }}
+          >
+            Run on desktop
+          </button>
+          <button
+            onClick={() => onCancel(action)}
+            className="cursor-pointer rounded-lg border px-3 py-1.5 text-2xs font-semibold transition-opacity hover:opacity-90"
+            style={{
+              background: "var(--surface-elevated)",
+              borderColor: "var(--border-strong)",
+              color: "var(--fg-secondary)",
+            }}
+          >
+            Cancel
+          </button>
+          <span className="ml-auto text-3xs" style={{ color: "var(--fg-tertiary)" }}>
+            or say "cancel"
+          </span>
+        </div>
+      </div>
       {action.unreported && (
         <span className="text-2xs" style={{ color: "var(--status-pending)" }}>
           {action.unreported}
@@ -318,30 +445,57 @@ function ActionRow({ action, onRunClick }: { action: VoiceAction; onRunClick: (a
   );
 }
 
+/** Every resource named this session, behind an accordion. The list is
+ *  uncapped, so a long session would otherwise push the proposal out of view;
+ *  the header keeps the count visible while collapsed. */
 function Pills({ pills }: { pills: MentionCandidate[] }) {
+  const [open, setOpen] = useState(true);
   if (pills.length === 0) return null;
   return (
-    <div
-      className="flex max-h-[7.5rem] shrink-0 flex-wrap items-center gap-1.5 overflow-y-auto border-t px-4 pt-2.5 pb-3.5"
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      className="shrink-0 border-t"
       style={{ borderColor: "var(--border-subtle)" }}
     >
-      {pills.map((p) => (
-        <span
-          key={p.id}
-          className="inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-2xs"
-          style={{
-            background: "var(--surface-sunken)",
-            borderColor: "var(--border-subtle)",
-            color: "var(--fg-secondary)",
-          }}
-        >
-          <span className="font-mono text-3xs font-semibold" style={{ color: "var(--accent-primary)" }}>
-            {MENTION_KIND_LABEL[p.kind]}
-          </span>
-          {p.name}
+      <CollapsibleTrigger className="flex w-full cursor-pointer items-center gap-2 px-4 pt-2.5 pb-2 text-left">
+        <span className="text-2xs font-semibold" style={{ color: "var(--fg-tertiary)" }}>
+          Referenced this session
         </span>
-      ))}
-    </div>
+        <span
+          className="rounded-full px-1.5 py-px font-mono text-3xs font-semibold"
+          style={{ background: "var(--surface-sunken)", color: "var(--fg-secondary)" }}
+        >
+          {pills.length}
+        </span>
+        <FontAwesomeIcon
+          icon={faChevronDown}
+          className={`ml-auto size-3 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+          style={{ color: "var(--fg-tertiary)" }}
+          aria-hidden
+        />
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="flex max-h-[7.5rem] flex-wrap items-center gap-1.5 overflow-y-auto px-4 pb-3.5">
+          {pills.map((p) => (
+            <span
+              key={p.id}
+              className="inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-2xs"
+              style={{
+                background: "var(--surface-sunken)",
+                borderColor: "var(--border-subtle)",
+                color: "var(--fg-secondary)",
+              }}
+            >
+              <span className="font-mono text-3xs font-semibold" style={{ color: "var(--accent-primary)" }}>
+                {MENTION_KIND_LABEL[p.kind]}
+              </span>
+              {p.name}
+            </span>
+          ))}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -351,12 +505,14 @@ export function VoicePopoverBody({
   pills,
   actions,
   onRunClick,
+  onCancel,
 }: {
   onEnd: () => void;
   report: AgentReport;
   pills: MentionCandidate[];
   actions: VoiceAction[];
   onRunClick: (a: VoiceAction) => void;
+  onCancel: (a: VoiceAction) => void;
 }) {
   const counting = actions.some((a) => a.tier === "voice" && !a.done);
   const [now, setNow] = useState(() => Date.now());
@@ -375,7 +531,7 @@ export function VoicePopoverBody({
       <Pills pills={pills} />
       {actions.map((a) =>
         a.tier === "voice" && !a.done ? (
-          <PendingConfirm key={a.id} action={a} now={now} />
+          <PendingConfirm key={a.id} action={a} now={now} onRunClick={onRunClick} onCancel={onCancel} />
         ) : (
           <ActionRow key={a.id} action={a} onRunClick={onRunClick} />
         ),
