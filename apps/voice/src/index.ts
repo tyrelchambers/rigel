@@ -102,10 +102,10 @@ async function main(): Promise<void> {
         apiKey: cfg.apiKey,
         apiSecret: cfg.apiSecret,
       }),
-      // Deterministic VAD, not the adaptive detector: the adaptive one
-      // classifies a short utterance near the agent's speech as a backchannel
-      // and discards it, and "confirm" spoken over the readback is exactly that
-      // shape. Dropping it would silently break the mutation gate.
+      // Deterministic VAD, not the adaptive detector, which classifies a short
+      // utterance near the agent's speech as a backchannel and discards it.
+      // "stop" and "no" over a long answer are exactly that shape, and being
+      // unable to cut the agent off is the worse failure.
       interruption: { mode: "vad" },
     },
     keytermsOptions: { keyterms: state.keyterms },

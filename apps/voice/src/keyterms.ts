@@ -8,8 +8,10 @@ export const MAX_KEYTERMS = 50;
 /** Anything longer is a generated pod suffix nobody says out loud. */
 export const MAX_KEYTERM_LENGTH = 40;
 
-export const CONFIRM_KEYTERMS = [
-  "confirm",
+/** The words an operator uses to cut the agent off mid-sentence. Biasing the
+ *  STT toward them is what makes an interruption land on the first try.
+ *  "confirm" is deliberately absent: no spoken word runs a change. */
+export const INTERRUPTION_KEYTERMS = [
   "cancel",
   "abort",
   "stop",
@@ -38,7 +40,7 @@ export const KUBERNETES_KEYTERMS = [
   "kube-system",
 ];
 
-export const STATIC_KEYTERMS = [...CONFIRM_KEYTERMS, ...KUBERNETES_KEYTERMS];
+export const STATIC_KEYTERMS = [...INTERRUPTION_KEYTERMS, ...KUBERNETES_KEYTERMS];
 
 /** Static terms first, then live cluster names, deduped and capped. */
 export function buildKeyterms(resourceNames: readonly string[]): string[] {

@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   buildKeyterms,
   sameKeyterms,
-  CONFIRM_KEYTERMS,
+  INTERRUPTION_KEYTERMS,
   KUBERNETES_KEYTERMS,
   MAX_KEYTERMS,
   MAX_KEYTERM_LENGTH,
@@ -10,10 +10,14 @@ import {
 } from "./keyterms.js";
 
 describe("STATIC_KEYTERMS", () => {
-  test("carries the confirm word and every cancel token the gate matches", () => {
-    for (const t of ["confirm", "cancel", "no", "stop", "wait", "abort", "never mind", "don't"]) {
-      expect(CONFIRM_KEYTERMS).toContain(t);
+  test("carries the words an operator cuts the agent off with", () => {
+    for (const t of ["cancel", "no", "stop", "wait", "abort", "never mind", "don't"]) {
+      expect(INTERRUPTION_KEYTERMS).toContain(t);
     }
+  });
+
+  test("does not bias the STT toward a word that can no longer run anything", () => {
+    expect(INTERRUPTION_KEYTERMS).not.toContain("confirm");
   });
 
   test("carries the Kubernetes states and kinds a general model mangles", () => {
