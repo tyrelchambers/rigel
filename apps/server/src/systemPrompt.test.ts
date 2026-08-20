@@ -57,3 +57,9 @@ describe("voiceSystemPrompt", () => {
     expect(systemPrompt("prod", ["prod"])).not.toContain("You are SPEAKING aloud");
   });
 });
+
+test("the voice prompt routes unmodelled changes to a real kind, not an invented one", () => {
+  const p = voiceSystemPrompt("prod");
+  expect(p).toContain("annotate");
+  expect(p).toContain("never invent a kind of your own");
+});

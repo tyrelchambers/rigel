@@ -518,3 +518,50 @@ test("setEnvRef honors resourceKind", () => {
     "-p", '{"spec":{"template":{"spec":{"containers":[{"name":"db","env":[{"name":"PGPASS","valueFrom":{"secretKeyRef":{"name":"pg-secret","key":"password"}}}]}]}}}}',
   ]);
 });
+
+// ---------------------------------------------------------------------------
+// annotate / label
+// ---------------------------------------------------------------------------
+test("annotate sets an annotation on a deployment", () => {
+  expect(
+    buildCommand({
+      kind: "annotate", name: "canada-hires-web", namespace: "default",
+      annotations: { "friendly-name": "job watch canada" },
+    }),
+  ).toEqual([
+    "annotate", "deployment/canada-hires-web", "-n", "default", "--overwrite",
+    "friendly-name=job watch canada",
+  ]);
+});
+
+test("annotate sorts pairs and removes a key with a null value", () => {
+  expect(
+    buildCommand({
+      kind: "annotate", name: "web", namespace: "default",
+      annotations: { "z-key": "last", "a-key": "first", "stale": null },
+    }),
+  ).toEqual([
+    "annotate", "deployment/web", "-n", "default", "--overwrite",
+    "a-key=first", "stale-", "z-key=last",
+  ]);
+});
+
+test("annotate honors resourceKind and cluster-scoped targets", () => {
+  expect(
+    buildCommand({ kind: "annotate", name: "pg", namespace: "db", resourceKind: "statefulset", annotations: { owner: "data" } }),
+  ).toEqual(["annotate", "statefulset/pg", "-n", "db", "--overwrite", "owner=data"]);
+  expect(
+    buildCommand({ kind: "annotate", name: "worker-3", resourceKind: "node", annotations: { owner: "data" } }),
+  ).toEqual(["annotate", "node/worker-3", "--overwrite", "owner=data"]);
+});
+
+test("label maps to kubectl label with the same shape", () => {
+  expect(
+    buildCommand({ kind: "label", name: "web", namespace: "default", labels: { tier: "frontend", old: null } }),
+  ).toEqual(["label", "deployment/web", "-n", "default", "--overwrite", "old-", "tier=frontend"]);
+});
+
+test("annotate and label refuse to build an empty edit", () => {
+  expect(() => buildCommand({ kind: "annotate", name: "web", namespace: "default" })).toThrow(/at least one/);
+  expect(() => buildCommand({ kind: "label", name: "web", namespace: "default", labels: {} })).toThrow(/at least one/);
+});

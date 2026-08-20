@@ -270,7 +270,7 @@ describe("voice-confirmable tiers", () => {
 
   test("the voice tier is exactly the reversible-undoable set", () => {
     expect([...VOICE_CONFIRMABLE_KINDS].sort()).toEqual(
-      ["cordon", "pause", "restart", "resume", "resumeCronJob", "scale", "setEnv", "setImage", "setResources", "suspendCronJob", "uncordon"].sort(),
+      ["annotate", "cordon", "pause", "restart", "resume", "resumeCronJob", "scale", "setEnv", "setImage", "setResources", "suspendCronJob", "uncordon"].sort(),
     );
   });
 
@@ -281,7 +281,7 @@ describe("voice-confirmable tiers", () => {
     expect(CLICK_REQUIRED_KINDS.sort()).toEqual(
       [
         "applyManifest", "command", "createNamespace", "deleteNamespace", "deletePod",
-        "deleteResource", "deleteWorkload", "drain", "proposeRepoFix", "purge",
+        "deleteResource", "deleteWorkload", "drain", "label", "proposeRepoFix", "purge",
         "rollback", "setEnvRef", "setImagePullSecrets", "triggerCronJob",
       ].sort(),
     );
@@ -304,6 +304,11 @@ describe("voice-confirmable tiers", () => {
 
   test("an unknown kind is not voice-confirmable", () => {
     expect(isVoiceConfirmable({ kind: "notARealKind" })).toBe(false);
+  });
+
+  test("annotate is voice-confirmable but label is not", () => {
+    expect(isVoiceConfirmable({ kind: "annotate" })).toBe(true);
+    expect(isVoiceConfirmable({ kind: "label" })).toBe(false);
   });
 
   test("a destructive hint always downgrades to click", () => {

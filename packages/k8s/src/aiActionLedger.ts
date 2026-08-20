@@ -115,6 +115,8 @@ const KIND_LABELS: Record<string, string> = {
   suspendCronJob: "Suspended",
   resumeCronJob: "Resumed",
   triggerCronJob: "Triggered",
+  annotate: "Annotated",
+  label: "Labelled",
   linkCatalogApp: "Linked",
   command: "Ran command",
   applyManifest: "Applied",

@@ -16,7 +16,8 @@ Action JSON (`SuggestedAction`):
   `restart`, `scale`, `rollback`, `setEnv`, `setImage`, `setResources`,
   `pause`, `resume`, `deletePod`, `deleteWorkload`, `cordon`, `uncordon`,
   `drain`, `suspendCronJob`, `resumeCronJob`, `triggerCronJob`,
-  `createNamespace`, `deleteNamespace`, `deleteResource`, `purge`, `command`.
+  `createNamespace`, `deleteNamespace`, `deleteResource`, `annotate`, `label`,
+  `purge`, `command`.
 - Target fields (presence depends on kind):
   - `name` — controller / cronjob / namespace / resource target.
     (`deployment` is accepted as a back-compat alias; `target = name ?? deployment`.)
@@ -27,6 +28,10 @@ Action JSON (`SuggestedAction`):
     (kubectl quantity strings, e.g. `cpu=250m,memory=512Mi`).
   - `resourceKind` — deleteResource (e.g. `service`, `configmap`, `secret`,
     `pvc`, `pv`, `ingress`, `clusterrole`).
+  - `annotations` / `labels` (object string→string|null) — `annotate` / `label`.
+    A `null` value removes the key (kubectl `key-`). Targets any resource via
+    `resourceKind` (defaults to `deployment`); both build
+    `kubectl <annotate|label> <kind>/<name> -n <ns> --overwrite <pairs…>`.
   - `args` (string[]) — `command` only: literal kubectl args WITHOUT the `kubectl`
     binary or `--context` (app prepends both), e.g. `["cnpg","destroy","pg","pg-1","-n","default"]`.
   - `destructive` (bool) — `command` only: Claude's hint. App also infers from
@@ -39,6 +44,9 @@ Special kinds:
   Never list resources to delete one-by-one for a full removal.
 - `command` — escape hatch for kubectl (incl. plugins like `cnpg`) the typed
   kinds don't model.
+- `annotate` / `label` — metadata edits. `annotate` is voice-confirmable;
+  `label` is click-required, because labels feed selectors and a wrong one can
+  break routing silently.
 
 Additional kinds:
 - `applyManifest` — install/self-host a new app. The `action` block is

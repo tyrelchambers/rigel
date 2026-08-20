@@ -51,6 +51,10 @@ export interface SuggestedAction {
   body?: string;
   /** proposeRepoFix only — the paired NEW file content, attached by the parser. */
   content?: string;
+  /** annotate only — desired annotations; a null value removes the key. */
+  annotations?: Record<string, string | null>;
+  /** label only — desired labels; a null value removes the key. */
+  labels?: Record<string, string | null>;
 }
 
 /**
@@ -107,6 +111,8 @@ export const ACTION_KINDS = [
   "createNamespace",
   "deleteNamespace",
   "deleteResource",
+  "annotate",
+  "label",
   "purge",
   "command",
   "applyManifest",
@@ -154,6 +160,9 @@ export const VOICE_CONFIRMABLE_KINDS = new Set<string>([
   "resume",
   "suspendCronJob",
   "resumeCronJob",
+  // Annotations select nothing, so a wrong one cannot silently break routing
+  // the way a wrong label can. `label` stays click-confirmed for that reason.
+  "annotate",
 ]);
 
 /**

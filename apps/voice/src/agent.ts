@@ -15,6 +15,22 @@ export const CONTEXT_HEADING = "[Live cluster context]";
 
 export const CONFIRM_PROMPT = "Say confirm to run it, or cancel.";
 
+/**
+ * The refusal a wrong `kind` gets. It names the escape hatch and lists the
+ * kinds, because the model that hit this in the field invented `patch` twice
+ * and had nothing in the old message to correct toward.
+ */
+export function unknownKindRefusal(kind: unknown): string {
+  const named = typeof kind === "string" && kind ? ` "${kind}"` : "";
+  return [
+    `Refused: unknown action kind${named}.`,
+    'Metadata edits are the kinds "annotate" and "label" (annotations/labels object; a null value removes a key).',
+    'Anything else the typed kinds do not model goes through kind "command" with the literal kubectl arguments in args, e.g. {"kind":"command","label":"...","args":["patch","deployment/web","-n","default","--type=merge","-p","{...}"]}.',
+    `Valid kinds: ${ACTION_KINDS.join(", ")}.`,
+    "Retry now with a valid kind rather than telling the user it cannot be done.",
+  ].join(" ");
+}
+
 export function buildAgent(state: SessionState, server: ServerClient, room: PublishRoom): voice.Agent {
   return new (class extends voice.Agent {
     constructor() {
@@ -51,7 +67,7 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
             execute: async ({ action }, opts) => {
               const a = action as unknown as SuggestedAction;
               if (!a || typeof a.kind !== "string" || !(ACTION_KINDS as readonly string[]).includes(a.kind)) {
-                return "Refused: unknown action kind. Use one of Rigel's chat action kinds.";
+                return unknownKindRefusal(a?.kind);
               }
               const id = opts.toolCallId;
 

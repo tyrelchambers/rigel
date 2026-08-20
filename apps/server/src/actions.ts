@@ -35,6 +35,8 @@
  *                    Full desired list (merge patch replaces the array; [] clears).
  * setEnvRef        patch <workloadKind>/<name> -n <ns> --type=strategic -p {... containers[].env[] valueFrom secret/configMapKeyRef ...}
  *                    Per-container; strategic merge keys containers+env by name. Requires container.
+ * annotate         annotate <kind>/<name> -n <ns> --overwrite k=v... (null value emits `k-` to remove)
+ * label            label <kind>/<name> -n <ns> --overwrite k=v... (null value emits `k-` to remove)
  * command          args[] verbatim (pre-filtered empty strings by Swift)
  * purge            throws PurgeActionError — handled by the client purge flow, not kubectl.
  */
@@ -90,6 +92,10 @@ export interface ActionBlock {
   imagePullSecrets?: string[];
   /** setEnvRef only — env vars sourced from a Secret/ConfigMap key. */
   envRefs?: Array<{ name: string; source: "secret" | "configMap"; resourceName: string; key: string }>;
+  /** annotate only — desired annotations; a null value removes the key. */
+  annotations?: Record<string, string | null>;
+  /** label only — desired labels; a null value removes the key. */
+  labels?: Record<string, string | null>;
 }
 
 /** Thrown when `kind === "purge"` — not a kubectl command; caller opens purge flow. */
@@ -392,6 +398,22 @@ export function buildCommand(a: ActionBlock): string[] {
       }));
       const patch = JSON.stringify({ spec: { template: { spec: { containers: [{ name: a.container, env }] } } } });
       return ["patch", `${wk}/${target(a)}`, ...ns, "--type=strategic", "-p", patch];
+    }
+
+    // -----------------------------------------------------------------------
+    // annotate / label — metadata edits on any resource. One path, two verbs:
+    // kubectl spells both the same way, and a null value means remove.
+    // -----------------------------------------------------------------------
+    case "annotate":
+    case "label": {
+      const pairs = a.kind === "annotate" ? a.annotations : a.labels;
+      const args = Object.entries(pairs ?? {})
+        .map(([k, v]) => (v === null ? `${k}-` : `${k}=${v}`))
+        .sort();
+      if (args.length === 0) {
+        throw new Error(`${a.kind} requires at least one ${a.kind === "annotate" ? "annotation" : "label"}`);
+      }
+      return [a.kind, `${workloadKind(a)}/${target(a)}`, ...ns, "--overwrite", ...args];
     }
 
     // -----------------------------------------------------------------------

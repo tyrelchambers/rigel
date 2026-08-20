@@ -1,7 +1,7 @@
 import { initializeLogger, llm, voice } from "@livekit/agents";
-import type { SuggestedAction } from "@rigel/k8s/src/actionBlocks";
+import { ACTION_KINDS, type SuggestedAction } from "@rigel/k8s/src/actionBlocks";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { buildAgent, CONFIRM_PROMPT, CONTEXT_HEADING, refreshInstructions } from "./agent.js";
+import { buildAgent, CONFIRM_PROMPT, CONTEXT_HEADING, refreshInstructions, unknownKindRefusal } from "./agent.js";
 import { PENDING_TTL_MS } from "./mutationFlow.js";
 import type { PublishRoom } from "./publish.js";
 import type { ActionResult, ServerClient } from "./serverClient.js";
@@ -278,8 +278,17 @@ describe("proposeMutation routing", () => {
 
     const out = await propose(buildAgent(emptySessionState(), server, room), { kind: "nukeCluster" }, toolOpts().opts);
 
-    expect(out).toMatch(/^Refused: unknown action kind/);
+    expect(out).toMatch(/^Refused: unknown action kind "nukeCluster"/);
     expect(frames).toEqual([]);
+  });
+
+  test("the unknown-kind refusal names the route the model should have taken", () => {
+    const out = unknownKindRefusal("patch");
+
+    expect(out).toContain('"patch"');
+    expect(out).toContain('"command"');
+    expect(out).toContain('"annotate"');
+    for (const kind of ACTION_KINDS) expect(out).toContain(kind);
   });
 
   test("a preview the server cannot build is refused, not guessed at", async () => {
