@@ -26,7 +26,7 @@ import {
   type AgentReport,
 } from "./VoiceMark";
 import { AGENT_IDENTITY_PREFIX, type VoiceAction } from "./VoiceSessionEffects";
-import { mergeSegments, type VoiceSegment } from "./voiceHistory";
+import { mergeSegments, type VoiceSegment } from "./voiceTurns";
 
 // Exhaustive on purpose: a new AgentState in a future SDK should break the
 // build rather than silently render the wrong label.

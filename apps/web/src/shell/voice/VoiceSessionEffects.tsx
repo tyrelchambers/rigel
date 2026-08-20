@@ -12,10 +12,8 @@ import { useDataChannel, useTranscriptions, type AgentState } from "@livekit/com
 import type { ActionBlock } from "@/lib/api";
 import { useCluster } from "@/store/cluster";
 import { buildMentions, type MentionCandidate } from "@/panels/chat/mentions";
-import { upsertSession } from "@/panels/chat/chatHistory";
 import { voiceKeytermNames } from "./keyterms";
 import { matchTranscript } from "./transcriptMatch";
-import { toHistoryEntry, type VoiceSegment } from "./voiceHistory";
 
 /** The agent's identity, minted by the server in voiceRoutes.identityFor. */
 export const AGENT_IDENTITY_PREFIX = "rigel-agent";
@@ -123,9 +121,6 @@ export function VoiceSessionEffects({
   const transcriptions = useTranscriptions();
   const publishedIds = useRef(new Set<string>());
   const pillsRef = useRef<MentionCandidate[]>([]);
-  const sessionIdRef = useRef(`voice-${crypto.randomUUID()}`);
-  const startedAtRef = useRef(Date.now());
-  const recordedRef = useRef<string | null>(null);
   const keytermsRef = useRef<string | null>(null);
 
   // Pills belong to a session, but they are held above this component so they
@@ -220,27 +215,6 @@ export function VoiceSessionEffects({
     }
     if (changed) onPills(pillsRef.current);
   }, [transcriptions, room, onPills]);
-
-  useEffect(() => {
-    // Only "lk.transcription_final" === "true" segments are done; everything
-    // else is STT still revising the same segment in place.
-    const finals: VoiceSegment[] = transcriptions
-      .filter((t) => t.streamInfo?.attributes?.["lk.transcription_final"] === "true")
-      .map((t) => ({
-        id: t.streamInfo?.id ?? crypto.randomUUID(),
-        text: t.text,
-        fromAgent: (t.participantInfo?.identity ?? "").startsWith(AGENT_IDENTITY_PREFIX),
-      }));
-    if (finals.length === 0) return;
-    // toHistoryEntry rebuilds the whole session's messages from every final
-    // seen so far, so upsertSession overwrites rather than appends; the
-    // signature guard below just skips the redundant write when nothing new
-    // finalized since the last tick.
-    const signature = finals.map((f) => `${f.id}:${f.text}`).join("|");
-    if (signature === recordedRef.current) return;
-    recordedRef.current = signature;
-    upsertSession(toHistoryEntry(sessionIdRef.current, startedAtRef.current, finals, Date.now()));
-  }, [transcriptions]);
 
   return null;
 }
