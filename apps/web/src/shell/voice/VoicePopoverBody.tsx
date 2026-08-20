@@ -25,6 +25,7 @@ import {
   type AgentReport,
 } from "./VoiceMark";
 import { AGENT_IDENTITY_PREFIX, type VoiceAction } from "./VoiceSessionEffects";
+import { mergeSegments, type VoiceSegment } from "./voiceHistory";
 
 // Exhaustive on purpose: a new AgentState in a future SDK should break the
 // build rather than silently render the wrong label.
@@ -176,33 +177,25 @@ function AgentMark() {
   );
 }
 
-export interface TranscriptTurn {
-  id: string;
-  fromAgent: boolean;
-  text: string;
-}
+export type TranscriptTurn = VoiceSegment;
 
 /**
  * One bubble per turn, not per transcription segment. LiveKit streams a
  * sentence, sometimes a phrase, as its own segment, so rendering them straight
- * left the log reading two or three words per line.
+ * left the log reading two or three words per line. The merge rule itself
+ * lives with the history writer, so the live transcript and the saved session
+ * split turns identically.
  */
 export function transcriptTurns(
   items: { text: string; participantInfo?: { identity: string }; streamInfo?: { id: string } }[],
 ): TranscriptTurn[] {
-  const turns: TranscriptTurn[] = [];
-  items.forEach((t, i) => {
-    const text = t.text.trim();
-    if (!text) return;
-    const fromAgent = (t.participantInfo?.identity ?? "").startsWith(AGENT_IDENTITY_PREFIX);
-    const last = turns[turns.length - 1];
-    if (last && last.fromAgent === fromAgent) {
-      last.text = `${last.text} ${text}`;
-      return;
-    }
-    turns.push({ id: t.streamInfo?.id ?? String(i), fromAgent, text });
-  });
-  return turns;
+  return mergeSegments(
+    items.map((t, i) => ({
+      id: t.streamInfo?.id ?? String(i),
+      text: t.text,
+      fromAgent: (t.participantInfo?.identity ?? "").startsWith(AGENT_IDENTITY_PREFIX),
+    })),
+  );
 }
 
 function Transcript({ actions }: { actions: VoiceAction[] }) {
