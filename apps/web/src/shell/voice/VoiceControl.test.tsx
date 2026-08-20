@@ -495,6 +495,14 @@ const CLICK_FRAME = {
   command: "kubectl delete pod web-1 -n default",
 };
 
+/** The command block splits the command across spans for syntax emphasis, so
+ *  it is matched on the block's text rather than a single text node. */
+function commandBlock(command: string) {
+  return screen.findByText(
+    (_content, el) => el?.tagName === "PRE" && (el.textContent ?? "").includes(command),
+  );
+}
+
 /** Hands one frame to the live handler for that topic, as the room would. */
 function deliver(topic: string, body: unknown, identity: string) {
   const msg = {
@@ -525,7 +533,7 @@ async function openWithClickProposal() {
 test("a proposal renders its command and a button labelled by the action", async () => {
   await openWithClickProposal();
 
-  expect(await screen.findByText("kubectl delete pod web-1 -n default")).toBeTruthy();
+  expect(await commandBlock("kubectl delete pod web-1 -n default")).toBeTruthy();
   expect(screen.getByRole("button", { name: "Delete pod web-1" })).toBeTruthy();
 });
 
@@ -563,7 +571,7 @@ test("a rigel.action frame from a non-agent identity never reaches the popover",
 
   deliver("rigel.action", CLICK_FRAME, "rigel-phone-abc");
 
-  expect(screen.queryByText("kubectl delete pod web-1 -n default")).toBeNull();
+  expect(document.querySelector("pre")).toBeNull();
   expect(screen.queryByRole("button", { name: "Delete pod web-1" })).toBeNull();
 });
 
@@ -617,6 +625,7 @@ test("a result publish that fails surfaces on the row instead of being swallowed
 test("a rigel.action.result marks the proposal done and retires its button", async () => {
   await openWithClickProposal();
   expect(await screen.findByRole("button", { name: "Delete pod web-1" })).toBeTruthy();
+  expect(await commandBlock("kubectl delete pod web-1 -n default")).toBeTruthy();
 
   deliver("rigel.action.result", { id: "call-1", ok: true, summary: "ran" }, AGENT);
 
@@ -626,14 +635,14 @@ test("a rigel.action.result marks the proposal done and retires its button", asy
 
 test("a new session starts with no proposals from the last one", async () => {
   await openWithClickProposal();
-  expect(await screen.findByText("kubectl delete pod web-1 -n default")).toBeTruthy();
+  expect(await commandBlock("kubectl delete pod web-1 -n default")).toBeTruthy();
 
   await userEvent.click(screen.getByText("End session"));
   await userEvent.click(screen.getByLabelText("Voice assistant"));
 
   await waitFor(() => expect(h.rooms).toHaveLength(2));
   expect(await screen.findByText("End session")).toBeTruthy();
-  expect(screen.queryByText("kubectl delete pod web-1 -n default")).toBeNull();
+  expect(document.querySelector("pre")).toBeNull();
 });
 
 test("resultSummary caps a runaway stderr line so the packet cannot blow the 64KB ceiling", () => {

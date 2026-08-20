@@ -9,6 +9,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronDown } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { useMultibandTrackVolume, useTranscriptions, type AgentState } from "@livekit/components-react";
 import { MessageScroller, useMessageScroller } from "@shadcn/react/message-scroller";
+import { CommandBlock } from "@/components/CommandBlock";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { isDestructiveAction } from "@/lib/actionBlocks";
 import { MENTION_KIND_LABEL, type MentionCandidate } from "@/panels/chat/mentions";
@@ -277,6 +278,9 @@ function ProposalCard({
 }) {
   const destructive = isDestructiveAction(action.action);
   const accent = action.auto ? "var(--accent-primary)" : destructive ? "var(--status-failed)" : "var(--status-pending)";
+  // The command box keys off risk exactly as the ConfirmSheet's does, so the
+  // same command reads the same in both places.
+  const commandAccent = destructive ? "var(--status-failed)" : "var(--accent-primary)";
   return (
     <div
       className="flex shrink-0 flex-col gap-2 border-t px-4 pt-3.5 pb-4"
@@ -290,16 +294,16 @@ function ProposalCard({
         }}
       >
         <div className="flex flex-col gap-2.5 p-3">
-          <code
-            className="rounded-[7px] border px-2.5 py-2 font-mono text-2xs leading-[17px] break-all"
-            style={{
-              background: "var(--surface-sunken)",
-              borderColor: "var(--border-subtle)",
-              color: "var(--fg-primary)",
-            }}
-          >
-            {action.command ?? actionTarget(action.action)}
-          </code>
+          {action.command ? (
+            <CommandBlock command={action.command} accent={commandAccent} compact />
+          ) : (
+            // purge, applyManifest and proposeRepoFix carry no command: the
+            // ConfirmSheet builds their preview. Naming the target is all this
+            // card can honestly show.
+            <span className="text-2xs" style={{ color: "var(--fg-secondary)" }}>
+              {actionTarget(action.action)}
+            </span>
+          )}
           <div className="flex items-center gap-2">
             {action.done ? (
               <span

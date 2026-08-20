@@ -322,3 +322,29 @@ test("a change the agent ran reports the outcome in place of the button", () => 
   );
   expect(screen.getByText("Ran")).toBeInTheDocument();
 });
+
+test("the command renders in the same block the confirm sheet uses, prompt and all", () => {
+  render(
+    <VoicePopoverBody report={REPORT} pills={[]} actions={[pendingAction("a1")]} onRunClick={vi.fn()} onCancel={vi.fn()} onEnd={vi.fn()} />,
+  );
+  const block = document.querySelector("pre");
+  expect(block?.textContent).toBe("$ kubectl rollout restart deployment/web -n default");
+  // The binary is emphasised separately from the flags, which is the whole
+  // point of sharing the component rather than restyling a <code>.
+  expect(block?.querySelectorAll("span").length).toBeGreaterThan(3);
+});
+
+test("a proposal with no command names its target instead of rendering an empty block", () => {
+  render(
+    <VoicePopoverBody
+      report={REPORT}
+      pills={[]}
+      actions={[{ id: "a1", action: { kind: "purge", label: "Remove memos", name: "memos", namespace: "default" }, command: null }]}
+      onRunClick={vi.fn()}
+      onCancel={vi.fn()}
+      onEnd={vi.fn()}
+    />,
+  );
+  expect(screen.getByText("purge memos in default")).toBeInTheDocument();
+  expect(document.querySelector("pre")).toBeNull();
+});
