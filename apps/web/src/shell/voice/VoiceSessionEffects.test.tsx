@@ -256,7 +256,7 @@ test("what the agent says back never pins a resource", () => {
   expect(pills.names()).toEqual([]);
 });
 
-test("pills are capped at six, keeping the most recent", () => {
+test("every resource named this session stays listed, in the order it was named", () => {
   const deployments: Record<string, unknown> = {};
   for (let i = 0; i < 8; i++) {
     deployments[`default/svc-${i}`] = { metadata: { uid: `u-${i}`, name: `svc-${i}`, namespace: "default" } };
@@ -271,7 +271,7 @@ test("pills are capped at six, keeping the most recent", () => {
   render(<VoiceSessionEffects room={room} onPills={pills.onPills} onAction={() => {}} onAgentState={() => {}} />);
 
   expect(frames(room, "rigel.context")).toHaveLength(8);
-  expect(pills.names()).toEqual(["svc-2", "svc-3", "svc-4", "svc-5", "svc-6", "svc-7"]);
+  expect(pills.names()).toEqual(["svc-0", "svc-1", "svc-2", "svc-3", "svc-4", "svc-5", "svc-6", "svc-7"]);
 });
 
 test("a final user segment is recorded into chat history", () => {

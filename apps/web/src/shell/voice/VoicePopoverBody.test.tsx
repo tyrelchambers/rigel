@@ -43,7 +43,7 @@ vi.mock("@shadcn/react/message-scroller", () => {
   };
 });
 
-import { VoicePopoverBody } from "./VoicePopoverBody";
+import { VoicePopoverBody, transcriptTurns } from "./VoicePopoverBody";
 
 const REPORT: AgentReport = { state: "listening", timedOut: false };
 
@@ -160,4 +160,65 @@ test("reveals instantly instead of smoothly when the reader prefers reduced moti
     <VoicePopoverBody report={REPORT} pills={[]} actions={[pendingAction("a1")]} onRunClick={vi.fn()} onEnd={vi.fn()} />,
   );
   expect(h.scrollToEnd).toHaveBeenCalledWith({ behavior: "auto" });
+});
+
+// ---------------------------------------------------------------------------
+// transcriptTurns
+// ---------------------------------------------------------------------------
+const seg = (text: string, identity: string, id: string): FakeTranscript => ({
+  text,
+  participantInfo: { identity },
+  streamInfo: { id },
+});
+
+test("consecutive segments from one speaker become a single turn", () => {
+  expect(
+    transcriptTurns([
+      seg("Reddex deploy has", "rigel-agent-worker", "s1"),
+      seg("three of three replicas ready.", "rigel-agent-worker", "s2"),
+    ]),
+  ).toEqual([{ id: "s1", fromAgent: true, text: "Reddex deploy has three of three replicas ready." }]);
+});
+
+test("a change of speaker starts a new turn", () => {
+  expect(
+    transcriptTurns([
+      seg("how is reddex", "operator", "s1"),
+      seg("Reddex deploy is", "rigel-agent-worker", "s2"),
+      seg("healthy.", "rigel-agent-worker", "s3"),
+      seg("restart it", "operator", "s4"),
+    ]),
+  ).toEqual([
+    { id: "s1", fromAgent: false, text: "how is reddex" },
+    { id: "s2", fromAgent: true, text: "Reddex deploy is healthy." },
+    { id: "s4", fromAgent: false, text: "restart it" },
+  ]);
+});
+
+test("blank segments neither render nor split a turn", () => {
+  expect(
+    transcriptTurns([
+      seg("scale web", "operator", "s1"),
+      seg("   ", "operator", "s2"),
+      seg("to three", "operator", "s3"),
+    ]),
+  ).toEqual([{ id: "s1", fromAgent: false, text: "scale web to three" }]);
+});
+
+test("the turn keeps the first segment's id, so a streaming tail does not remount it", () => {
+  const first = transcriptTurns([seg("Reddex deploy", "rigel-agent-worker", "s1")]);
+  const later = transcriptTurns([
+    seg("Reddex deploy", "rigel-agent-worker", "s1"),
+    seg("is healthy.", "rigel-agent-worker", "s2"),
+  ]);
+  expect(later[0]?.id).toBe(first[0]?.id);
+});
+
+test("a fragmented agent answer renders as one bubble, not one per segment", () => {
+  h.transcriptions = [
+    seg("Canada hires web", "rigel-agent-worker", "s1"),
+    seg("is running one replica.", "rigel-agent-worker", "s2"),
+  ];
+  renderPopover([]);
+  expect(screen.getByText("Canada hires web is running one replica.")).toBeInTheDocument();
 });

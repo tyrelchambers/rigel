@@ -36,7 +36,9 @@ export function toReportedAgentState(body: unknown): AgentState | null {
   return typeof state === "string" && REPORTED_STATES.includes(state) ? (state as AgentState) : null;
 }
 
-const MAX_PILLS = 6;
+/** Every resource named this session is listed, so the bound is a runaway
+ *  guard rather than a display cap. */
+const MAX_PILLS = 60;
 
 /** A mutation the worker proposed, exactly as it arrives on `rigel.action`. */
 export interface VoiceActionFrame {

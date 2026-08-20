@@ -1,7 +1,7 @@
 /**
  * Popover contents, top to bottom: the spectrum hairline, state line, live
- * waveform, rolling transcript, the mutations the worker has proposed, and the
- * resources the session has pinned. Must be rendered inside a
+ * waveform, rolling transcript, the resources the session has referenced, and
+ * the mutations the worker has proposed. Must be rendered inside a
  * RoomContext.Provider.
  */
 import { useEffect, useRef, useState } from "react";
@@ -140,25 +140,51 @@ function TranscriptFollow({ actions }: { actions: VoiceAction[] }) {
   return null;
 }
 
+export interface TranscriptTurn {
+  id: string;
+  fromAgent: boolean;
+  text: string;
+}
+
+/**
+ * One bubble per turn, not per transcription segment. LiveKit streams a
+ * sentence, sometimes a phrase, as its own segment, so rendering them straight
+ * left the log reading two or three words per line.
+ */
+export function transcriptTurns(
+  items: { text: string; participantInfo?: { identity: string }; streamInfo?: { id: string } }[],
+): TranscriptTurn[] {
+  const turns: TranscriptTurn[] = [];
+  items.forEach((t, i) => {
+    const text = t.text.trim();
+    if (!text) return;
+    const fromAgent = (t.participantInfo?.identity ?? "").startsWith(AGENT_IDENTITY_PREFIX);
+    const last = turns[turns.length - 1];
+    if (last && last.fromAgent === fromAgent) {
+      last.text = `${last.text} ${text}`;
+      return;
+    }
+    turns.push({ id: t.streamInfo?.id ?? String(i), fromAgent, text });
+  });
+  return turns;
+}
+
 function Transcript({ actions }: { actions: VoiceAction[] }) {
-  const transcriptions = useTranscriptions();
-  const recent = transcriptions.slice(-12);
+  const recent = transcriptTurns(useTranscriptions()).slice(-12);
   return (
     <MessageScroller.Provider autoScroll defaultScrollPosition="end">
       <TranscriptFollow actions={actions} />
       <MessageScroller.Root>
-        <MessageScroller.Viewport className="max-h-52 overflow-y-auto px-4 py-3.5">
+        <MessageScroller.Viewport className="max-h-[min(46vh,26rem)] overflow-y-auto px-4 py-3.5">
           {recent.length === 0 ? (
             <span className="text-2xs" style={{ color: "var(--fg-tertiary)" }}>
               Say something. Your words appear here as you speak.
             </span>
           ) : (
             <MessageScroller.Content className="flex flex-col gap-2.5">
-              {recent.map((t, i) => {
-                const id = t.streamInfo?.id ?? String(i);
-                const fromAgent = (t.participantInfo?.identity ?? "").startsWith(AGENT_IDENTITY_PREFIX);
+              {recent.map(({ id, fromAgent, text }) => {
                 return (
-                  <MessageScroller.Item key={id} messageId={id} className="flex">
+                  <MessageScroller.Item key={id} messageId={id} className="flex flex-col">
                     <span
                       className={`rounded-[9px] border px-[11px] py-2 text-xs leading-[18px] ${fromAgent ? "max-w-[260px] self-start" : "max-w-[90%] self-end"}`}
                       style={
@@ -175,7 +201,7 @@ function Transcript({ actions }: { actions: VoiceAction[] }) {
                             }
                       }
                     >
-                      {t.text}
+                      {text}
                     </span>
                   </MessageScroller.Item>
                 );
@@ -295,7 +321,10 @@ function ActionRow({ action, onRunClick }: { action: VoiceAction; onRunClick: (a
 function Pills({ pills }: { pills: MentionCandidate[] }) {
   if (pills.length === 0) return null;
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-1.5 px-4 pt-2.5 pb-3.5">
+    <div
+      className="flex max-h-[7.5rem] shrink-0 flex-wrap items-center gap-1.5 overflow-y-auto border-t px-4 pt-2.5 pb-3.5"
+      style={{ borderColor: "var(--border-subtle)" }}
+    >
       {pills.map((p) => (
         <span
           key={p.id}
@@ -343,6 +372,7 @@ export function VoicePopoverBody({
       <StateRow onEnd={onEnd} report={report} />
       <Waveform report={report} />
       <Transcript actions={actions} />
+      <Pills pills={pills} />
       {actions.map((a) =>
         a.tier === "voice" && !a.done ? (
           <PendingConfirm key={a.id} action={a} now={now} />
@@ -350,7 +380,6 @@ export function VoicePopoverBody({
           <ActionRow key={a.id} action={a} onRunClick={onRunClick} />
         ),
       )}
-      <Pills pills={pills} />
     </>
   );
 }
