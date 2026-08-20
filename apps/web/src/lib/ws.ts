@@ -1,4 +1,4 @@
-import { useCluster } from "@/store/cluster";
+import { useCluster, type MissingTool } from "@/store/cluster";
 import { rigel } from "@/lib/desktop";
 import type { ChatEvent } from "@/panels/chat/types";
 import type { ActionBlock } from "@/lib/api";
@@ -104,6 +104,10 @@ export function sendClusterCreate(opts: { tool: "kind" | "k3d"; name: string; ve
 }
 export function sendClusterStop(): void {
   rawSend(JSON.stringify({ type: "cluster.stop" }));
+}
+/** Ask the server to re-probe for missing binaries right now. */
+export function sendToolsRecheck(): void {
+  rawSend(JSON.stringify({ type: "tools.recheck" }));
 }
 export function onClusterEvent(cb: ClusterCallback): () => void {
   clusterListeners.push(cb);
@@ -322,6 +326,8 @@ export function connectCluster(): void {
     ) {
       const listeners = actionListeners.get(m.id);
       if (listeners) listeners.forEach((cb) => cb(m as ActionEvent));
+    } else if (m.type === "tools.status") {
+      store.setMissingTools(Array.isArray(m.missing) ? (m.missing as MissingTool[]) : []);
     } else if (m.type === "access") {
       store.setContextAccess(
         typeof m.context === "string" ? m.context : null,

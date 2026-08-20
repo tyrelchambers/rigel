@@ -1,4 +1,5 @@
 import { WatchEventParser, type WatchEvent } from "@rigel/k8s/src/watch";
+import { requiredTools } from "./requiredTools";
 import { spawn, type ChildProcess } from "node:child_process";
 
 // Cache key for a watched object: `namespace/name` for namespaced resources,
@@ -263,7 +264,11 @@ export class WatchManager {
     };
 
     proc.on("close", (code) => onEnd(code));
-    proc.on("error", () => onEnd(1)); // ENOENT etc: do not crash the server
+    proc.on("error", (err: Error) => {
+      // ENOENT etc: do not crash the server, but do record a missing binary.
+      requiredTools.noteSpawnFailure("kubectl", err.message);
+      onEnd(1);
+    });
   }
 
   // Phase 2: the long-lived delta stream. Each event updates the cache and is

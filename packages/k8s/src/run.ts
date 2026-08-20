@@ -24,6 +24,24 @@ export function buildKubectlArgs(context: string | null, args: string[]): string
 
 export interface RunResult { code: number; stdout: string; stderr: string }
 
+/**
+ * Notified whenever a spawn fails outright (code -1), so one listener can tell
+ * whether a binary is missing from PATH instead of every call site reporting it
+ * for itself. Exit codes are not spawn failures and never reach this.
+ */
+type SpawnFailureListener = (bin: string, stderr: string) => void;
+const spawnFailureListeners = new Set<SpawnFailureListener>();
+
+export function onSpawnFailure(listener: SpawnFailureListener): () => void {
+  spawnFailureListeners.add(listener);
+  return () => spawnFailureListeners.delete(listener);
+}
+
+export function reportSpawnFailure(bin: string, result: RunResult): RunResult {
+  if (result.code === -1) for (const l of spawnFailureListeners) l(bin, result.stderr);
+  return result;
+}
+
 /** Collect a child's stdout/stderr to completion. Resolves (never rejects) —
  *  spawn errors (e.g. ENOENT) come back as { code: -1, stderr: <message> }. */
 function collectProcess(proc: ChildProcess): Promise<RunResult> {
@@ -53,7 +71,9 @@ export function runProcess(
   // gcloud SDK bin to PATH so component-installed tools (gke-gcloud-auth-plugin)
   // are visible to kubectl and cloud-connect checks even with a Homebrew gcloud.
   const env = spawnEnv(opts?.env ?? process.env);
-  return collectProcess(spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"], env }));
+  return collectProcess(spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"], env })).then((r) =>
+    reportSpawnFailure(bin, r),
+  );
 }
 
 /**
@@ -67,7 +87,7 @@ export function runProcessWithStdin(bin: string, args: string[], input: string):
   proc.stdin!.on("error", () => {}); // absorb EPIPE if the child exits before draining stdin
   proc.stdin!.write(input);
   proc.stdin!.end();
-  return collectProcess(proc);
+  return collectProcess(proc).then((r) => reportSpawnFailure(bin, r));
 }
 
 export const kubectl = (context: string | null, args: string[]) =>

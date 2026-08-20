@@ -11,7 +11,10 @@ vi.mock("./useNavHistory", () => ({
     goForward: vi.fn(),
   }),
 }));
-vi.mock("@/store/cluster", () => ({ useCluster: () => false }));
+vi.mock("@/store/cluster", () => ({
+  useCluster: (select?: (s: { connected: boolean; missingTools: unknown[] }) => unknown) =>
+    select ? select({ connected: false, missingTools: [] }) : false,
+}));
 
 import { GlobalHeader } from "./GlobalHeader";
 
