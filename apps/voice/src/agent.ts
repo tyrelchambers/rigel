@@ -1,5 +1,7 @@
-// The voice Agent: instructions, tools, and the per-turn hook that carries both
-// context injection and the spoken-confirmation gate.
+// The voice Agent: instructions, tools, and the per-turn hook that carries
+// context injection. Non-destructive changes the operator asks for run here;
+// destructive ones are published for approval on the desktop. Nothing listens
+// for a spoken word.
 import { llm, voice } from "@livekit/agents";
 import { ACTION_KINDS, type SuggestedAction } from "@rigel/k8s/src/actionBlocks";
 import { voiceSystemPrompt } from "@rigel/server/src/systemPrompt";
@@ -17,10 +19,10 @@ const UNPREVIEWABLE_KINDS = new Set(["purge", "applyManifest", "proposeRepoFix"]
 const PREVIEWABLE = (a: SuggestedAction) => !UNPREVIEWABLE_KINDS.has(a.kind);
 
 export const SENT_TO_DESKTOP =
-  "Sent to the desktop popover. Tell the user it is waiting there for them to review and run it. Never say you have run it, and never ask them to confirm out loud: a spoken word cannot run a change.";
+  "Sent to the desktop popover for approval, because this one is destructive. Tell the user it is waiting there for them to approve. Never say you have run it, and never ask them to confirm out loud: a spoken word cannot run anything.";
 
 export const NO_DESKTOP =
-  "Refused: every change needs a tap in the desktop app, and no desktop session is connected. Tell the user this in one sentence.";
+  "Refused: this one is destructive and needs approval in the desktop app, and no desktop session is connected. Tell the user this in one sentence.";
 
 /**
  * The refusal a wrong `kind` gets. It names the escape hatch and lists the
@@ -101,13 +103,33 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
                 return "Refused: the app could not build that command.";
               }
               const command = argv.join(" ");
-              const decided = decideMutationRoute(command, desktopPresent(room));
+              const decided = decideMutationRoute(a, command, desktopPresent(room));
               if (decided.route === "refuse") {
                 return `Refused: ${decided.reason}. Tell the user this in one sentence.`;
               }
-              state.awaitingClick.set(id, a.label);
-              await publishJson(room, "rigel.action", { id, action: a, command });
-              return SENT_TO_DESKTOP;
+              if (decided.route === "click") {
+                state.awaitingClick.set(id, a.label);
+                await publishJson(room, "rigel.action", { id, action: a, command });
+                return SENT_TO_DESKTOP;
+              }
+
+              // The operator asked for a change that destroys nothing, so the
+              // agent carries it out. The frame goes up first so the popover
+              // shows what is running before the result lands, and the server
+              // stamps the ledger `source: "voice"` either way.
+              await publishJson(room, "rigel.action", { id, action: a, command, auto: true });
+              try {
+                const res = await server.runAction(a, state.activeContext);
+                const ok = res.code === 0;
+                const firstErr = res.stderr.split("\n").find(Boolean) ?? "unknown error";
+                await publishJson(room, "rigel.action.result", { id, ok, summary: ok ? "ran" : firstErr });
+                return ok
+                  ? `Done: ${command} ran and completed. Tell the user in one short sentence what changed.`
+                  : `That failed: ${firstErr}. Tell the user it failed and why, in one sentence.`;
+              } catch (err) {
+                await publishJson(room, "rigel.action.result", { id, ok: false, summary: String(err) });
+                return "That failed to reach the app, so nothing changed. Tell the user in one sentence.";
+              }
             },
           }),
         },

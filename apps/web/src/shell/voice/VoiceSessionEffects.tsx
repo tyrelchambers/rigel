@@ -44,6 +44,9 @@ const MAX_PILLS = 60;
 export interface VoiceActionFrame {
   id: string;
   action: ActionBlock;
+  /** True when the worker is running it on the operator's instruction, rather
+   *  than asking them to approve it. Non-destructive kinds only. */
+  auto?: boolean;
   /**
    * Null for purge, applyManifest and proposeRepoFix: /api/action cannot
    * preview those three, so the worker skips the preview and the ConfirmSheet
@@ -102,6 +105,7 @@ export function toVoiceActionFrame(topic: string | undefined, body: unknown): Vo
     id: m.id,
     action,
     command: typeof m.command === "string" ? m.command : null,
+    ...(m.auto === true ? { auto: true } : {}),
   };
 }
 

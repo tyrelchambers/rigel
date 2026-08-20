@@ -260,10 +260,11 @@ function actionTarget(action: VoiceAction["action"]): string {
 }
 
 /**
- * A proposal, command first. Nothing here can run by voice: the operator reads
- * the exact kubectl and taps Review and run, which opens the same confirm
- * sheet the chat panel uses. The meta line above it names the context and the
- * kind, so the blast radius is legible before the command is parsed.
+ * A change, command first. Two shapes: one the agent is running because the
+ * operator asked for it, which shows what it is doing and offers no button,
+ * and one waiting for approval, which the operator runs through the same
+ * confirm sheet the chat panel uses. Nothing here is ever run by a spoken
+ * word.
  */
 function ProposalCard({
   action,
@@ -275,7 +276,7 @@ function ProposalCard({
   onDismiss: (a: VoiceAction) => void;
 }) {
   const destructive = isDestructiveAction(action.action);
-  const accent = destructive ? "var(--status-failed)" : "var(--status-pending)";
+  const accent = action.auto ? "var(--accent-primary)" : destructive ? "var(--status-failed)" : "var(--status-pending)";
   return (
     <div
       className="flex shrink-0 flex-col gap-2 border-t px-4 pt-3.5 pb-4"
@@ -307,6 +308,10 @@ function ProposalCard({
               >
                 {action.done.ok ? "Ran" : action.done.summary || "Failed"}
               </span>
+            ) : action.auto ? (
+              <span className="text-2xs font-semibold" style={{ color: "var(--accent-primary)" }}>
+                Running…
+              </span>
             ) : (
               <>
                 <button
@@ -328,7 +333,7 @@ function ProposalCard({
                   Dismiss
                 </button>
                 <span className="ml-auto text-3xs" style={{ color: "var(--fg-tertiary)" }}>
-                  {destructive ? "irreversible" : "reversible"}
+                  {destructive ? "needs your approval" : "reversible"}
                 </span>
               </>
             )}

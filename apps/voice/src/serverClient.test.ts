@@ -39,4 +39,11 @@ describe("createServerClient", () => {
     expect(urlArg).toBe(`${BASE}/api/action?preview=1`);
     expect((init as RequestInit).headers).toMatchObject({ "X-Rigel-Context": "prod" });
   });
+
+  test("runAction posts the action and returns the kubectl result", async () => {
+    const ok = createServerClient(BASE, "sess", "wt", fakeFetch(200, { code: 0, stdout: "restarted", stderr: "" }));
+    expect((await ok.runAction({ kind: "restart", label: "x", name: "web" }, null)).code).toBe(0);
+    const bad = createServerClient(BASE, "sess", "wt", fakeFetch(422, {}));
+    await expect(bad.runAction({ kind: "restart", label: "x", name: "web" }, null)).rejects.toThrow("422");
+  });
 });

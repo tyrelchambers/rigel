@@ -139,6 +139,8 @@ export {
   type SuggestedQuestion,
   type QuestionField,
   ACTION_KINDS,
+  AUTO_RUNNABLE_KINDS,
+  isAutoRunnable,
   extractActionBlocks,
   extractAlertBlocks,
   extractQuestionBlocks,

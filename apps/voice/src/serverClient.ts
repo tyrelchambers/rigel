@@ -20,6 +20,12 @@ export interface AgentConfig {
  * `missing` names which fields, straight from the response body, so a caller
  * can log something more useful than a bare status code.
  */
+export interface ActionResult {
+  code: number;
+  stdout: string;
+  stderr: string;
+}
+
 export class VoiceNotConfiguredError extends Error {
   readonly missing: string[];
   constructor(missing: string[]) {
@@ -31,9 +37,12 @@ export class VoiceNotConfiguredError extends Error {
 
 export interface ServerClient {
   agentConfig(): Promise<AgentConfig>;
-  /** Preview only. The worker deliberately cannot run a mutation: every change
-   *  is executed by the desktop's confirm sheet after a tap. */
   previewAction(action: SuggestedAction, context: string | null): Promise<string[]>;
+  /** Runs a change the operator asked for. Reachable ONLY for kinds
+   *  isAutoRunnable admits: destructive work goes to the desktop's confirm
+   *  sheet instead, and no spoken word reaches this. The server stamps the
+   *  ledger entry `source: "voice"`, so it is attributable afterwards. */
+  runAction(action: SuggestedAction, context: string | null): Promise<ActionResult>;
 }
 
 export function createServerClient(
@@ -66,6 +75,15 @@ export function createServerClient(
       });
       if (!res.ok) throw new Error(`action preview failed: ${res.status}`);
       return ((await res.json()) as { command: string[] }).command;
+    },
+    async runAction(action, context) {
+      const res = await fetchFn(`${base}/api/action`, {
+        method: "POST",
+        headers: headers(context),
+        body: JSON.stringify(action),
+      });
+      if (!res.ok) throw new Error(`action failed: ${res.status}`);
+      return (await res.json()) as ActionResult;
     },
   };
 }

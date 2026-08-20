@@ -30,18 +30,25 @@ function fakeRoom(identities: string[] = [DESKTOP_IDENTITY]): { room: PublishRoo
 
 interface FakeServer extends ServerClient {
   previews: SuggestedAction[];
+  runs: SuggestedAction[];
 }
 
 function fakeServer(overrides: Partial<ServerClient> = {}): FakeServer {
   const previews: SuggestedAction[] = [];
+  const runs: SuggestedAction[] = [];
   return {
     previews,
+    runs,
     agentConfig: async () => {
       throw new Error("not used");
     },
     previewAction: async (action) => {
       previews.push(action);
       return ["kubectl", "--context", "prod", "rollout", "restart", "deployment/web"];
+    },
+    runAction: async (action) => {
+      runs.push(action);
+      return { code: 0, stdout: "restarted", stderr: "" };
     },
     ...overrides,
   };
@@ -161,7 +168,7 @@ describe("buildAgent", () => {
 });
 
 describe("proposeMutation routing", () => {
-  test("a reversible kind still goes to the desktop, and the reply never asks for a spoken confirmation", async () => {
+  test("a non-destructive change the operator asked for is run, and reported as run", async () => {
     const state = emptySessionState();
     state.activeContext = "prod";
     const server = fakeServer();
@@ -171,9 +178,10 @@ describe("proposeMutation routing", () => {
     const out = await propose(buildAgent(state, server, room), restart, opts);
 
     expect(server.previews).toEqual([restart]);
-    expect(out).toMatch(/desktop/);
-    expect(out).toMatch(/never ask them to confirm out loud/);
-    expect(state.awaitingClick.get("call-42")).toBe(restart.label);
+    expect(server.runs).toEqual([restart]);
+    expect(out).toMatch(/^Done:/);
+    // Nothing was left waiting on the desktop, because nothing is waiting.
+    expect(state.awaitingClick.size).toBe(0);
     expect(frames).toEqual([
       {
         topic: "rigel.action",
@@ -181,12 +189,55 @@ describe("proposeMutation routing", () => {
           id: "call-42",
           action: restart,
           command: "kubectl --context prod rollout restart deployment/web",
+          auto: true,
         },
       },
+      { topic: "rigel.action.result", payload: { id: "call-42", ok: true, summary: "ran" } },
     ]);
   });
 
-  test("an irreversible kind takes the same single route", async () => {
+  test("a failed run is reported as failed, with the cluster's own first line", async () => {
+    const server = fakeServer({
+      runAction: async () => ({ code: 1, stdout: "", stderr: 'Error from server: deployments.apps "web" not found' }),
+    });
+    const { room, frames } = fakeRoom();
+
+    const out = await propose(buildAgent(emptySessionState(), server, room), restart, toolOpts().opts);
+
+    expect(out).toMatch(/^That failed: Error from server/);
+    expect(frames[1]!.payload).toMatchObject({ ok: false });
+  });
+
+  test("a run that cannot reach the app says nothing changed", async () => {
+    const server = fakeServer({
+      runAction: async () => {
+        throw new Error("socket hang up");
+      },
+    });
+    const { room, frames } = fakeRoom();
+
+    const out = await propose(buildAgent(emptySessionState(), server, room), restart, toolOpts().opts);
+
+    expect(out).toMatch(/nothing changed/);
+    expect(frames[1]!.payload).toMatchObject({ ok: false });
+  });
+
+  test("a destructive kind is never run, only surfaced", async () => {
+    const state = emptySessionState();
+    const server = fakeServer();
+    const { room, frames } = fakeRoom();
+    const del: SuggestedAction = { kind: "deleteResource", label: "Delete svc web", name: "web", resourceKind: "service" };
+
+    const out = await propose(buildAgent(state, server, room), del, toolOpts("call-9").opts);
+
+    expect(server.runs).toEqual([]);
+    expect(out).toBe(SENT_TO_DESKTOP);
+    expect(state.awaitingClick.get("call-9")).toBe(del.label);
+    expect(frames.map((f) => f.topic)).toEqual(["rigel.action"]);
+    expect(frames[0]!.payload.auto).toBeUndefined();
+  });
+
+  test("an irreversible kind waits on the desktop and is remembered for its result", async () => {
     const state = emptySessionState();
     const server = fakeServer();
     const { room, frames } = fakeRoom();
@@ -282,8 +333,8 @@ describe("proposeMutation routing", () => {
   });
 });
 
-describe("the live LLM-driven proposal turn", () => {
-  test("a model tool call publishes a proposal and nothing spoken afterwards can run it", async () => {
+describe("the live LLM-driven turn", () => {
+  test("a model tool call runs the change, and nothing spoken afterwards runs anything else", async () => {
     const state = emptySessionState();
     state.activeContext = "prod";
     const server = fakeServer();
@@ -294,23 +345,26 @@ describe("the live LLM-driven proposal turn", () => {
         toolCalls: [{ name: "proposeMutation", args: { action: restart } }],
       },
       {
-        input: JSON.stringify(SENT_TO_DESKTOP),
-        content: "It's waiting in the popover for you to run.",
+        input: JSON.stringify(
+          "Done: kubectl --context prod rollout restart deployment/web ran and completed. Tell the user in one short sentence what changed.",
+        ),
+        content: "Restarted web.",
         duration: 50,
       },
     ]);
 
     const result = await session.run({ userInput: "restart web" });
-    await vi.waitFor(() => expect(frames).toHaveLength(1));
+    await vi.waitFor(() => expect(frames).toHaveLength(2));
 
     result.expect.containsFunctionCall({ name: "proposeMutation" });
-    expect(frames[0]!.payload.action).toEqual(restart);
-    expect(state.awaitingClick.get("call-1") ?? state.awaitingClick.size).toBeTruthy();
+    expect(frames[0]!.payload).toMatchObject({ action: restart, auto: true });
+    expect(frames[1]!.topic).toBe("rigel.action.result");
+    expect(server.runs).toEqual([restart]);
 
-    // The word that used to execute is now an ordinary turn: it neither
-    // throws StopResponse nor reaches the server, because the worker has no
-    // way to run anything at all.
+    // The word that used to execute is now an ordinary turn. It reaches
+    // nothing, because the only path to runAction is a tool call the model
+    // makes on an explicit instruction.
     await expect(userTurn(agent, "confirm")).resolves.toBeUndefined();
-    expect(server).not.toHaveProperty("runAction");
+    expect(server.runs).toEqual([restart]);
   }, 20_000);
 });

@@ -48,10 +48,21 @@ Special kinds:
   looks: labels feed Service selectors, NetworkPolicies and ArgoCD tracking, so
   a wrong one breaks routing with nothing visible to see.
 
-Confirmation: EVERY action, from every surface including voice, is executed by
-a human clicking through the confirm sheet. The voice agent proposes and
-nothing more; no spoken word runs a change, because anyone within earshot can
-say one.
+Confirmation, voice surface: no spoken word ever runs a change, and the agent
+never asks for one — anyone within earshot could say it. What the agent may do
+is keyed on the ACTION, not on what it hears:
+- Non-destructive kinds (`AUTO_RUNNABLE_KINDS`: restart, rollback, pause,
+  resume, suspend/resumeCronJob, uncordon, scale, setImage, setEnv,
+  setResources, annotate, createNamespace) run on the operator's own
+  instruction. They destroy nothing and can be undone.
+- Everything else is surfaced in the desktop popover for the operator to
+  approve: the delete family, drain, cordon, purge, raw patches (setEnvRef,
+  setImagePullSecrets), `command`, `applyManifest`, `proposeRepoFix`, plus
+  `label` (feeds selectors) and `triggerCronJob` (starts arbitrary work).
+- A destructive hint downgrades any kind, `scale` to 0 replicas is treated as
+  an outage rather than a scale, and `classifyTier` on the built command is the
+  second, stricter gate: a kind that would otherwise run is surfaced when its
+  actual command tiers destructive.
 
 Additional kinds:
 - `applyManifest` — install/self-host a new app. The `action` block is

@@ -274,7 +274,7 @@ test("running a proposal goes through the confirm sheet, never a spoken word", a
   expect(onRunClick).toHaveBeenCalledWith(action);
 });
 
-test("a reversible proposal is marked as such, and a destructive one is not", () => {
+test("a destructive change says it needs approval; a reversible one says it is reversible", () => {
   const { rerender } = render(
     <VoicePopoverBody report={REPORT} pills={[]} actions={[pendingAction("a1")]} onRunClick={vi.fn()} onCancel={vi.fn()} onEnd={vi.fn()} />,
   );
@@ -290,5 +290,35 @@ test("a reversible proposal is marked as such, and a destructive one is not", ()
       onEnd={vi.fn()}
     />,
   );
-  expect(screen.getByText("irreversible")).toBeInTheDocument();
+  expect(screen.getByText("needs your approval")).toBeInTheDocument();
+});
+
+test("a change the agent is running offers no button to press", () => {
+  render(
+    <VoicePopoverBody
+      report={REPORT}
+      pills={[]}
+      actions={[{ ...pendingAction("a1"), auto: true }]}
+      onRunClick={vi.fn()}
+      onCancel={vi.fn()}
+      onEnd={vi.fn()}
+    />,
+  );
+  expect(screen.getByText("Running…")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Restart web" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Dismiss" })).toBeNull();
+});
+
+test("a change the agent ran reports the outcome in place of the button", () => {
+  render(
+    <VoicePopoverBody
+      report={REPORT}
+      pills={[]}
+      actions={[{ ...pendingAction("a1"), auto: true, done: { ok: true, summary: "ran" } }]}
+      onRunClick={vi.fn()}
+      onCancel={vi.fn()}
+      onEnd={vi.fn()}
+    />,
+  );
+  expect(screen.getByText("Ran")).toBeInTheDocument();
 });
