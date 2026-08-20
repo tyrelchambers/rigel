@@ -34,6 +34,16 @@ export function deriveTitle(messages: ChatMessage[]): string {
   return t.length > 64 ? `${t.slice(0, 64)}…` : t;
 }
 
+/**
+ * Voice sessions used to be written in here. They read as one side of a
+ * conversation, because only the operator's speech was ever recorded, so the
+ * writer was removed. This drops what it left behind: an id prefixed
+ * `voice-`, which nothing else produces, with the fixed title it always wrote.
+ */
+function isRetiredVoiceSession(e: ChatHistoryEntry): boolean {
+  return e.id.startsWith("voice-") && e.title === "Voice session";
+}
+
 /** All saved conversations, newest first. */
 export function loadSessions(): ChatHistoryEntry[] {
   try {
@@ -41,7 +51,7 @@ export function loadSessions(): ChatHistoryEntry[] {
     if (!raw) return [];
     const arr = JSON.parse(raw);
     if (!Array.isArray(arr)) return [];
-    return (arr as ChatHistoryEntry[])
+    const kept = (arr as ChatHistoryEntry[])
       .filter(
         (e) =>
           e &&
@@ -49,7 +59,11 @@ export function loadSessions(): ChatHistoryEntry[] {
           Array.isArray(e.messages) &&
           e.messages.length > 0,
       )
+      .filter((e) => !isRetiredVoiceSession(e))
       .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+    // Written back once, so the sweep costs nothing on later reads.
+    if (kept.length !== arr.length) localStorage.setItem(KEY, JSON.stringify(kept));
+    return kept;
   } catch {
     return [];
   }
