@@ -29,9 +29,16 @@ import type { ManifestEdit } from "./manifestEdit";
 /** A metadata map where a null value removes the key (kubectl's `key-`). */
 const nullableMap = z.record(z.string(), z.union([z.string(), z.null()]));
 
-/** Carried by every kind: the button text, and the model's own risk hint. */
+/**
+ * Carried by every kind: the button text, and the model's own risk hint.
+ *
+ * `label` is optional because it is display only and every surface already
+ * falls back ("Review and run", "Propose fix", "kubectl"). Requiring it cost a
+ * live session a whole tool call out of the three a turn gets: the model had
+ * the change right and was rejected for the button text.
+ */
 const base = {
-  label: z.string(),
+  label: z.string().optional().describe("short button text for the desktop card"),
   destructive: z.boolean().optional(),
 };
 

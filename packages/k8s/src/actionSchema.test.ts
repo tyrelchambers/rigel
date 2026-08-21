@@ -86,6 +86,14 @@ describe("actionSchema covers the contract", () => {
     }
   });
 
+  // A live session was rejected for the button text while having the change
+  // itself right. label is display only and every surface falls back, so it
+  // must never cost one of the three tool calls a turn gets.
+  test("an action with no label is accepted, because the label is only display", () => {
+    const { label: _drop, ...noLabel } = CANONICAL.proposeRepoFix as unknown as Record<string, unknown>;
+    expect(actionSchema.safeParse(noLabel).success).toBe(true);
+  });
+
   test("the model's destructive hint is carried on any kind", () => {
     expect(actionSchema.parse({ ...CANONICAL.restart, destructive: true })).toMatchObject({ destructive: true });
   });
