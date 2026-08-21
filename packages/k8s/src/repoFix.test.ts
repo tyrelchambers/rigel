@@ -330,6 +330,8 @@ describe("proposeRepoFix", () => {
     expect(vi.mocked(writeFile).mock.calls[0]![0]).toContain("/k8s/web.yaml");
     expect(String(vi.mocked(writeFile).mock.calls[0]![1])).toContain("replicas: 4");
     expect(callMatching((a) => a[0] === "-C" && a.includes("add") && a.includes("k8s/web.yaml"))).toBeDefined();
+    // The planned file comes back, because only the planner knew which it was.
+    expect(res.filePath).toBe("k8s/web.yaml");
   });
 
   test("a typed edit the planner refuses never runs a git write", async () => {

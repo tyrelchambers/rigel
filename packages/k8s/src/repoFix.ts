@@ -104,6 +104,8 @@ export interface RepoFixResult {
   /** The opened PR's number. */
   number?: number;
   branch?: string;
+  /** The file the fix changed, which a typed edit only knows after planning. */
+  filePath?: string;
   message?: string;
 }
 
@@ -235,7 +237,7 @@ export async function proposeRepoFix(input: RepoFixInput): Promise<RepoFixResult
   if (result.number && input.origin) {
     await labelPullRequest(slug, input.token, result.number, input.origin);
   }
-  return result;
+  return { ...result, filePath: rel };
 }
 
 async function writeProposedFile(dir: string, rel: string, content: string): Promise<void> {

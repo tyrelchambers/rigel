@@ -36,6 +36,7 @@ import {
 // implementation. ensureCheckout is used below by diffSource/applySource;
 // the rest is re-exported so callers keep importing it from "./git" unchanged.
 import { ensureCheckout } from "@rigel/k8s/src/repoFix";
+import type { ManifestEdit } from "@rigel/k8s/src/manifestEdit";
 export {
   ensureCheckout,
   previewRepoFix,
@@ -309,8 +310,9 @@ export async function resolveDeploymentLink(
   context: string | null,
   namespace: string,
   deployment: string,
+  kind = "deployment",
 ): Promise<{ linked: boolean; link: RepoLink | null }> {
-  const res = await kubectl(context, ["get", "deployment", deployment, "-n", namespace, "-o", "json"]);
+  const res = await kubectl(context, ["get", kind, deployment, "-n", namespace, "-o", "json"]);
   if (res.code !== 0) return { linked: false, link: null };
   let annotations: Record<string, string> = {};
   try {
@@ -321,6 +323,96 @@ export async function resolveDeploymentLink(
   }
   const link = resolveRepoLink(await loadSources(context), annotations);
   return { linked: link !== null, link };
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/git/propose-fix request parsing
+// ---------------------------------------------------------------------------
+
+/** The change a propose-fix request carries, in one of the two RepoFixInput shapes. */
+export type ProposeFixChange =
+  | { filePath: string; content: string }
+  | { target: { kind: string; name: string; namespace: string }; edit: ManifestEdit };
+
+export interface ParsedProposeFix {
+  /** The deployment's provenance id (the rigel.dev/source-repo value). */
+  source: string;
+  title: string;
+  body?: string;
+  dryRun: boolean;
+  change: ProposeFixChange;
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
+
+/** A map of string keys to string-or-null values, which is what annotate/label take. */
+function isStringOrNullMap(v: unknown): v is Record<string, string | null> {
+  return isRecord(v) && Object.values(v).every((x) => x === null || typeof x === "string");
+}
+
+function parseEdit(raw: unknown): ManifestEdit | string {
+  if (!isRecord(raw)) return "edit must be an object naming the change to make";
+  switch (raw.op) {
+    case "annotate":
+      if (!isStringOrNullMap(raw.annotations)) return "an annotate edit needs an annotations object";
+      return { op: "annotate", annotations: raw.annotations };
+    case "label":
+      if (!isStringOrNullMap(raw.labels)) return "a label edit needs a labels object";
+      return { op: "label", labels: raw.labels };
+    case "setImage":
+      if (typeof raw.image !== "string" || raw.image === "") return "a setImage edit needs an image";
+      if (raw.container !== undefined && typeof raw.container !== "string") return "container must be a name";
+      return { op: "setImage", image: raw.image, ...(raw.container ? { container: raw.container } : {}) };
+    case "scale":
+      if (!Number.isInteger(raw.replicas)) return "a scale edit needs a whole replica count";
+      return { op: "scale", replicas: raw.replicas as number };
+    default:
+      return `"${String(raw.op)}" is not an edit Rigel can make; the edits are annotate, label, setImage and scale`;
+  }
+}
+
+/**
+ * Validate a propose-fix body into the shape the repo-fix core takes, or return
+ * the reason it cannot be. A request carries EITHER a complete replacement file
+ * (chat) OR a workload and a typed edit (voice); both or neither is a refusal,
+ * never a silent preference for one of them.
+ */
+export function parseProposeFixRequest(raw: unknown): ParsedProposeFix | string {
+  if (!isRecord(raw)) return "invalid request body";
+  const source = typeof raw.source === "string" ? raw.source : "";
+  const title = typeof raw.title === "string" ? raw.title : "";
+  if (!source) return "missing source";
+  if (!title) return "missing title";
+
+  const hasFile = typeof raw.filePath === "string" && typeof raw.content === "string";
+  const hasEdit = typeof raw.name === "string" && raw.edit !== undefined;
+  if (hasFile === hasEdit) {
+    return "a fix carries either filePath with content, or name with edit, and not both";
+  }
+
+  const common = {
+    source,
+    title,
+    ...(typeof raw.body === "string" ? { body: raw.body } : {}),
+    dryRun: raw.dryRun === true,
+  };
+
+  if (hasFile) {
+    return { ...common, change: { filePath: raw.filePath as string, content: raw.content as string } };
+  }
+  const edit = parseEdit(raw.edit);
+  if (typeof edit === "string") return edit;
+  return {
+    ...common,
+    change: {
+      target: {
+        kind: typeof raw.resourceKind === "string" && raw.resourceKind ? raw.resourceKind : "deployment",
+        name: raw.name as string,
+        namespace: typeof raw.namespace === "string" && raw.namespace ? raw.namespace : "default",
+      },
+      edit,
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
