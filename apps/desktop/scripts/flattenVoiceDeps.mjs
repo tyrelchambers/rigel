@@ -18,6 +18,7 @@
 import { cp, mkdir, readFile, rm } from "node:fs/promises";
 import { existsSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /** Node's platform name for an electron-builder-style target prefix. */
 const NODE_PLATFORM = { mac: "darwin", win: "win32", linux: "linux" };
@@ -151,8 +152,10 @@ function bindingsVerdict(found, target, { strict, native }) {
 }
 
 export async function flattenVoiceDeps({
-  fromDir = new URL("..", import.meta.url).pathname,
-  outDir = new URL("../dist/voice-deps", import.meta.url).pathname,
+  // fileURLToPath, not URL.pathname: the latter yields "/D:/a/..." on Windows,
+  // a drive-letter path with a leading slash that no fs call accepts.
+  fromDir = fileURLToPath(new URL("..", import.meta.url)),
+  outDir = fileURLToPath(new URL("../dist/voice-deps", import.meta.url)),
   roots = ["@livekit/rtc-node", "@livekit/local-inference"],
   platform = process.platform,
 } = {}) {
@@ -174,7 +177,7 @@ export async function flattenVoiceDeps({
   return results;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
   const results = await flattenVoiceDeps();
   for (const r of results) console.log(`  voice deps → dist/voice-deps/${r.target} (${r.packages} packages)`);
 }
