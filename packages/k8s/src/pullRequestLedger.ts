@@ -2,7 +2,7 @@
 // "Pending PRs" card can watch each one's status and offer Sync-on-merge. Stored
 // as a JSON array in the rigel-pull-requests ConfigMap (server-owned).
 
-import type { RepoFixOrigin } from "./repoFix.js";
+import type { RepoFixOrigin } from "./gitSources.js";
 
 export const PULL_REQUESTS_CONFIGMAP = "rigel-pull-requests";
 export const PULL_REQUESTS_DATA_KEY = "pull-requests.json";

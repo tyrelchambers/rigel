@@ -75,6 +75,11 @@ export function findByDeployment(
   return null;
 }
 
+/** Who asked for a repo fix: chat, the voice assistant, or the in-cluster agent.
+ *  Lives here rather than in repoFix.ts so the PR ledger can name it without
+ *  dragging repoFix's fs + git imports into a browser build. */
+export type RepoFixOrigin = "chat" | "agent" | "voice";
+
 export const GIT_SOURCES_CONFIGMAP = "rigel-git-sources";
 /** Account-level GitHub PAT (+ login) used to list repos, clone, push, and open PRs. */
 export const GITHUB_SECRET = "rigel-github";

@@ -15,10 +15,13 @@ import {
   fixBranchName,
   normalizeManifestPath,
   parseRepoSlug,
+  type RepoFixOrigin,
   redactURL,
   safeRepoFilePath,
   type ResolvedTarget,
 } from "./gitSources.js";
+
+export type { RepoFixOrigin };
 
 const REPO_ROOT = `${process.env.TMPDIR ?? "/tmp"}/rigel-repos`;
 
@@ -66,9 +69,6 @@ export async function ensureCheckout(
 // ---------------------------------------------------------------------------
 // AI fix → pull request (feature 3c)
 // ---------------------------------------------------------------------------
-
-/** Who asked for the fix: chat, the voice assistant, or the in-cluster agent. */
-export type RepoFixOrigin = "chat" | "agent" | "voice";
 
 /**
  * The change to propose, in one of two shapes, never both:
