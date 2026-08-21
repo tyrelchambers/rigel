@@ -12,7 +12,6 @@ import { RoomAudioRenderer, RoomContext, useTrackVolume } from "@livekit/compone
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useVoiceStatus, type ActionResult } from "@/lib/api";
-import type { MentionCandidate } from "@/panels/chat/mentions";
 import { VoiceMark, visualStateFor, type AgentReport } from "./VoiceMark";
 import { VoicePopoverBody } from "./VoicePopoverBody";
 import {
@@ -78,12 +77,11 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
   const { room, status, failure, connect, disconnect } = useVoiceRoom();
   const { report, onAgentState } = useAgentReport(room);
   const [open, setOpen] = useState(false);
-  const [pills, setPills] = useState<MentionCandidate[]>([]);
   const [actions, setActions] = useState<VoiceAction[]>([]);
   const [confirmAction, setConfirmAction] = useState<VoiceAction | null>(null);
 
-  // Proposals belong to a session. Pills are dropped by VoiceSessionEffects
-  // remounting; actions are held here, so they are dropped here.
+  // Proposals belong to a session, and they are held here rather than in
+  // VoiceSessionEffects, so this is where a new room drops them.
   useEffect(() => {
     setActions([]);
     setConfirmAction(null);
@@ -135,7 +133,7 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
       {room && (
         <RoomContext.Provider value={room}>
           <RoomAudioRenderer />
-          <VoiceSessionEffects room={room} onPills={setPills} onAction={onAction} onAgentState={onAgentState} />
+          <VoiceSessionEffects room={room} onAction={onAction} onAgentState={onAgentState} />
           <ConfirmSheet
             action={confirmAction?.action ?? null}
             open={confirmAction != null}
@@ -192,7 +190,6 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
             <RoomContext.Provider value={room}>
               <VoicePopoverBody
                 report={report}
-                pills={pills}
                 actions={actions}
                 onRunClick={setConfirmAction}
                 onCancel={(a) => void reportResult(a, false, "cancelled")}

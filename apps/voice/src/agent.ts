@@ -187,6 +187,7 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
                     ok: true,
                     summary: `opened pull request #${res.number ?? 0}`,
                     prUrl: res.prUrl,
+                    repoSlug: res.repoSlug,
                   });
                   return `Done: pull request #${res.number ?? 0} is open at ${res.prUrl}. Tell the user the pull request is open, name the repository and the number, and say the URL; the link is in the popover and the change itself is on GitHub. Nothing was changed on the cluster.`;
                 } catch (err) {

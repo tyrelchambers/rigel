@@ -106,6 +106,8 @@ export interface RepoFixResult {
   branch?: string;
   /** The file the fix changed, which a typed edit only knows after planning. */
   filePath?: string;
+  /** owner/repo, so a caller can name the repository without re-parsing the URL. */
+  repoSlug?: string;
   message?: string;
 }
 
@@ -251,7 +253,7 @@ export async function proposeRepoFix(input: RepoFixInput): Promise<RepoFixResult
   if (result.number && input.origin) {
     await labelPullRequest(slug, input.token, result.number, input.origin);
   }
-  return { ...result, filePath: rel };
+  return { ...result, filePath: rel, repoSlug: `${slug.owner}/${slug.repo}` };
 }
 
 async function writeProposedFile(dir: string, rel: string, content: string): Promise<void> {

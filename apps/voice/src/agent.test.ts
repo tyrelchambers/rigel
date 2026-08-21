@@ -54,7 +54,7 @@ function fakeServer(overrides: Partial<ServerClient> = {}): FakeServer {
     repoLink: async () => ({ linked: true, link: LINK }),
     proposeFix: async (action) => {
       proposals.push(action);
-      return { ok: true, prUrl: "https://github.com/owner/repo/pull/7", number: 7, branch: "rigel/fix-x", message: "ok" };
+      return { ok: true, prUrl: "https://github.com/owner/repo/pull/7", number: 7, branch: "rigel/fix-x", repoSlug: "owner/repo", message: "ok" };
     },
     agentConfig: async () => {
       throw new Error("not used");
@@ -469,7 +469,13 @@ describe("proposeRepoFix from voice", () => {
       { topic: "rigel.action", payload: { id: "call-7", action: fix, command: null, auto: true } },
       {
         topic: "rigel.action.result",
-        payload: { id: "call-7", ok: true, summary: "opened pull request #7", prUrl: "https://github.com/owner/repo/pull/7" },
+        payload: {
+          id: "call-7",
+          ok: true,
+          summary: "opened pull request #7",
+          prUrl: "https://github.com/owner/repo/pull/7",
+          repoSlug: "owner/repo",
+        },
       },
     ]);
   });
