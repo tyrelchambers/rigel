@@ -141,20 +141,31 @@ async function resolveChange(dir: string, input: RepoFixInput): Promise<Resolved
     return { ok: true, rel: safeRepoFilePath(input.filePath), content: input.content };
   }
   const manifestDir = normalizeManifestPath(input.source.path);
+  const where = `${manifestDir} on branch ${input.source.branch}`;
   const files = await readManifestFiles(dir, manifestDir);
+  // Told apart on purpose. "No manifest defines that workload" sends the
+  // operator looking at the workload, and the answer here is usually that the
+  // source was linked to a directory the repo does not have.
+  if (files === null) {
+    return { ok: false, message: `The source points at ${where}, and that directory is not in the repository.` };
+  }
+  if (files.length === 0) {
+    return { ok: false, message: `There are no YAML files under ${where} in the repository.` };
+  }
   const plan = planManifestEdit(files, { ...input.target!, dir: manifestDir }, input.edit!);
   if (!plan.ok) return plan;
   return { ok: true, rel: safeRepoFilePath(plan.filePath), content: plan.content };
 }
 
-/** Every manifest under the source's directory, keyed by its repo-relative path. */
-async function readManifestFiles(dir: string, manifestDir: string): Promise<ManifestFile[]> {
+/** Every manifest under the source's directory, keyed by its repo-relative
+ *  path, or null when that directory is not in the checkout at all. */
+async function readManifestFiles(dir: string, manifestDir: string): Promise<ManifestFile[] | null> {
   const base = manifestDir === "." ? dir : `${dir}/${manifestDir}`;
   let names: string[];
   try {
     names = (await readdir(base, { recursive: true })) as unknown as string[];
   } catch {
-    return [];
+    return null;
   }
   const out: ManifestFile[] = [];
   for (const name of names) {

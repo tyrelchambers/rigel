@@ -107,6 +107,15 @@ async function main(): Promise<void> {
       // "stop" and "no" over a long answer are exactly that shape, and being
       // unable to cut the agent off is the worse failure.
       interruption: { mode: "vad" },
+      // A streaming turn detector silently opts the session into
+      // streamingEndpointingOptions, whose minDelay is 300ms. Half a second of
+      // thought mid-sentence read as the end of the turn, and the agent
+      // answered a question the operator had not finished asking. These are the
+      // deliberate values: dynamic, so a speaker who pauses is learned rather
+      // than talked over, with a floor well clear of an ordinary breath and a
+      // ceiling that still ends a turn the detector never calls. Preemptive
+      // generation absorbs most of what the floor costs time to first token.
+      endpointing: { mode: "dynamic", minDelay: 900, maxDelay: 4000 },
     },
     keytermsOptions: { keyterms: state.keyterms },
   });

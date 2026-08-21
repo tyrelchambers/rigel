@@ -384,6 +384,40 @@ describe("proposeRepoFix", () => {
   });
 });
 
+describe("a typed edit against a source whose path is wrong", () => {
+  test("a manifest directory that is not in the repo says so, rather than blaming the workload", async () => {
+    mockRun.mockImplementation(gitOk());
+    mockReaddir.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+    const res = await proposeRepoFix({
+      source: target,
+      token: "TOK",
+      title: "Scale web",
+      target: { kind: "deployment", name: "web", namespace: "shop" },
+      edit: { op: "scale", replicas: 4 },
+    });
+    expect(res.ok).toBe(false);
+    expect(res.message).toContain("k8s");
+    expect(res.message).toContain("main");
+    expect(res.message).toMatch(/not in the repository/i);
+    expect(res.message).not.toMatch(/no manifest.*defines/i);
+  });
+
+  test("a directory with no YAML in it is named as empty, not as a missing workload", async () => {
+    mockRun.mockImplementation(gitOk());
+    repoTree({ "README.md": "# nothing here", "kustomization.json": "{}" });
+    const res = await proposeRepoFix({
+      source: target,
+      token: "TOK",
+      title: "Scale web",
+      target: { kind: "deployment", name: "web", namespace: "shop" },
+      edit: { op: "scale", replicas: 4 },
+    });
+    expect(res.ok).toBe(false);
+    expect(res.message).toMatch(/no YAML/i);
+    expect(res.message).toContain("k8s");
+  });
+});
+
 describe("previewRepoFix with a typed edit", () => {
   test("returns the planned change's diff without committing", async () => {
     mockRun.mockImplementation(gitOk("@@ -6 +6 @@\n-  replicas: 2\n+  replicas: 4"));
