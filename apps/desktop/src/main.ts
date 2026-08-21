@@ -61,8 +61,8 @@ const APPS_DIR = join(DESKTOP_DIR, ".."); // apps
 // wrapper that imports server.mjs) so the server self-terminates if the Electron
 // main process is killed with SIGKILL. Both files live in dist/ next to main.js.
 const SERVER_BUNDLE_DEV = join(__dirname, "server-entry.mjs");
-// The voice worker is bundled the same way (see build.mjs). Dev-only: forked
-// only when RIGEL_VOICE=1 (see forkVoiceWorker); packaging is a later task.
+// The voice worker is bundled the same way (see build.mjs). Not forked in a
+// packaged app yet (see voiceAvailable); packaging it is a later task.
 const VOICE_BUNDLE_DEV = join(__dirname, "voice-entry.mjs");
 const WEB_DIST_DEV = join(APPS_DIR, "web", "dist");
 // The Rigel app icon. The packaged .app embeds build/icon.icns via
@@ -298,6 +298,11 @@ function forkServer(port: number): UtilityProcess {
   configureAuditSkillsEnv(env);
   env.RIGEL_SESSION_SECRET = SESSION_SECRET;
   env.RIGEL_VOICE_WORKER_TOKEN = VOICE_WORKER_TOKEN;
+  // The server decides whether to advertise voice, but it cannot see whether
+  // this build can actually run the worker. Answer that here, on exactly the
+  // condition forkVoiceWorker uses, so the header never offers a session that
+  // has nothing to connect to.
+  if (voiceAvailable()) env.RIGEL_VOICE = "1";
   env.RIGEL_USER_DATA_DIR = app.getPath("userData");
 
   let entry: string;
@@ -374,9 +379,9 @@ function forkServer(port: number): UtilityProcess {
 }
 
 // ── Voice worker fork ────────────────────────────────────────────────────────
-// Dev-only, flag-gated: forks the desktop-bundled voice.mjs (see build.mjs)
-// alongside the server when RIGEL_VOICE=1. Packaging (resourcesPath layout,
-// crash-restart, etc.) is a later task — a packaged app never forks this.
+// Forks the desktop-bundled voice.mjs (see build.mjs) alongside the server.
+// Packaging (resourcesPath layout, crash-restart, etc.) is a later task, so a
+// packaged app does not fork this and does not advertise voice either.
 //
 // utilityProcess.fork relaunches the SAME Electron helper binary with
 // --type=utility, so this child still links Electron Framework (which
@@ -394,8 +399,18 @@ function forkServer(port: number): UtilityProcess {
 // repo short of running the voice worker under a real, separate Node
 // binary instead of Electron's own executable, which is a bigger call
 // than a log-noise cleanup.
+/**
+ * Whether this build can run the voice worker at all. Packaging it is still
+ * open work — the resourcesPath layout and crash-restart are not done — so a
+ * packaged app has no worker and must not advertise one. There is deliberately
+ * no env var here: voice is a feature, not something to switch on per launch.
+ */
+function voiceAvailable(): boolean {
+  return !app.isPackaged;
+}
+
 function forkVoiceWorker(port: number): UtilityProcess | null {
-  if (process.env.RIGEL_VOICE !== "1" || app.isPackaged) return null;
+  if (!voiceAvailable()) return null;
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     PORT: String(port),
@@ -514,7 +529,7 @@ function configureMicPermissionHandlers(): void {
         permission,
         requestingUrl: details.requestingUrl,
         mediaTypes: "mediaTypes" in details ? details.mediaTypes : undefined,
-        voiceEnabled: process.env.RIGEL_VOICE === "1",
+        voiceEnabled: voiceAvailable(),
         ownOriginPrefix: ownOrigin(),
       }),
     );
@@ -525,7 +540,7 @@ function configureMicPermissionHandlers(): void {
       permission,
       requestingUrl: details.requestingUrl,
       mediaTypes: details.mediaType ? [details.mediaType] : undefined,
-      voiceEnabled: process.env.RIGEL_VOICE === "1",
+      voiceEnabled: voiceAvailable(),
       ownOriginPrefix: ownOrigin(),
     }),
   );

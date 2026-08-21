@@ -10,7 +10,6 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "dev": "pnpm build && electron .",
-    "dev:voice": "RIGEL_VOICE=1 pnpm run dev",
     "smoke": "pnpm build && HELMSMAN_SMOKE=1 electron .",
     "dist": "pnpm build && electron-builder --mac --arm64",
     "dist:all": "pnpm build && electron-builder --mac --arm64 --x64",
