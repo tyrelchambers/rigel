@@ -84,18 +84,34 @@ Additional kinds:
     "image":"…"}`, `{"op":"scale","replicas":N}`, with a null annotation or
     label value removing the key. This is the voice shape.
 
-  Both or neither is a 422, never a silent preference. The voice worker
-  corrects a small set of near-miss field names before it posts (`sourceId` for
-  `source`, `deployment` for `name`, an `edit` wrapped in a one-item array),
-  because a turn is capped at three tool calls and a model that spends two of
-  them guessing at a key never opens the PR. The route itself takes only the
-  documented names. The manifest is located
+  Both or neither is a 422, never a silent preference. Voice sends only the
+  second shape, and its tool is schema-constrained (see below), so a near-miss
+  key like `sourceId` is refused naming `source` before the call is made. The manifest is located
   by matching kind + name + namespace across the source's directory; zero
   matches, several matches, or a templated (Helm) tree refuses with the reason
   rather than editing on a guess. Nothing is applied to the cluster: the chat
   path shows a `git diff` in the confirm sheet before the operator confirms,
   and voice opens the PR itself and speaks its number and URL. The opened PR is
   labelled `rigel` + `rigel:<chat|voice|agent>`.
+
+### The voice tool is schema-constrained
+
+The chat surface emits action blocks as fenced JSON and `extractActionBlocks`
+parses them permissively, because the chat model is taught this contract in
+prose and has no schema in context.
+
+The voice tool is different: `proposeMutation` declares
+`packages/k8s/src/actionSchema.ts`, a `z.discriminatedUnion("kind", ...)` over
+every kind here. `@livekit/agents` validates against it BEFORE the tool runs, so
+the model sees the field names up front, a wrong kind comes back listing every
+valid one, and a wrong field comes back naming that field alone. Nothing in the
+worker checks the shape by hand.
+
+Two rules keep the schema honest, both tested in `actionSchema.test.ts`. Every
+field the server consumes must appear in its variant, because zod strips
+unknown keys and a missing one would be dropped before execute ever saw it. And
+no `.refine()`, because refinements do not survive `toJSONSchema` and would
+advertise a schema looser than the one that runs.
 
 Examples:
 

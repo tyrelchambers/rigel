@@ -1,7 +1,8 @@
 import { initializeLogger, llm, voice } from "@livekit/agents";
 import { ACTION_KINDS, type SuggestedAction } from "@rigel/k8s/src/actionBlocks";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { buildAgent, CONTEXT_HEADING, refreshInstructions, SENT_TO_DESKTOP, unknownKindRefusal } from "./agent.js";
+import type * as z from "zod";
+import { buildAgent, CONTEXT_HEADING, refreshInstructions, SENT_TO_DESKTOP } from "./agent.js";
 import type { PublishRoom } from "./publish.js";
 import type { ServerClient } from "./serverClient.js";
 import { DESKTOP_IDENTITY, applyDataFrame, emptySessionState, type SessionState } from "./state.js";
@@ -71,6 +72,18 @@ function fakeServer(overrides: Partial<ServerClient> = {}): FakeServer {
   };
 }
 
+/** A complete, valid pull-request proposal, which several suites start from. */
+const FIX = {
+  kind: "proposeRepoFix",
+  label: "Open a PR annotating web",
+  source: "shop-web-82b3ade",
+  title: "Annotate web",
+  body: "asked for over voice",
+  name: "web",
+  namespace: "shop",
+  edit: { op: "annotate" as const, annotations: { "example.com/owner": "platform" } },
+} satisfies SuggestedAction;
+
 const restart: SuggestedAction = { kind: "restart", label: "Restart web", name: "web", namespace: "prod" };
 
 /** The ToolOptions shape the SDK hands a tool: { ctx, toolCallId, abortSignal }. */
@@ -86,10 +99,19 @@ function toolOpts(callId = "call-1"): { opts: never; fireSpeechDone: () => void 
   };
 }
 
-function propose(agent: voice.Agent, action: unknown, opts: never): Promise<string> {
+/**
+ * Calls proposeMutation the way the SDK does: dist/voice/generation.js parses
+ * the tool's zod parameters BEFORE execute and, on failure, hands the model
+ * "Invalid arguments for <tool>: <message>" as the tool output instead of
+ * calling it at all. Going straight to execute would test a path production
+ * never takes, and would miss the schema doing the refusing.
+ */
+async function propose(agent: voice.Agent, action: unknown, opts: never): Promise<string> {
   const tool = agent.toolCtx.getFunctionTool("proposeMutation");
   if (!tool) throw new Error("proposeMutation is not registered");
-  return tool.execute({ action }, opts) as Promise<string>;
+  const parsed = await (tool.parameters as z.ZodType).safeParseAsync({ action });
+  if (!parsed.success) return `Invalid arguments for proposeMutation: ${parsed.error.message}`;
+  return tool.execute(parsed.data as { action: unknown }, opts) as Promise<string>;
 }
 
 /** A live AgentSession so `this.session.say(...)` and StopResponse take the real path. */
@@ -278,13 +300,17 @@ describe("proposeMutation routing", () => {
     const { room, frames } = fakeRoom();
     const agent = buildAgent(emptySessionState(), server, room);
 
-    for (const kind of ["purge", "applyManifest"]) {
-      await expect(propose(agent, { kind, label: kind }, toolOpts().opts)).resolves.toMatch(/desktop/);
+    const unpreviewable = [
+      { kind: "purge", label: "Purge memos", name: "memos", namespace: "default" },
+      { kind: "applyManifest", label: "Install memos", manifest: "apiVersion: v1\nkind: Namespace\n" },
+    ];
+    for (const action of unpreviewable) {
+      await expect(propose(agent, action, toolOpts().opts)).resolves.toMatch(/desktop/);
     }
     // proposeRepoFix opens the PR itself unless a destructive hint downgrades
     // it; downgraded, it is as unpreviewable as the other two.
     await expect(
-      propose(agent, { kind: "proposeRepoFix", label: "pr", destructive: true }, toolOpts().opts),
+      propose(agent, { ...FIX, destructive: true }, toolOpts().opts),
     ).resolves.toMatch(/desktop/);
     expect(frames.map((f) => f.payload.command)).toEqual([null, null, null]);
   });
@@ -317,7 +343,10 @@ describe("proposeMutation routing", () => {
     expect(state.awaitingClick.size).toBe(0);
   });
 
-  test("an unknown kind is refused before anything is previewed or published", async () => {
+  // The schema refuses a wrong kind before execute is ever called, so the
+  // model is told every kind there is rather than being left to guess. This is
+  // what the hand-written unknown-kind refusal used to do by hand.
+  test("an invented kind never reaches the tool, and comes back naming every real one", async () => {
     const server = fakeServer({
       previewAction: async () => {
         throw new Error("must not preview an unknown kind");
@@ -325,19 +354,11 @@ describe("proposeMutation routing", () => {
     });
     const { room, frames } = fakeRoom();
 
-    const out = await propose(buildAgent(emptySessionState(), server, room), { kind: "nukeCluster" }, toolOpts().opts);
+    const out = await propose(buildAgent(emptySessionState(), server, room), { kind: "patch", label: "Patch web" }, toolOpts().opts);
 
-    expect(out).toMatch(/^Refused: unknown action kind "nukeCluster"/);
-    expect(frames).toEqual([]);
-  });
-
-  test("the unknown-kind refusal names the route the model should have taken", () => {
-    const out = unknownKindRefusal("patch");
-
-    expect(out).toContain('"patch"');
-    expect(out).toContain('"command"');
-    expect(out).toContain('"annotate"');
+    expect(out).toMatch(/^Invalid arguments for proposeMutation/);
     for (const kind of ACTION_KINDS) expect(out).toContain(kind);
+    expect(frames).toEqual([]);
   });
 
   test("a preview the server cannot build is refused, not guessed at", async () => {
@@ -441,32 +462,21 @@ describe("checkGitLink", () => {
 });
 
 describe("proposeRepoFix from voice", () => {
-  const fix: SuggestedAction = {
-    kind: "proposeRepoFix",
-    label: "Open a PR annotating web",
-    source: "shop-web-82b3ade",
-    title: "Annotate web",
-    body: "asked for over voice",
-    name: "web",
-    namespace: "shop",
-    edit: { op: "annotate", annotations: { "example.com/owner": "platform" } },
-  };
-
   test("opens the pull request itself and speaks the number and the URL", async () => {
     const state = emptySessionState();
     const server = fakeServer();
     const { room, frames } = fakeRoom();
 
-    const out = await propose(buildAgent(state, server, room), fix, toolOpts("call-7").opts);
+    const out = await propose(buildAgent(state, server, room), FIX, toolOpts("call-7").opts);
 
-    expect(server.proposals).toEqual([fix]);
+    expect(server.proposals).toEqual([FIX]);
     expect(server.previews).toEqual([]); // a PR is not a kubectl command
     expect(out).toContain("7");
     expect(out).toContain("https://github.com/owner/repo/pull/7");
     expect(out).toMatch(/nothing was changed on the cluster/i);
     expect(state.awaitingClick.size).toBe(0);
     expect(frames).toEqual([
-      { topic: "rigel.action", payload: { id: "call-7", action: fix, command: null, auto: true } },
+      { topic: "rigel.action", payload: { id: "call-7", action: FIX, command: null, auto: true } },
       {
         topic: "rigel.action.result",
         payload: {
@@ -482,15 +492,15 @@ describe("proposeRepoFix from voice", () => {
 
   test("carries no diff on the wire, because the pull request shows the change", async () => {
     const { room, frames } = fakeRoom();
-    await propose(buildAgent(emptySessionState(), fakeServer(), room), fix, toolOpts().opts);
+    await propose(buildAgent(emptySessionState(), fakeServer(), room), FIX, toolOpts().opts);
     expect(JSON.stringify(frames)).not.toContain("diff");
   });
 
   test("opens the pull request even with no desktop connected", async () => {
     const server = fakeServer();
     const { room, frames } = fakeRoom(["phone-1"]);
-    const out = await propose(buildAgent(emptySessionState(), server, room), fix, toolOpts().opts);
-    expect(server.proposals).toEqual([fix]);
+    const out = await propose(buildAgent(emptySessionState(), server, room), FIX, toolOpts().opts);
+    expect(server.proposals).toEqual([FIX]);
     expect(out).toMatch(/^Done:/);
     // The frames are display only, so they go up regardless; nothing waits.
     expect(frames.map((f) => f.topic)).toEqual(["rigel.action", "rigel.action.result"]);
@@ -502,7 +512,7 @@ describe("proposeRepoFix from voice", () => {
     });
     const { room, frames } = fakeRoom();
 
-    const out = await propose(buildAgent(emptySessionState(), server, room), fix, toolOpts().opts);
+    const out = await propose(buildAgent(emptySessionState(), server, room), FIX, toolOpts().opts);
 
     expect(out).toContain("No manifest under k8s");
     expect(out).not.toMatch(/^Done:/);
@@ -517,7 +527,7 @@ describe("proposeRepoFix from voice", () => {
     });
     const { room, frames } = fakeRoom();
 
-    const out = await propose(buildAgent(emptySessionState(), server, room), fix, toolOpts().opts);
+    const out = await propose(buildAgent(emptySessionState(), server, room), FIX, toolOpts().opts);
 
     expect(out).toContain("unknown source");
     expect(out).toMatch(/nothing was pushed/i);
@@ -531,8 +541,8 @@ describe("proposeRepoFix from voice", () => {
 
     const out = await propose(agent, { kind: "proposeRepoFix", label: "Open a PR" }, toolOpts().opts);
 
-    expect(out).toMatch(/^Refused:/);
-    for (const field of ["source", "title", "name", "edit"]) expect(out).toContain(`"${field}"`);
+    expect(out).toMatch(/^Invalid arguments for proposeMutation/);
+    for (const field of ["source", "title", "name", "edit"]) expect(out).toContain(field);
     expect(server.proposals).toEqual([]);
     expect(frames).toEqual([]);
   });
@@ -541,62 +551,53 @@ describe("proposeRepoFix from voice", () => {
   // "sourceId", and a refusal that listed all four fields gave it nothing to
   // correct. It re-sent the same wrong key five times and then told the
   // operator the refusal was for an unclear reason.
-  // The near-miss keys a live model actually reached for. Correcting them is
-  // worth more than a good error message: the SDK caps a turn at three tool
-  // steps, so two wasted on a field name leave nothing to open the PR with.
-  test("sourceId is understood as source, and the PR opens", async () => {
+  // The near-miss keys a live model actually reached for. They are refused
+  // rather than corrected now: the schema puts the right names in front of the
+  // model before it calls, and names the one field it got wrong if it still
+  // does. Correcting silently would let the contract drift from what the
+  // server accepts.
+  test("sourceId is refused naming source, and nothing else", async () => {
     const server = fakeServer();
     const agent = buildAgent(emptySessionState(), server, fakeRoom().room);
+    const { source: _drop, ...rest } = FIX;
 
-    const out = await propose(agent, { ...fix, source: undefined, sourceId: fix.source }, toolOpts().opts);
+    const out = await propose(agent, { ...rest, sourceId: FIX.source }, toolOpts().opts);
 
-    expect(out).toMatch(/^Done:/);
-    expect(server.proposals[0]!.source).toBe(fix.source);
-  });
-
-  test("an edit sent as a one-item array is unwrapped", async () => {
-    const server = fakeServer();
-    const agent = buildAgent(emptySessionState(), server, fakeRoom().room);
-
-    const out = await propose(agent, { ...fix, edit: [fix.edit] }, toolOpts().opts);
-
-    expect(out).toMatch(/^Done:/);
-    expect(server.proposals[0]!.edit).toEqual(fix.edit);
-  });
-
-  test("several edits at once are refused, because one pull request carries one change", async () => {
-    const server = fakeServer();
-    const agent = buildAgent(emptySessionState(), server, fakeRoom().room);
-
-    const out = await propose(
-      agent,
-      { ...fix, edit: [fix.edit, { op: "scale", replicas: 3 }] },
-      toolOpts().opts,
-    );
-
-    expect(out).toMatch(/^Refused:/);
-    expect(out).toMatch(/one change/i);
+    expect(out).toContain("source");
+    expect(out).not.toContain("title");
     expect(server.proposals).toEqual([]);
   });
 
-  test("the workload named as deployment is understood, matching every other kind", async () => {
+  test("an edit sent as an array is refused naming edit", async () => {
     const server = fakeServer();
     const agent = buildAgent(emptySessionState(), server, fakeRoom().room);
 
-    const out = await propose(agent, { ...fix, name: undefined, deployment: "web" }, toolOpts().opts);
+    const out = await propose(agent, { ...FIX, edit: [FIX.edit] }, toolOpts().opts);
 
-    expect(out).toMatch(/^Done:/);
-    expect(server.proposals[0]!.name).toBe("web");
+    expect(out).toMatch(/^Invalid arguments for proposeMutation/);
+    expect(out).toContain("edit");
+    expect(server.proposals).toEqual([]);
   });
 
-  test("a field it never sent under any name is still named precisely", async () => {
+  test("the workload named as deployment is refused naming name", async () => {
+    const server = fakeServer();
+    const agent = buildAgent(emptySessionState(), server, fakeRoom().room);
+    const { name: _drop, ...rest } = FIX;
+
+    const out = await propose(agent, { ...rest, deployment: "web" }, toolOpts().opts);
+
+    expect(out).toContain("name");
+    expect(server.proposals).toEqual([]);
+  });
+
+  test("a field it never sent is named, and the ones it got right are not", async () => {
     const agent = buildAgent(emptySessionState(), fakeServer(), fakeRoom().room);
+    const { title: _drop, ...rest } = FIX;
 
-    const out = await propose(agent, { ...fix, title: undefined }, toolOpts().opts);
+    const out = await propose(agent, rest, toolOpts().opts);
 
-    expect(out).toContain('"title"');
-    expect(out).not.toContain('"source"');
-    expect(out).not.toContain('"name" is missing');
+    expect(out).toContain("title");
+    expect(out).not.toContain("source");
   });
 
   test("a destructive hint downgrades it to the desktop, where the sheet takes over", async () => {
@@ -604,11 +605,11 @@ describe("proposeRepoFix from voice", () => {
     const server = fakeServer();
     const { room, frames } = fakeRoom();
 
-    const out = await propose(buildAgent(state, server, room), { ...fix, destructive: true }, toolOpts("call-3").opts);
+    const out = await propose(buildAgent(state, server, room), { ...FIX, destructive: true }, toolOpts("call-3").opts);
 
     expect(server.proposals).toEqual([]);
     expect(out).toBe(SENT_TO_DESKTOP);
-    expect(state.awaitingClick.get("call-3")).toBe(fix.label);
+    expect(state.awaitingClick.get("call-3")).toBe(FIX.label);
     expect(frames[0]!.payload.command).toBeNull();
   });
 });

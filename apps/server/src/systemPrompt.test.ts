@@ -51,6 +51,16 @@ describe("voiceSystemPrompt", () => {
     expect(p).toContain("not linked to a repository");
   });
 
+  // The tool's schema names the kinds and their fields, so the prompt saying
+  // it again is duplication that can drift. It points at the schema instead.
+  test("leaves the vocabulary to the schema rather than reciting it", () => {
+    const p = voiceSystemPrompt("prod");
+    expect(p).toContain("Its schema lists every kind");
+    expect(p).not.toContain("sourceId");
+    expect(p).not.toContain("suspendCronJob");
+    expect(p).not.toContain('{"op":"setImage"');
+  });
+
   test("pins the turn to the question just asked", () => {
     expect(voiceSystemPrompt("prod")).toContain("Answer the question just asked");
   });
@@ -66,10 +76,14 @@ describe("voiceSystemPrompt", () => {
   });
 });
 
-test("the voice prompt routes unmodelled changes to a real kind, not an invented one", () => {
+test("the voice prompt routes unmodelled changes to a real kind", () => {
   const p = voiceSystemPrompt("prod");
   expect(p).toContain("annotate");
-  expect(p).toContain("never invent a kind of your own");
+  expect(p).toContain("the command kind");
+  // Inventing a kind is impossible now that the tool has a schema, so the
+  // prompt no longer forbids it. What it still has to say is that being unable
+  // to name a change is not a reason to tell the operator it cannot be done.
+  expect(p).toContain("Never tell the user a change is impossible");
 });
 
 test("the voice prompt never asks for a spoken confirmation", () => {

@@ -3,7 +3,8 @@
 // destructive ones are published for approval on the desktop. Nothing listens
 // for a spoken word.
 import { llm, voice } from "@livekit/agents";
-import { ACTION_KINDS, isAutoRunnable, type SuggestedAction } from "@rigel/k8s/src/actionBlocks";
+import { isAutoRunnable, type SuggestedAction } from "@rigel/k8s/src/actionBlocks";
+import { actionSchema } from "@rigel/k8s/src/actionSchema";
 import { voiceSystemPrompt } from "@rigel/server/src/systemPrompt";
 import { z } from "zod";
 import { decideMutationRoute } from "./mutationFlow.js";
@@ -23,88 +24,6 @@ export const SENT_TO_DESKTOP =
 
 export const NO_DESKTOP =
   "Refused: this one is destructive and needs approval in the desktop app, and no desktop session is connected. Tell the user this in one sentence.";
-
-/**
- * The refusal a wrong `kind` gets. It names the escape hatch and lists the
- * kinds, because the model that hit this in the field invented `patch` twice
- * and had nothing in the old message to correct toward.
- */
-export function unknownKindRefusal(kind: unknown): string {
-  const named = typeof kind === "string" && kind ? ` "${kind}"` : "";
-  return [
-    `Refused: unknown action kind${named}.`,
-    'Metadata edits are the kinds "annotate" and "label" (annotations/labels object; a null value removes a key).',
-    'Anything else the typed kinds do not model goes through kind "command" with the literal kubectl arguments in args, e.g. {"kind":"command","label":"...","args":["patch","deployment/web","-n","default","--type=merge","-p","{...}"]}.',
-    `Valid kinds: ${ACTION_KINDS.join(", ")}.`,
-    "Retry now with a valid kind rather than telling the user it cannot be done.",
-  ].join(" ");
-}
-
-/**
- * The refusal a proposeRepoFix missing its parts gets. Names the shape and the
- * tool that supplies the source, so the model can retry in the same turn.
- */
-/** The near-miss keys a model reaches for when it means the one on the left. */
-const ALIASES: Record<string, string[]> = {
-  source: ["sourceId", "sourceID", "source_id"],
-  name: ["deployment", "workload", "resource"],
-  title: ["prTitle", "pullRequestTitle"],
-  edit: ["edits", "change", "changes"],
-};
-
-/**
- * Straighten out the shapes a model reaches for around proposeRepoFix: the
- * near-miss key names above, and an `edit` wrapped in a one-item array.
- *
- * This is correction at the model boundary, not a loosening of the contract:
- * /api/git/propose-fix still takes exactly the documented fields, and what
- * leaves here is exactly that. It earns its place because the SDK caps a turn
- * at three tool steps, so a model that spends two of them guessing at a field
- * name has none left to open the pull request with. A live session spent all
- * three on "sourceId" and gave up.
- */
-export function normalizeRepoFix(action: SuggestedAction): SuggestedAction {
-  const sent = action as unknown as Record<string, unknown>;
-  const out: Record<string, unknown> = { ...sent };
-  for (const [field, aliases] of Object.entries(ALIASES)) {
-    if (out[field] !== undefined) continue;
-    const used = aliases.find((alias) => sent[alias] !== undefined);
-    if (used) out[field] = sent[used];
-  }
-  // One pull request carries one change, so a single-item array is the same
-  // thing wrapped; anything longer is a different request and is refused below.
-  if (Array.isArray(out.edit) && out.edit.length === 1) out.edit = out.edit[0];
-  return out as unknown as SuggestedAction;
-}
-
-/**
- * What is wrong with a proposeRepoFix, named field by field, or null when it
- * carries everything /api/git/propose-fix needs. Runs on the NORMALIZED action,
- * so it never reports a field the model did send under another name.
- *
- * The wording matters more than it looks. The first version listed all four
- * required fields whatever was actually wrong, and a model that had sent
- * "sourceId" instead of "source" could not tell which one to change: it re-sent
- * the same key five times and finally told the operator the refusal was for an
- * unclear reason. Name only what is wrong.
- */
-export function repoFixRefusal(action: SuggestedAction): string | null {
-  const problems: string[] = [];
-  if (!action.source) problems.push('"source" is missing, which is the source id checkGitLink returned.');
-  if (!action.name) problems.push('"name" is missing, which is the workload to change.');
-  if (!action.title) problems.push('"title" is missing, which is the pull request\'s title.');
-  if (action.edit === undefined || action.edit === null) {
-    problems.push(
-      '"edit" is missing, which is the change: {"op":"annotate","annotations":{...}}, {"op":"label","labels":{...}}, {"op":"setImage","container":"...","image":"..."} or {"op":"scale","replicas":N}, where a null annotation or label value removes the key.',
-    );
-  } else if (Array.isArray(action.edit)) {
-    problems.push('"edit" carries more than one change, and one pull request makes one change. Send them one at a time.');
-  } else if (typeof action.edit !== "object") {
-    problems.push('"edit" is one object describing the change, not a string.');
-  }
-  if (problems.length === 0) return null;
-  return `Refused: ${problems.join(" ")} Resend the same action with only that corrected; the rest of what you sent was right.`;
-}
 
 export function buildAgent(state: SessionState, server: ServerClient, room: PublishRoom): voice.Agent {
   return new (class extends voice.Agent {
@@ -158,13 +77,13 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
           }),
           proposeMutation: llm.tool({
             description:
-              "Propose a cluster change as a Rigel action object ({label, kind, name, namespace, ...}). Never claims to run anything; follow the returned instruction verbatim.",
-            parameters: z.object({ action: z.record(z.string(), z.unknown()) }),
+              "Propose a cluster change as a Rigel action. Never claims to run anything; follow the returned instruction verbatim.",
+            // The SDK parses this before execute runs, so a wrong kind comes
+            // back naming every valid kind and a wrong field comes back naming
+            // that field. Nothing below has to check the shape.
+            parameters: z.object({ action: actionSchema }),
             execute: async ({ action }, opts) => {
-              const a = action as unknown as SuggestedAction;
-              if (!a || typeof a.kind !== "string" || !(ACTION_KINDS as readonly string[]).includes(a.kind)) {
-                return unknownKindRefusal(a?.kind);
-              }
+              const a = action as SuggestedAction;
               const id = opts.toolCallId;
 
               // A pull request changes no cluster state, lands on a branch, and
@@ -172,12 +91,9 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
               // operator's instruction (see AUTO_RUNNABLE_KINDS). It is not a
               // kubectl command, so it never goes near /api/action.
               if (a.kind === "proposeRepoFix" && isAutoRunnable(a)) {
-                const fix = normalizeRepoFix(a);
-                const wrong = repoFixRefusal(fix);
-                if (wrong) return wrong;
-                await publishJson(room, "rigel.action", { id, action: fix, command: null, auto: true });
+                await publishJson(room, "rigel.action", { id, action: a, command: null, auto: true });
                 try {
-                  const res = await server.proposeFix(fix, state.activeContext);
+                  const res = await server.proposeFix(a, state.activeContext);
                   if (!res.ok) {
                     await publishJson(room, "rigel.action.result", { id, ok: false, summary: res.message ?? "failed" });
                     return `That failed: ${res.message ?? "the pull request could not be opened"}. Nothing was pushed. Tell the user in one sentence.`;
