@@ -31,14 +31,31 @@ function fakeRoom(identities: string[] = [DESKTOP_IDENTITY]): { room: PublishRoo
 interface FakeServer extends ServerClient {
   previews: SuggestedAction[];
   runs: SuggestedAction[];
+  proposals: SuggestedAction[];
 }
+
+const LINK = {
+  source: "shop-web-82b3ade",
+  repo: "owner/repo",
+  repoName: "owner-repo",
+  repoURL: "https://github.com/owner/repo",
+  branch: "main",
+  path: "k8s",
+};
 
 function fakeServer(overrides: Partial<ServerClient> = {}): FakeServer {
   const previews: SuggestedAction[] = [];
   const runs: SuggestedAction[] = [];
+  const proposals: SuggestedAction[] = [];
   return {
     previews,
     runs,
+    proposals,
+    repoLink: async () => ({ linked: true, link: LINK }),
+    proposeFix: async (action) => {
+      proposals.push(action);
+      return { ok: true, prUrl: "https://github.com/owner/repo/pull/7", number: 7, branch: "rigel/fix-x", message: "ok" };
+    },
     agentConfig: async () => {
       throw new Error("not used");
     },
@@ -261,9 +278,14 @@ describe("proposeMutation routing", () => {
     const { room, frames } = fakeRoom();
     const agent = buildAgent(emptySessionState(), server, room);
 
-    for (const kind of ["purge", "applyManifest", "proposeRepoFix"]) {
+    for (const kind of ["purge", "applyManifest"]) {
       await expect(propose(agent, { kind, label: kind }, toolOpts().opts)).resolves.toMatch(/desktop/);
     }
+    // proposeRepoFix opens the PR itself unless a destructive hint downgrades
+    // it; downgraded, it is as unpreviewable as the other two.
+    await expect(
+      propose(agent, { kind: "proposeRepoFix", label: "pr", destructive: true }, toolOpts().opts),
+    ).resolves.toMatch(/desktop/);
     expect(frames.map((f) => f.payload.command)).toEqual([null, null, null]);
   });
 
@@ -367,4 +389,159 @@ describe("the live LLM-driven turn", () => {
     await expect(userTurn(agent, "confirm")).resolves.toBeUndefined();
     expect(server.runs).toEqual([restart]);
   }, 20_000);
+});
+
+describe("checkGitLink", () => {
+  const ask = (agent: voice.Agent, args: unknown) =>
+    agent.toolCtx.getFunctionTool("checkGitLink")!.execute(args as never, {} as never) as Promise<string>;
+
+  test("says which repository a linked workload is managed from", async () => {
+    const out = await ask(buildAgent(emptySessionState(), fakeServer(), fakeRoom().room), {
+      name: "web",
+      namespace: "shop",
+    });
+    expect(out).toContain("owner/repo");
+    expect(out).toContain(LINK.source);
+    expect(out).toContain("main");
+  });
+
+  test("passes the workload's kind through, so a statefulset resolves too", async () => {
+    const asked: unknown[] = [];
+    const server = fakeServer({
+      repoLink: async (workload) => {
+        asked.push(workload);
+        return { linked: true, link: LINK };
+      },
+    });
+    await ask(buildAgent(emptySessionState(), server, fakeRoom().room), {
+      kind: "statefulset",
+      name: "web",
+      namespace: "shop",
+    });
+    expect(asked).toEqual([{ kind: "statefulset", name: "web", namespace: "shop" }]);
+  });
+
+  test("an unlinked workload is stated plainly, not as an error", async () => {
+    const server = fakeServer({ repoLink: async () => ({ linked: false, link: null }) });
+    const out = await ask(buildAgent(emptySessionState(), server, fakeRoom().room), { name: "web" });
+    expect(out).toMatch(/not/i);
+    expect(out).toContain("pull request");
+  });
+
+  test("a server that cannot answer comes back as text, not a thrown tool call", async () => {
+    const server = fakeServer({
+      repoLink: async () => {
+        throw new Error("socket hang up");
+      },
+    });
+    await expect(ask(buildAgent(emptySessionState(), server, fakeRoom().room), { name: "web" })).resolves.toContain(
+      "socket hang up",
+    );
+  });
+});
+
+describe("proposeRepoFix from voice", () => {
+  const fix: SuggestedAction = {
+    kind: "proposeRepoFix",
+    label: "Open a PR annotating web",
+    source: "shop-web-82b3ade",
+    title: "Annotate web",
+    body: "asked for over voice",
+    name: "web",
+    namespace: "shop",
+    edit: { op: "annotate", annotations: { "example.com/owner": "platform" } },
+  };
+
+  test("opens the pull request itself and speaks the number and the URL", async () => {
+    const state = emptySessionState();
+    const server = fakeServer();
+    const { room, frames } = fakeRoom();
+
+    const out = await propose(buildAgent(state, server, room), fix, toolOpts("call-7").opts);
+
+    expect(server.proposals).toEqual([fix]);
+    expect(server.previews).toEqual([]); // a PR is not a kubectl command
+    expect(out).toContain("7");
+    expect(out).toContain("https://github.com/owner/repo/pull/7");
+    expect(out).toMatch(/nothing was changed on the cluster/i);
+    expect(state.awaitingClick.size).toBe(0);
+    expect(frames).toEqual([
+      { topic: "rigel.action", payload: { id: "call-7", action: fix, command: null, auto: true } },
+      {
+        topic: "rigel.action.result",
+        payload: { id: "call-7", ok: true, summary: "opened pull request #7", prUrl: "https://github.com/owner/repo/pull/7" },
+      },
+    ]);
+  });
+
+  test("carries no diff on the wire, because the pull request shows the change", async () => {
+    const { room, frames } = fakeRoom();
+    await propose(buildAgent(emptySessionState(), fakeServer(), room), fix, toolOpts().opts);
+    expect(JSON.stringify(frames)).not.toContain("diff");
+  });
+
+  test("opens the pull request even with no desktop connected", async () => {
+    const server = fakeServer();
+    const { room, frames } = fakeRoom(["phone-1"]);
+    const out = await propose(buildAgent(emptySessionState(), server, room), fix, toolOpts().opts);
+    expect(server.proposals).toEqual([fix]);
+    expect(out).toMatch(/^Done:/);
+    // The frames are display only, so they go up regardless; nothing waits.
+    expect(frames.map((f) => f.topic)).toEqual(["rigel.action", "rigel.action.result"]);
+  });
+
+  test("a refusal from the server is spoken as its own reason, and never as an open PR", async () => {
+    const server = fakeServer({
+      proposeFix: async () => ({ ok: false, message: "No manifest under k8s defines deployment web in namespace shop." }),
+    });
+    const { room, frames } = fakeRoom();
+
+    const out = await propose(buildAgent(emptySessionState(), server, room), fix, toolOpts().opts);
+
+    expect(out).toContain("No manifest under k8s");
+    expect(out).not.toMatch(/^Done:/);
+    expect(frames[1]!.payload).toMatchObject({ ok: false });
+  });
+
+  test("a server it cannot reach says nothing was pushed", async () => {
+    const server = fakeServer({
+      proposeFix: async () => {
+        throw new Error("unknown source");
+      },
+    });
+    const { room, frames } = fakeRoom();
+
+    const out = await propose(buildAgent(emptySessionState(), server, room), fix, toolOpts().opts);
+
+    expect(out).toContain("unknown source");
+    expect(out).toMatch(/nothing was pushed/i);
+    expect(frames[1]!.payload).toMatchObject({ ok: false });
+  });
+
+  test("a proposal missing what a pull request needs is refused with the shape to retry with", async () => {
+    const server = fakeServer();
+    const { room, frames } = fakeRoom();
+    const agent = buildAgent(emptySessionState(), server, room);
+
+    const out = await propose(agent, { kind: "proposeRepoFix", label: "Open a PR" }, toolOpts().opts);
+
+    expect(out).toMatch(/^Refused:/);
+    expect(out).toContain("checkGitLink");
+    expect(out).toContain("edit");
+    expect(server.proposals).toEqual([]);
+    expect(frames).toEqual([]);
+  });
+
+  test("a destructive hint downgrades it to the desktop, where the sheet takes over", async () => {
+    const state = emptySessionState();
+    const server = fakeServer();
+    const { room, frames } = fakeRoom();
+
+    const out = await propose(buildAgent(state, server, room), { ...fix, destructive: true }, toolOpts("call-3").opts);
+
+    expect(server.proposals).toEqual([]);
+    expect(out).toBe(SENT_TO_DESKTOP);
+    expect(state.awaitingClick.get("call-3")).toBe(fix.label);
+    expect(frames[0]!.payload.command).toBeNull();
+  });
 });

@@ -43,6 +43,14 @@ describe("voiceSystemPrompt", () => {
     expect(p).toContain("never drop results silently");
   });
 
+  test("teaches the Git-managed route: check the link, then propose a pull request", () => {
+    const p = voiceSystemPrompt("prod");
+    expect(p).toContain("checkGitLink");
+    expect(p).toContain("proposeRepoFix");
+    expect(p).toContain("overwritten the next time it syncs");
+    expect(p).toContain("not linked to a repository");
+  });
+
   test("pins the turn to the question just asked", () => {
     expect(voiceSystemPrompt("prod")).toContain("Answer the question just asked");
   });

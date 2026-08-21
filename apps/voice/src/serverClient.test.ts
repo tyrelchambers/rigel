@@ -40,6 +40,67 @@ describe("createServerClient", () => {
     expect((init as RequestInit).headers).toMatchObject({ "X-Rigel-Context": "prod" });
   });
 
+  test("repoLink asks the server whether a workload is managed from Git", async () => {
+    const link = { source: "default-web-82b3ade", repo: "owner/repo", repoName: "owner-repo", repoURL: "https://github.com/owner/repo", branch: "main", path: "k8s" };
+    const f = fakeFetch(200, { linked: true, link });
+    const c = createServerClient(BASE, "sess", "wt", f);
+    const res = await c.repoLink({ kind: "statefulset", name: "web", namespace: "shop" }, "prod");
+    expect(res.linked).toBe(true);
+    expect(res.link).toEqual(link);
+    const [urlArg, init] = (f as unknown as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(String(urlArg)).toBe(`${BASE}/api/git/link?namespace=shop&deployment=web&kind=statefulset`);
+    expect((init as RequestInit).headers).toMatchObject({
+      "x-rigel-voice-worker": "wt",
+      "X-Rigel-Context": "prod",
+    });
+  });
+
+  test("repoLink reports an unlinked workload rather than throwing", async () => {
+    const c = createServerClient(BASE, "sess", "wt", fakeFetch(200, { linked: false, link: null }));
+    expect((await c.repoLink({ name: "web" }, null)).linked).toBe(false);
+  });
+
+  test("proposeFix posts the intent, never a file, and never a dry run", async () => {
+    const f = fakeFetch(200, { ok: true, prUrl: "https://github.com/owner/repo/pull/7", number: 7 });
+    const c = createServerClient(BASE, "sess", "wt", f);
+    const res = await c.proposeFix(
+      {
+        kind: "proposeRepoFix",
+        label: "Open a PR",
+        source: "default-web-82b3ade",
+        title: "Annotate web",
+        body: "asked for over voice",
+        name: "web",
+        namespace: "shop",
+        resourceKind: "statefulset",
+        edit: { op: "annotate", annotations: { "example.com/owner": "platform" } },
+      },
+      "prod",
+    );
+    expect(res.prUrl).toBe("https://github.com/owner/repo/pull/7");
+    const [urlArg, init] = (f as unknown as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(urlArg).toBe(`${BASE}/api/git/propose-fix`);
+    const sent = JSON.parse((init as RequestInit).body as string) as Record<string, unknown>;
+    expect(sent).toEqual({
+      source: "default-web-82b3ade",
+      title: "Annotate web",
+      body: "asked for over voice",
+      name: "web",
+      namespace: "shop",
+      resourceKind: "statefulset",
+      edit: { op: "annotate", annotations: { "example.com/owner": "platform" } },
+    });
+    expect(sent.dryRun).toBeUndefined();
+    expect(sent.filePath).toBeUndefined();
+  });
+
+  test("proposeFix throws the server's own reason, so the refusal can be spoken", async () => {
+    const c = createServerClient(BASE, "sess", "wt", fakeFetch(404, { error: "unknown source" }));
+    await expect(
+      c.proposeFix({ kind: "proposeRepoFix", label: "x", source: "s", title: "t", name: "web", edit: { op: "scale", replicas: 2 } }, null),
+    ).rejects.toThrow("unknown source");
+  });
+
   test("runAction posts the action and returns the kubectl result", async () => {
     const ok = createServerClient(BASE, "sess", "wt", fakeFetch(200, { code: 0, stdout: "restarted", stderr: "" }));
     expect((await ok.runAction({ kind: "restart", label: "x", name: "web" }, null)).code).toBe(0);
