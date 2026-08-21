@@ -10,18 +10,26 @@ import { fileURLToPath } from "node:url";
 // with a leading slash, which is not a path any fs call accepts.
 const RELEASE = fileURLToPath(new URL("../release/", import.meta.url));
 
-/** macOS buries it in the .app; Windows and Linux put it beside the binary. */
-function resourcesDir() {
+/**
+ * Every packed app, not just the first: the macOS job packs arm64 and x64, and
+ * the x64 one is where a missing cross-arch native binding would show up.
+ * macOS buries resources in the .app; Windows and Linux put them beside the
+ * binary.
+ */
+function resourceDirs() {
   if (!existsSync(RELEASE)) fail(`no release/ directory — did electron-builder --dir run?`);
+  const found = [];
   for (const entry of readdirSync(RELEASE)) {
     const dir = join(RELEASE, entry);
     if (!statSync(dir).isDirectory()) continue;
     const mac = join(dir, "Rigel.app", "Contents", "Resources");
-    if (existsSync(mac)) return mac;
-    const other = join(dir, "resources");
-    if (existsSync(other)) return other;
+    if (existsSync(mac)) found.push(mac);
+    else if (existsSync(join(dir, "resources"))) found.push(join(dir, "resources"));
   }
-  fail(`no packed app under ${RELEASE} (looked for */Rigel.app/Contents/Resources and */resources)`);
+  if (found.length === 0) {
+    fail(`no packed app under ${RELEASE} (looked for */Rigel.app/Contents/Resources and */resources)`);
+  }
+  return found;
 }
 
 const problems = [];
@@ -33,7 +41,7 @@ function fail(msg) {
   process.exit(1);
 }
 
-const res = resourcesDir();
+for (const res of resourceDirs()) {
 console.log(`verifyPack: checking ${res}`);
 
 // The Node server the desktop forks, and the SPA it serves.
@@ -64,6 +72,7 @@ if (existsSync(voice)) {
   }
 } else {
   console.log("verifyPack: no voice/ in this build — skipping voice checks (expected until HELM-128 lands)");
+}
 }
 
 if (problems.length > 0) {
