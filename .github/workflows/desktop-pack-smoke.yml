@@ -1,0 +1,84 @@
+name: Desktop pack smoke
+
+# Packs the desktop app on all three OSes WITHOUT cutting a release, so a
+# packaging break is found by a pull request instead of by a tag push.
+#
+# desktop-release.yml only runs on `v*`, which means the packaged layout — the
+# forked server, node-pty's native addon, the SPA, and (once HELM-128 lands)
+# the voice worker's native bindings — is exercised for the first time during a
+# release. Everything here mirrors that workflow's setup so the two cannot
+# drift, then stops at `--dir`: no dmg/NSIS/AppImage, no signing, no publish.
+on:
+  workflow_dispatch:
+  pull_request:
+    # Deliberately narrow. Each run is a 3-OS Electron download and pack, so it
+    # is scoped to what can actually change the packaged layout rather than to
+    # anything that changes the app.
+    paths:
+      - "apps/desktop/**"
+      - "apps/voice/**"
+      - "pnpm-workspace.yaml"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/desktop-pack-smoke.yml"
+
+jobs:
+  pack:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          # Same reason as desktop-release.yml: the default cache runs before
+          # corepack enables pnpm and fails to find the executable.
+          package-manager-cache: false
+
+      - name: Enable corepack (pnpm)
+        run: corepack enable
+
+      # The web build pulls Font Awesome Pro from a private registry, so the
+      # install 401s without this. Note pull_request runs from a fork cannot
+      # read secrets — this repo's PRs come from branches, so that is fine, but
+      # a fork PR will fail here rather than mysteriously later.
+      - name: Load Font Awesome token from 1Password
+        uses: 1password/load-secrets-action@v3
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          FONTAWESOME_NPM_TOKEN: op://App Secrets/Font Awesome/credential
+
+      - name: Authenticate to the Font Awesome registry
+        shell: bash
+        run: echo "//npm.fontawesome.com/:_authToken=${FONTAWESOME_NPM_TOKEN}" >> .npmrc
+
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile
+
+      # Bundles main/preload/server/voice and builds the SPA — the same script
+      # the release runs, so a build break surfaces here first.
+      - name: Build desktop bundles
+        run: pnpm --filter desktop build
+
+      # --dir stops after the unpacked app: no installer, no signing, no
+      # notarization, nothing published. Signing is explicitly disabled rather
+      # than left to auto-discovery, which would otherwise pick up a keychain
+      # identity on the macOS runner and fail without the CSC_* secrets.
+      # shell: bash on every runner, because PowerShell splits
+      # `-c.mac.notarize=false` into `-c ".mac.notarize=false"` and
+      # electron-builder then tries to read a config file by that name.
+      - name: Pack (no installer, unsigned)
+        shell: bash
+        run: pnpm --filter desktop exec electron-builder --dir -c.mac.notarize=false
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      # Packing succeeding proves very little on its own: electron-builder will
+      # happily produce an app whose forked server or native addons are absent.
+      - name: Verify the packed layout
+        run: node apps/desktop/scripts/verifyPack.mjs
