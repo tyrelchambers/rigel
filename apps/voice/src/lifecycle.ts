@@ -24,6 +24,11 @@ export interface ScrubbableAgent {
   updateChatCtx(chatCtx: llm.ChatContext): Promise<void>;
 }
 
+/** The subset of the AgentSession the desktop's departure touches. */
+export interface InterruptibleSession {
+  interrupt(options?: { force?: boolean }): unknown;
+}
+
 /**
  * Tells the desktop what the agent is doing. Sent on every transition and again
  * whenever the desktop joins, because the worker has usually been sitting in
@@ -39,8 +44,24 @@ export function announceAgentState(room: PublishRoom, state: voice.AgentState): 
  * context and any armed mutation (see resetSessionState) and empties the chat
  * history, so the next connection starts on a blank agent rather than resuming
  * a conversation whose other half has gone.
+ *
+ * Stopping the speech is part of that and used to be missing. One AgentSession
+ * runs for the life of the worker, so a reply already being spoken went on
+ * being spoken into a room the operator had left, and the next connection
+ * picked it up mid-sentence: closing the window looked like it had done
+ * nothing. Interrupting is best-effort, because there is usually nothing being
+ * said and the session is entitled to say so.
  */
-export async function endDesktopSession(state: SessionState, agent: ScrubbableAgent): Promise<void> {
+export async function endDesktopSession(
+  state: SessionState,
+  agent: ScrubbableAgent,
+  session: InterruptibleSession,
+): Promise<void> {
+  try {
+    session.interrupt();
+  } catch (err) {
+    console.error("interrupting the agent as the desktop left failed:", err);
+  }
   resetSessionState(state);
   await agent.updateChatCtx(llm.ChatContext.empty());
 }

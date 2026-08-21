@@ -168,7 +168,7 @@ async function main(): Promise<void> {
   room.on(RoomEvent.ParticipantDisconnected, (participant) => {
     if (participant.identity !== DESKTOP_IDENTITY) return;
     console.log("desktop left, scrubbing the session");
-    void endDesktopSession(state, agent)
+    void endDesktopSession(state, agent, session)
       .then(() => refreshInstructions(agent, state))
       .catch(logRejection("scrubbing the session"));
   });
