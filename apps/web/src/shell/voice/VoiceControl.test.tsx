@@ -703,6 +703,37 @@ test("clicking the button opens the ConfirmSheet on the exact action block", asy
   expect(JSON.parse(screen.getByTestId("confirm-action").textContent!)).toEqual(CLICK_FRAME.action);
 });
 
+test("pressing Escape ends the session, because closing the window means leaving", async () => {
+  h.status.data = { enabled: true, configured: true };
+  render(<VoiceControl />);
+  await userEvent.click(screen.getByLabelText("Voice assistant"));
+  await waitFor(() => expect(h.rooms).toHaveLength(1));
+
+  await userEvent.keyboard("{Escape}");
+
+  await waitFor(() => expect(h.rooms[0]!.disconnect).toHaveBeenCalled());
+});
+
+test("clicking away ends the session too", async () => {
+  h.status.data = { enabled: true, configured: true };
+  render(<VoiceControl />);
+  await userEvent.click(screen.getByLabelText("Voice assistant"));
+  await waitFor(() => expect(h.rooms).toHaveLength(1));
+
+  await userEvent.click(document.body);
+
+  await waitFor(() => expect(h.rooms[0]!.disconnect).toHaveBeenCalled());
+});
+
+test("a proposal's confirm sheet closes the popover without hanging up on the session", async () => {
+  await openWithClickProposal();
+  await userEvent.click(await screen.findByRole("button", { name: "Delete pod web-1" }));
+
+  // The sheet steals focus, which closes the popover. Ending the session here
+  // would drop the room before the result could be reported back to the worker.
+  expect(h.rooms[0]!.disconnect).not.toHaveBeenCalled();
+});
+
 test("a successful run is published back to the worker and marked on the row", async () => {
   await openWithClickProposal();
   await userEvent.click(await screen.findByRole("button", { name: "Delete pod web-1" }));

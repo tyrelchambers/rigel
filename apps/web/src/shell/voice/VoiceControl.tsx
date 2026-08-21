@@ -64,10 +64,10 @@ export function notReadyMessage(
   return "Connecting…";
 }
 
-/** What the header mark's next click will do. Reachable outside interactions
- * (a proposal's ConfirmSheet stealing focus, Escape, an outside click) close
- * the popover without ending the session, so this only switches to the
- * ending copy while the popover is open on a live or in-flight session. */
+/** What the header mark's next click will do. A nested dialog taking focus (a
+ * proposal's ConfirmSheet) closes the popover without ending the session, so
+ * this only switches to the ending copy while the popover is open on a live or
+ * in-flight session. */
 export function voiceButtonLabel(open: boolean, status: VoiceConnection): string {
   return open && (status === "connecting" || status === "connected") ? "End voice session" : "Voice assistant";
 }
@@ -154,17 +154,24 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
       )}
       <Popover
         open={open}
-        onOpenChange={(o, eventDetails) => {
-          // Only a press on our own mark drives the session: an outside
-          // press or a nested dialog stealing focus (a proposal's
-          // ConfirmSheet) also closes the popover, and must not hang up on
-          // a session the user never asked to end.
-          if (eventDetails.reason !== "trigger-press") {
-            setOpen(o);
+        onOpenChange={(o) => {
+          if (o) {
+            openSession();
             return;
           }
-          if (o) openSession();
-          else closeSession();
+          // Closing the window is leaving, however it was closed: the mark, a
+          // press outside, Escape. An agent that keeps talking to a window that
+          // is not there is worse than having to say hello again.
+          //
+          // The exception is a proposal's ConfirmSheet, which takes focus and
+          // closes the popover without the operator going anywhere. Hanging up
+          // there would drop the room before the result could be published back
+          // to the worker, so the sheet being up is what tells the two apart.
+          if (confirmAction != null) {
+            setOpen(false);
+            return;
+          }
+          closeSession();
         }}
       >
         <PopoverTrigger
