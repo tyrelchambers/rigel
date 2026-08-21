@@ -102,6 +102,13 @@ export async function voiceConfig(context: string | null): Promise<VoiceConfigRe
   };
 }
 
+/**
+ * Whether this install can hold a voice session. RIGEL_VOICE is set by the
+ * desktop for its own forked server, on exactly the condition under which it
+ * forks the voice worker, so the header never offers a session with nothing to
+ * connect to. It is NOT a switch for the operator to set: a server started
+ * without it simply has no worker behind it.
+ */
 export function voiceEnabled(): boolean {
   return process.env.RIGEL_VOICE === "1";
 }
