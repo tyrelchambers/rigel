@@ -518,7 +518,7 @@ describe("proposeRepoFix from voice", () => {
     expect(frames[1]!.payload).toMatchObject({ ok: false });
   });
 
-  test("a proposal missing what a pull request needs is refused with the shape to retry with", async () => {
+  test("a proposal missing what a pull request needs names every missing field", async () => {
     const server = fakeServer();
     const { room, frames } = fakeRoom();
     const agent = buildAgent(emptySessionState(), server, room);
@@ -526,10 +526,46 @@ describe("proposeRepoFix from voice", () => {
     const out = await propose(agent, { kind: "proposeRepoFix", label: "Open a PR" }, toolOpts().opts);
 
     expect(out).toMatch(/^Refused:/);
-    expect(out).toContain("checkGitLink");
-    expect(out).toContain("edit");
+    for (const field of ["source", "title", "name", "edit"]) expect(out).toContain(`"${field}"`);
     expect(server.proposals).toEqual([]);
     expect(frames).toEqual([]);
+  });
+
+  // The field-report bug: a model sent everything but spelled source
+  // "sourceId", and a refusal that listed all four fields gave it nothing to
+  // correct. It re-sent the same wrong key five times and then told the
+  // operator the refusal was for an unclear reason.
+  test("only the wrong field is named, not the ones that were right", async () => {
+    const agent = buildAgent(emptySessionState(), fakeServer(), fakeRoom().room);
+
+    const out = await propose(agent, { ...fix, source: undefined, sourceId: "shop-web-82b3ade" }, toolOpts().opts);
+
+    expect(out).toContain('"source"');
+    expect(out).toContain('"sourceId"');
+    expect(out).not.toContain('"title"');
+    expect(out).not.toContain('"name"');
+    expect(out).not.toContain('"edit" is missing');
+  });
+
+  test("an edit sent as an array is told it is one object", async () => {
+    const agent = buildAgent(emptySessionState(), fakeServer(), fakeRoom().room);
+
+    const out = await propose(
+      agent,
+      { ...fix, edit: [{ op: "annotate", annotations: { "a.io/b": "c" } }] },
+      toolOpts().opts,
+    );
+
+    expect(out).toContain('"edit"');
+    expect(out).toMatch(/one object|not an array/i);
+    expect(out).not.toContain('"source"');
+  });
+
+  test("the workload named as deployment rather than name is pointed at the right field", async () => {
+    const agent = buildAgent(emptySessionState(), fakeServer(), fakeRoom().room);
+    const out = await propose(agent, { ...fix, name: undefined, deployment: "web" }, toolOpts().opts);
+    expect(out).toContain('"name"');
+    expect(out).toContain('"deployment"');
   });
 
   test("a destructive hint downgrades it to the desktop, where the sheet takes over", async () => {

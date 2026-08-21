@@ -44,17 +44,46 @@ export function unknownKindRefusal(kind: unknown): string {
  * The refusal a proposeRepoFix missing its parts gets. Names the shape and the
  * tool that supplies the source, so the model can retry in the same turn.
  */
-export const REPO_FIX_SHAPE_REFUSAL = [
-  "Refused: a pull request needs source, title, name and edit.",
-  "source is the source id checkGitLink returns for that workload, name is the workload, and edit is the change:",
-  '{"op":"annotate","annotations":{...}}, {"op":"label","labels":{...}}, {"op":"setImage","container":"...","image":"..."} or {"op":"scale","replicas":N},',
-  "with a null annotation or label value removing the key. Add resourceKind when the workload is not a Deployment.",
-  "Retry with those rather than telling the user it cannot be done.",
-].join(" ");
+/** The near-miss key a model reaches for when it means `right`. */
+const ALIASES: Record<string, string[]> = {
+  source: ["sourceId", "sourceID", "source_id"],
+  name: ["deployment", "workload", "resource"],
+  title: ["prTitle", "pullRequestTitle"],
+  edit: ["edits", "change", "changes"],
+};
 
-/** Whether an action carries everything /api/git/propose-fix needs. */
-const isProposable = (a: SuggestedAction): boolean =>
-  Boolean(a.source && a.title && a.name && a.edit);
+/**
+ * What is wrong with a proposeRepoFix, named field by field, or null when it
+ * carries everything /api/git/propose-fix needs.
+ *
+ * The wording matters more than it looks. The first version listed all four
+ * required fields whatever was actually wrong, and a model that had sent
+ * "sourceId" instead of "source" could not tell which one to change: it re-sent
+ * the same key five times, tried the edit as an array, and finally told the
+ * operator the refusal was for an unclear reason. Name only what is wrong, and
+ * name the wrong key it used when it looks like a near miss.
+ */
+export function repoFixRefusal(action: SuggestedAction): string | null {
+  const sent = action as unknown as Record<string, unknown>;
+  const wrongKey = (field: string): string => {
+    const used = ALIASES[field]?.find((alias) => sent[alias] !== undefined);
+    return used ? ` You sent "${used}"; the field is "${field}".` : "";
+  };
+
+  const problems: string[] = [];
+  if (!action.source) problems.push(`"source" is missing, which is the source id checkGitLink returned.${wrongKey("source")}`);
+  if (!action.name) problems.push(`"name" is missing, which is the workload to change.${wrongKey("name")}`);
+  if (!action.title) problems.push(`"title" is missing, which is the pull request's title.${wrongKey("title")}`);
+  if (action.edit === undefined || action.edit === null) {
+    problems.push(
+      `"edit" is missing, which is the change: {"op":"annotate","annotations":{...}}, {"op":"label","labels":{...}}, {"op":"setImage","container":"...","image":"..."} or {"op":"scale","replicas":N}, where a null annotation or label value removes the key.${wrongKey("edit")}`,
+    );
+  } else if (Array.isArray(action.edit) || typeof action.edit !== "object") {
+    problems.push('"edit" is one object, not an array or a string. Send the single change on its own.');
+  }
+  if (problems.length === 0) return null;
+  return `Refused: ${problems.join(" ")} Resend the same action with only that corrected; the rest of what you sent was right.`;
+}
 
 export function buildAgent(state: SessionState, server: ServerClient, room: PublishRoom): voice.Agent {
   return new (class extends voice.Agent {
@@ -99,7 +128,7 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
                 if (!linked || !link) {
                   return `Not managed from Git: ${name} carries no Rigel source annotation, so there is no repository to open a pull request against. Say that in one sentence if the user asked for one, and change the cluster instead if they want it changed now.`;
                 }
-                return `Managed from Git: source ${link.source}, repository ${link.repo}, branch ${link.branch}, path ${link.path}. A change here belongs in a pull request, because the next sync overwrites anything patched on the cluster. Pass that source to proposeMutation with kind proposeRepoFix.`;
+                return `Managed from Git: source ${link.source}, repository ${link.repo}, branch ${link.branch}, path ${link.path}. A change here belongs in a pull request, because the next sync overwrites anything patched on the cluster. To open one, call proposeMutation with kind proposeRepoFix and "source":"${link.source}" spelled exactly that way.`;
               } catch (err) {
                 console.error(`checkGitLink ${name} failed:`, err);
                 return String(err);
@@ -122,7 +151,8 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
               // operator's instruction (see AUTO_RUNNABLE_KINDS). It is not a
               // kubectl command, so it never goes near /api/action.
               if (a.kind === "proposeRepoFix" && isAutoRunnable(a)) {
-                if (!isProposable(a)) return REPO_FIX_SHAPE_REFUSAL;
+                const wrong = repoFixRefusal(a);
+                if (wrong) return wrong;
                 await publishJson(room, "rigel.action", { id, action: a, command: null, auto: true });
                 try {
                   const res = await server.proposeFix(a, state.activeContext);
