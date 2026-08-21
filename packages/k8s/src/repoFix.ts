@@ -141,7 +141,10 @@ async function resolveChange(dir: string, input: RepoFixInput): Promise<Resolved
     return { ok: true, rel: safeRepoFilePath(input.filePath), content: input.content };
   }
   const manifestDir = normalizeManifestPath(input.source.path);
-  const where = `${manifestDir} on branch ${input.source.branch}`;
+  const where =
+    manifestDir === "."
+      ? `the repository on branch ${input.source.branch}`
+      : `${manifestDir} on branch ${input.source.branch}`;
   const files = await readManifestFiles(dir, manifestDir);
   // Told apart on purpose. "No manifest defines that workload" sends the
   // operator looking at the workload, and the answer here is usually that the
@@ -150,7 +153,7 @@ async function resolveChange(dir: string, input: RepoFixInput): Promise<Resolved
     return { ok: false, message: `The source points at ${where}, and that directory is not in the repository.` };
   }
   if (files.length === 0) {
-    return { ok: false, message: `There are no YAML files under ${where} in the repository.` };
+    return { ok: false, message: `There are no YAML files in ${where}.` };
   }
   const plan = planManifestEdit(files, { ...input.target!, dir: manifestDir }, input.edit!);
   if (!plan.ok) return plan;

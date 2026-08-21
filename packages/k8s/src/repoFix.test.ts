@@ -399,7 +399,7 @@ describe("a typed edit against a source whose path is wrong", () => {
     expect(res.message).toContain("k8s");
     expect(res.message).toContain("main");
     expect(res.message).toMatch(/not in the repository/i);
-    expect(res.message).not.toMatch(/no manifest.*defines/i);
+    expect(res.message).not.toMatch(/no manifest/i);
   });
 
   test("a directory with no YAML in it is named as empty, not as a missing workload", async () => {
@@ -415,6 +415,27 @@ describe("a typed edit against a source whose path is wrong", () => {
     expect(res.ok).toBe(false);
     expect(res.message).toMatch(/no YAML/i);
     expect(res.message).toContain("k8s");
+  });
+
+  test("a source with no manifest path searches the whole repository", async () => {
+    mockRun.mockImplementation(gitOk());
+    repoTree({ "deploy/web.yaml": DEPLOY });
+    const fetchMock = vi.fn(async (_url: unknown, _init?: unknown) =>
+      new Response(JSON.stringify({ html_url: "https://github.com/owner/repo/pull/7", number: 7 }), { status: 201 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await proposeRepoFix({
+      source: { ...target, path: "" },
+      token: "TOK",
+      title: "Scale web",
+      target: { kind: "deployment", name: "web", namespace: "shop" },
+      edit: { op: "scale", replicas: 4 },
+    });
+
+    expect(res.ok).toBe(true);
+    // Found without a configured directory, and reported at its repo path.
+    expect(res.filePath).toBe("deploy/web.yaml");
   });
 });
 

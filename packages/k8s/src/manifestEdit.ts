@@ -21,7 +21,9 @@ export interface ManifestFile {
   content: string;
 }
 
-/** The live object the edit targets, plus the directory searched (messages only). */
+/** The live object the edit targets, plus where it was looked for (messages
+ *  only). `dir` is "." when the source carries no manifest path, which means
+ *  the whole repository was searched. */
 export interface ManifestTarget {
   kind: string;
   name: string;
@@ -76,11 +78,12 @@ export function planManifestEdit(
   }
 
   const named = `${target.kind} ${target.name} in namespace ${target.namespace}`;
+  const searched = target.dir === "." ? "in the repository" : `under ${target.dir}`;
   if (hits.length === 0) {
     const templated = unparsed.length
       ? ` Some files could not be read as YAML (${unparsed.join(", ")}), so these manifests may be templated, and Rigel cannot edit templated manifests.`
       : "";
-    return refuse(`No manifest under ${target.dir} defines ${named}.${templated}`);
+    return refuse(`No manifest ${searched} defines ${named}.${templated}`);
   }
   if (hits.length > 1) {
     const where = hits.map((h) => h.file.path).join(", ");

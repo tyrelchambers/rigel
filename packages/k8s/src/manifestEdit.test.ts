@@ -72,6 +72,14 @@ describe("planManifestEdit — locating the document", () => {
     expect(plan.message).toContain("staging");
   });
 
+  test("a repo-wide search says so rather than naming a directory called dot", () => {
+    const plan = planManifestEdit(one(SERVICE), { ...target, dir: "." }, { op: "scale", replicas: 5 });
+    expect(plan.ok).toBe(false);
+    if (plan.ok) return;
+    expect(plan.message).toContain("in the repository");
+    expect(plan.message).not.toContain("under .");
+  });
+
   test("no match names the kind, the name and the searched directory", () => {
     const plan = planManifestEdit(one(SERVICE), target, { op: "scale", replicas: 5 });
     expect(plan.ok).toBe(false);
