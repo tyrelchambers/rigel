@@ -69,7 +69,11 @@ jobs:
       # notarization, nothing published. Signing is explicitly disabled rather
       # than left to auto-discovery, which would otherwise pick up a keychain
       # identity on the macOS runner and fail without the CSC_* secrets.
+      # shell: bash on every runner, because PowerShell splits
+      # `-c.mac.notarize=false` into `-c ".mac.notarize=false"` and
+      # electron-builder then tries to read a config file by that name.
       - name: Pack (no installer, unsigned)
+        shell: bash
         run: pnpm --filter desktop exec electron-builder --dir -c.mac.notarize=false
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
