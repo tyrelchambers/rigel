@@ -535,37 +535,62 @@ describe("proposeRepoFix from voice", () => {
   // "sourceId", and a refusal that listed all four fields gave it nothing to
   // correct. It re-sent the same wrong key five times and then told the
   // operator the refusal was for an unclear reason.
-  test("only the wrong field is named, not the ones that were right", async () => {
-    const agent = buildAgent(emptySessionState(), fakeServer(), fakeRoom().room);
+  // The near-miss keys a live model actually reached for. Correcting them is
+  // worth more than a good error message: the SDK caps a turn at three tool
+  // steps, so two wasted on a field name leave nothing to open the PR with.
+  test("sourceId is understood as source, and the PR opens", async () => {
+    const server = fakeServer();
+    const agent = buildAgent(emptySessionState(), server, fakeRoom().room);
 
-    const out = await propose(agent, { ...fix, source: undefined, sourceId: "shop-web-82b3ade" }, toolOpts().opts);
+    const out = await propose(agent, { ...fix, source: undefined, sourceId: fix.source }, toolOpts().opts);
 
-    expect(out).toContain('"source"');
-    expect(out).toContain('"sourceId"');
-    expect(out).not.toContain('"title"');
-    expect(out).not.toContain('"name"');
-    expect(out).not.toContain('"edit" is missing');
+    expect(out).toMatch(/^Done:/);
+    expect(server.proposals[0]!.source).toBe(fix.source);
   });
 
-  test("an edit sent as an array is told it is one object", async () => {
-    const agent = buildAgent(emptySessionState(), fakeServer(), fakeRoom().room);
+  test("an edit sent as a one-item array is unwrapped", async () => {
+    const server = fakeServer();
+    const agent = buildAgent(emptySessionState(), server, fakeRoom().room);
+
+    const out = await propose(agent, { ...fix, edit: [fix.edit] }, toolOpts().opts);
+
+    expect(out).toMatch(/^Done:/);
+    expect(server.proposals[0]!.edit).toEqual(fix.edit);
+  });
+
+  test("several edits at once are refused, because one pull request carries one change", async () => {
+    const server = fakeServer();
+    const agent = buildAgent(emptySessionState(), server, fakeRoom().room);
 
     const out = await propose(
       agent,
-      { ...fix, edit: [{ op: "annotate", annotations: { "a.io/b": "c" } }] },
+      { ...fix, edit: [fix.edit, { op: "scale", replicas: 3 }] },
       toolOpts().opts,
     );
 
-    expect(out).toContain('"edit"');
-    expect(out).toMatch(/one object|not an array/i);
-    expect(out).not.toContain('"source"');
+    expect(out).toMatch(/^Refused:/);
+    expect(out).toMatch(/one change/i);
+    expect(server.proposals).toEqual([]);
   });
 
-  test("the workload named as deployment rather than name is pointed at the right field", async () => {
-    const agent = buildAgent(emptySessionState(), fakeServer(), fakeRoom().room);
+  test("the workload named as deployment is understood, matching every other kind", async () => {
+    const server = fakeServer();
+    const agent = buildAgent(emptySessionState(), server, fakeRoom().room);
+
     const out = await propose(agent, { ...fix, name: undefined, deployment: "web" }, toolOpts().opts);
-    expect(out).toContain('"name"');
-    expect(out).toContain('"deployment"');
+
+    expect(out).toMatch(/^Done:/);
+    expect(server.proposals[0]!.name).toBe("web");
+  });
+
+  test("a field it never sent under any name is still named precisely", async () => {
+    const agent = buildAgent(emptySessionState(), fakeServer(), fakeRoom().room);
+
+    const out = await propose(agent, { ...fix, title: undefined }, toolOpts().opts);
+
+    expect(out).toContain('"title"');
+    expect(out).not.toContain('"source"');
+    expect(out).not.toContain('"name" is missing');
   });
 
   test("a destructive hint downgrades it to the desktop, where the sheet takes over", async () => {

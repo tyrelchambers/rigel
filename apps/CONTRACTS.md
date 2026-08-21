@@ -84,7 +84,12 @@ Additional kinds:
     "image":"…"}`, `{"op":"scale","replicas":N}`, with a null annotation or
     label value removing the key. This is the voice shape.
 
-  Both or neither is a 422, never a silent preference. The manifest is located
+  Both or neither is a 422, never a silent preference. The voice worker
+  corrects a small set of near-miss field names before it posts (`sourceId` for
+  `source`, `deployment` for `name`, an `edit` wrapped in a one-item array),
+  because a turn is capped at three tool calls and a model that spends two of
+  them guessing at a key never opens the PR. The route itself takes only the
+  documented names. The manifest is located
   by matching kind + name + namespace across the source's directory; zero
   matches, several matches, or a templated (Helm) tree refuses with the reason
   rather than editing on a guess. Nothing is applied to the cluster: the chat
