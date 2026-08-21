@@ -51,7 +51,7 @@ export interface VoiceActionFrame {
    * rebuilds the command from the action block itself.
    */
   command: string | null;
-  done?: { ok: boolean; summary: string };
+  done?: { ok: boolean; summary: string; prUrl?: string };
 }
 
 /** A frame plus renderer-only state, which does not cross the wire. */
@@ -92,7 +92,11 @@ export function toVoiceActionFrame(topic: string | undefined, body: unknown): Vo
       id: m.id,
       action: { kind: "" },
       command: null,
-      done: { ok: m.ok === true, summary: typeof m.summary === "string" ? m.summary : "" },
+      done: {
+        ok: m.ok === true,
+        summary: typeof m.summary === "string" ? m.summary : "",
+        ...(typeof m.prUrl === "string" ? { prUrl: m.prUrl } : {}),
+      },
     };
   }
   if (topic !== ACTION_TOPIC) return null;

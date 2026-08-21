@@ -351,6 +351,26 @@ test("a rigel.action.result frame from the agent arrives as a done patch", () =>
   expect(onAction.mock.calls[0]![0]).toMatchObject({ id: "call-1", done: { ok: true, summary: "ran" } });
 });
 
+test("a result frame carries the pull request's link, and drops a non-string one", () => {
+  const room = fakeRoom();
+  const onAction = vi.fn();
+  render(<VoiceSessionEffects room={room} onPills={() => {}} onAction={onAction} onAgentState={() => {}} />);
+
+  deliver(
+    ACTION_RESULT_TOPIC,
+    { id: "call-1", ok: true, summary: "opened pull request #7", prUrl: "https://github.com/o/r/pull/7" },
+    AGENT,
+  );
+  deliver(ACTION_RESULT_TOPIC, { id: "call-2", ok: true, summary: "ran", prUrl: 7 }, AGENT);
+
+  expect(onAction.mock.calls[0]![0].done).toEqual({
+    ok: true,
+    summary: "opened pull request #7",
+    prUrl: "https://github.com/o/r/pull/7",
+  });
+  expect(onAction.mock.calls[1]![0].done).toEqual({ ok: true, summary: "ran" });
+});
+
 test("a rigel.action.result frame from a non-agent identity is ignored", () => {
   const room = fakeRoom();
   const onAction = vi.fn();

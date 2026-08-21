@@ -1,6 +1,7 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ActiveForward } from "@/panels/services/portForward";
 import type { SuggestedAlert, DigestInput, ApplySource, RecentBatch, ChannelId } from "@rigel/k8s";
+import type { ManifestEdit } from "@rigel/k8s/src/manifestEdit";
 import type { CheckResult, CloudProvider, CloudCluster } from "@rigel/cloud-connect/src/index";
 import type { Subject } from "@/panels/rbac/types";
 import type { CanICheck, CanIResult } from "@/panels/rbac/canI";
@@ -51,6 +52,9 @@ export interface ActionBlock {
   title?: string;
   body?: string;
   content?: string;
+  /** proposeRepoFix only — the change as an intent, which the server turns into
+   *  the edited manifest. The alternative to filePath + content. */
+  edit?: ManifestEdit;
   /** setImagePullSecrets only — desired full list of imagePullSecret names. */
   imagePullSecrets?: string[];
   /** setEnvRef only — env vars sourced from a Secret/ConfigMap key. */
@@ -189,6 +193,10 @@ export async function proposeRepoFix(action: ActionBlock, dryRun: boolean): Prom
       source: action.source,
       filePath: action.filePath,
       content: action.content,
+      name: action.name,
+      namespace: action.namespace,
+      resourceKind: action.resourceKind,
+      edit: action.edit,
       title: action.title ?? action.label,
       body: action.body,
       dryRun,

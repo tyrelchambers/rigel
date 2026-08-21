@@ -323,6 +323,60 @@ test("a change the agent ran reports the outcome in place of the button", () => 
   expect(screen.getByText("Ran")).toBeInTheDocument();
 });
 
+const prAction = (over: Record<string, unknown> = {}) => ({
+  ...pendingAction("pr1"),
+  auto: true,
+  command: null,
+  action: { kind: "proposeRepoFix", label: "Open a PR annotating web", name: "web", namespace: "shop" },
+  ...over,
+});
+
+test("a pull request being opened says so, rather than claiming something is running", () => {
+  render(
+    <VoicePopoverBody report={REPORT} pills={[]} actions={[prAction()]} onRunClick={vi.fn()} onCancel={vi.fn()} onEnd={vi.fn()} />,
+  );
+  expect(screen.getByText("Opening a pull request…")).toBeInTheDocument();
+  expect(screen.queryByText("Running…")).toBeNull();
+});
+
+test("an opened pull request shows its number and links out to it, and shows no diff", () => {
+  render(
+    <VoicePopoverBody
+      report={REPORT}
+      pills={[]}
+      actions={[
+        prAction({
+          done: { ok: true, summary: "opened pull request #7", prUrl: "https://github.com/owner/repo/pull/7" },
+        }),
+      ]}
+      onRunClick={vi.fn()}
+      onCancel={vi.fn()}
+      onEnd={vi.fn()}
+    />,
+  );
+  expect(screen.getByText("opened pull request #7")).toBeInTheDocument();
+  const link = screen.getByRole("link", { name: "View pull request" });
+  expect(link).toHaveAttribute("href", "https://github.com/owner/repo/pull/7");
+  expect(link).toHaveAttribute("target", "_blank");
+  expect(screen.queryByText("Ran")).toBeNull();
+  expect(document.querySelector("pre")).toBeNull();
+});
+
+test("a pull request that could not be opened shows the reason", () => {
+  render(
+    <VoicePopoverBody
+      report={REPORT}
+      pills={[]}
+      actions={[prAction({ done: { ok: false, summary: "No manifest under k8s defines deployment web." } })]}
+      onRunClick={vi.fn()}
+      onCancel={vi.fn()}
+      onEnd={vi.fn()}
+    />,
+  );
+  expect(screen.getByText("No manifest under k8s defines deployment web.")).toBeInTheDocument();
+  expect(screen.queryByRole("link")).toBeNull();
+});
+
 test("the command renders in the same block the confirm sheet uses, prompt and all", () => {
   render(
     <VoicePopoverBody report={REPORT} pills={[]} actions={[pendingAction("a1")]} onRunClick={vi.fn()} onCancel={vi.fn()} onEnd={vi.fn()} />,

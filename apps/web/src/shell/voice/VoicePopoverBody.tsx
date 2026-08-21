@@ -306,15 +306,30 @@ function ProposalCard({
           )}
           <div className="flex items-center gap-2">
             {action.done ? (
-              <span
-                className="text-2xs font-semibold"
-                style={{ color: action.done.ok ? "var(--status-running)" : "var(--status-failed)" }}
-              >
-                {action.done.ok ? "Ran" : action.done.summary || "Failed"}
-              </span>
+              <>
+                <span
+                  className="text-2xs font-semibold"
+                  style={{ color: action.done.ok ? "var(--status-running)" : "var(--status-failed)" }}
+                >
+                  {action.done.ok && !action.done.prUrl ? "Ran" : action.done.summary || "Failed"}
+                </span>
+                {action.done.prUrl && (
+                  // The pull request itself shows the change, so this links to
+                  // it rather than repeating a diff in a popover this size.
+                  <a
+                    href={action.done.prUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-2xs font-semibold underline underline-offset-2"
+                    style={{ color: "var(--accent-primary)" }}
+                  >
+                    View pull request
+                  </a>
+                )}
+              </>
             ) : action.auto ? (
               <span className="text-2xs font-semibold" style={{ color: "var(--accent-primary)" }}>
-                Running…
+                {action.action.kind === "proposeRepoFix" ? "Opening a pull request…" : "Running…"}
               </span>
             ) : (
               <>
