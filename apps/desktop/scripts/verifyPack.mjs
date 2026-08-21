@@ -4,8 +4,11 @@
 // rather than assumed, and every check names what breaks when it fails.
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const RELEASE = new URL("../release/", import.meta.url).pathname;
+// fileURLToPath, not URL.pathname: on Windows the latter yields "/D:/a/..."
+// with a leading slash, which is not a path any fs call accepts.
+const RELEASE = fileURLToPath(new URL("../release/", import.meta.url));
 
 /** macOS buries it in the .app; Windows and Linux put it beside the binary. */
 function resourcesDir() {
