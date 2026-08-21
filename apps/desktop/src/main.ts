@@ -419,9 +419,15 @@ function forkVoiceWorker(port: number): UtilityProcess | null {
   };
   if (process.env.PATH) env.PATH = process.env.PATH;
 
-  const child = utilityProcess.fork(VOICE_BUNDLE_DEV, [], {
+  // Packaged: electron-builder puts the bundle and its flattened node_modules
+  // in resources/voice (see electron-builder.yml). It cannot live inside the
+  // asar — utilityProcess.fork silently starts nothing for a path in an
+  // archive: no stdout, no exit event, no throw.
+  const voiceDir = app.isPackaged ? join(process.resourcesPath, "voice") : DESKTOP_DIR;
+  const entry = app.isPackaged ? join(voiceDir, "voice-entry.mjs") : VOICE_BUNDLE_DEV;
+  const child = utilityProcess.fork(entry, [], {
     env: env as Record<string, string>,
-    cwd: DESKTOP_DIR,
+    cwd: voiceDir,
     stdio: "pipe",
   });
 

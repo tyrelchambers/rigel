@@ -50,30 +50,11 @@ check(join(res, "server", "server.mjs"), "the server bundle server-entry.mjs imp
 check(join(res, "server", "node_modules", "node-pty"), "terminals need the native addon on the real filesystem, never inside an asar");
 check(join(res, "web", "dist", "index.html"), "WEB_DIST points here; without it the window loads nothing");
 
-// The LiveKit native addons electron-builder collects from apps/desktop's
-// dependencies. They are the reason supportedArchitectures exists in
-// pnpm-workspace.yaml: without it the x64 mac app, built on an arm64 runner,
-// gets no binding at all — and nothing on a developer machine would show it.
-const unpacked = join(res, "app.asar.unpacked", "node_modules", "@livekit");
-if (existsSync(unpacked)) {
-  const present = readdirSync(unpacked);
-  for (const [prefix, why] of [
-    ["rtc-ffi-bindings-", "the voice worker cannot open a LiveKit room on this platform/arch"],
-    ["local-inference-", "the voice worker's VAD degrades to a silent no-op instead of failing"],
-  ]) {
-    if (!present.some((d) => d.startsWith(prefix))) {
-      problems.push(
-        `MISSING ${unpacked}/${prefix}<platform>  (present: ${present.join(", ") || "nothing"})\n    → ${why}`,
-      );
-    }
-  }
-} else {
-  problems.push(`MISSING ${unpacked}\n    → no LiveKit native addons were packed for this app at all`);
-}
-
-// Voice is packaged later (HELM-128). These checks are inert until the layout
-// exists, and become load-bearing the moment it does — so the workflow that
-// runs this does not need editing when voice lands.
+// The voice worker and the flattened native deps it resolves from. These are
+// deliberately NOT collected into the asar: @livekit/rtc-node and
+// @livekit/local-inference are devDependencies of apps/desktop precisely so
+// electron-builder does not ship a second 52MB copy of the same addons that
+// only this worker ever loads.
 const voice = join(res, "voice");
 if (existsSync(voice)) {
   check(join(voice, "voice-entry.mjs"), "forkVoiceWorker's packaged entry");
@@ -83,11 +64,13 @@ if (existsSync(voice)) {
   if (existsSync(bindings)) {
     const dirs = readdirSync(bindings);
     for (const [pkg, why] of [
-      ["rtc-ffi-bindings-", "no LiveKit room client for this platform"],
+      ["rtc-ffi-bindings-", "no LiveKit room client for this platform/arch"],
       ["local-inference-", "the VAD silently degrades to a no-op instead of failing"],
     ]) {
       if (!dirs.some((d) => d.startsWith(pkg))) {
-        problems.push(`MISSING ${bindings}/${pkg}<platform>\n    → ${why}`);
+        problems.push(
+          `MISSING ${bindings}/${pkg}<platform>  (present: ${dirs.join(", ") || "nothing"})\n    → ${why}`,
+        );
       }
     }
   }

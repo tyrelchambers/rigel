@@ -69,6 +69,18 @@ extraResources:
   # The rigel-pr CLI the assistant runs to label + record a PR it opened itself.
   - from: ../../packages/pr-cli/dist/rigel-pr.mjs
     to: server/rigel-pr.mjs
+  # Voice worker + its parent-death watchdog entry, forked by main.ts.
+  - from: dist/voice.mjs
+    to: voice/voice.mjs
+  - from: dist/voice-entry.mjs
+    to: voice/voice-entry.mjs
+  # The worker's native deps, flattened per target by scripts/flattenVoiceDeps.mjs.
+  # It must sit NEXT TO voice.mjs: @livekit/agents resolves its addons with
+  # createRequire(import.meta.url), so resolution walks up from the bundle's own
+  # directory and never consults cwd. ${os}/${arch} expand to mac|win|linux and
+  # arm64|x64, matching the directory names the flatten script emits.
+  - from: dist/voice-deps/${os}-${arch}/node_modules
+    to: voice/node_modules
 
 # Native node-pty is shipped unpacked via extraResources (above), so no asar
 # unpacking is needed for it. Re-state the intent defensively in case node-pty
