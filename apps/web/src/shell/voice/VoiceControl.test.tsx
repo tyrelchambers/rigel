@@ -197,12 +197,17 @@ test("a failed token request surfaces the retry copy instead of hanging on Conne
 test("Room.connect rejecting lands on error and stays there once the deferred Disconnected fires", async () => {
   h.status.data = { enabled: true, configured: true };
   h.behavior.failConnect = true;
+  const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
   render(<VoiceControl />);
   await userEvent.click(screen.getByLabelText("Voice assistant"));
 
   expect(await screen.findByText(/Could not connect/)).toBeTruthy();
   await waitFor(() => expect(h.rooms).toHaveLength(1));
   expect(h.rooms[0]!.disconnect).toHaveBeenCalled();
+  // The popover can only say "could not connect", so the real reason has to
+  // reach the console or a media-path failure leaves no trace anywhere.
+  expect(consoleError).toHaveBeenCalledWith("voice connect failed:", expect.anything());
+  consoleError.mockRestore();
 
   await waitFor(() => expect(h.rooms[0]!.handlers.has("disconnected")).toBe(false));
   expect(screen.getByText(/Could not connect/)).toBeTruthy();

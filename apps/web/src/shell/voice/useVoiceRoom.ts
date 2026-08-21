@@ -118,6 +118,10 @@ export function useVoiceRoom() {
         setStatus("connected");
       }
     } catch (err) {
+      // The popover can only say "could not connect", which is no help when the
+      // failure is a media path that never came up rather than a bad key. This
+      // is the only place the real reason exists, so it is written down.
+      console.error("voice connect failed:", err);
       // Leave the phase first: tearing down a half-connected room fires
       // Disconnected, and that handler would overwrite "error" with "idle".
       phaseRef.current = { kind: "off" };
