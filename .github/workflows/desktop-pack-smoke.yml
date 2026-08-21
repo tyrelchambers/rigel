@@ -26,7 +26,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
+        include:
+          # macOS packs BOTH arches, as release:mac does. The x64 app built on
+          # an arm64 runner is the only place a missing cross-arch native
+          # binding shows up, and it is invisible on a developer machine.
+          - { os: macos-latest, flags: "--mac --arm64 --x64" }
+          - { os: windows-latest, flags: "" }
+          - { os: ubuntu-latest, flags: "" }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -74,7 +80,7 @@ jobs:
       # electron-builder then tries to read a config file by that name.
       - name: Pack (no installer, unsigned)
         shell: bash
-        run: pnpm --filter desktop exec electron-builder --dir -c.mac.notarize=false
+        run: pnpm --filter desktop exec electron-builder --dir ${{ matrix.flags }} -c.mac.notarize=false
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 

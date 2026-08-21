@@ -1,6 +1,20 @@
 packages:
   - "apps/*"
   - "packages/*"
+# The mac release job builds BOTH arm64 and x64 dmgs on one arm64 runner
+# (release:mac → --mac --arm64 --x64), but pnpm installs only the optional
+# platform packages matching the running machine. The x64 app would therefore
+# ship without @livekit/rtc-ffi-bindings-darwin-x64 or
+# @livekit/local-inference-darwin-x64 — electron-builder says so out loud
+# ("platform-specific optional dependencies not bundled"), and the voice
+# worker on an Intel Mac would fail to load its native addons.
+supportedArchitectures:
+  os:
+    - current
+  cpu:
+    - x64
+    - arm64
+
 allowBuilds:
   esbuild: true
   # Transitive only (astro's optional image service, and @livekit/agents, whose
