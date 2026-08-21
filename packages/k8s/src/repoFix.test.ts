@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, test, expect, vi } from "vitest";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { runProcess } from "./run";
 import { ensureCheckout, previewRepoFix, proposeRepoFix } from "./repoFix";
 import type { ResolvedTarget } from "./gitSources";
@@ -7,9 +8,36 @@ import type { ResolvedTarget } from "./gitSources";
 // mock both so these are pure unit tests with no real clone/commit/push. The
 // GitHub PR call goes through global fetch, which each test stubs as needed.
 vi.mock("./run", () => ({ runProcess: vi.fn() }));
-vi.mock("node:fs/promises", () => ({ rm: vi.fn(), mkdir: vi.fn(), writeFile: vi.fn() }));
+vi.mock("node:fs/promises", () => ({
+  rm: vi.fn(),
+  mkdir: vi.fn(),
+  writeFile: vi.fn(),
+  readdir: vi.fn(),
+  readFile: vi.fn(),
+}));
 
 const mockRun = vi.mocked(runProcess);
+const mockReaddir = vi.mocked(readdir);
+const mockReadFile = vi.mocked(readFile);
+
+const DEPLOY = `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: shop
+spec:
+  replicas: 2
+`;
+
+/** Lay out a manifest tree in the source's manifest directory: { name: content }. */
+function repoTree(files: Record<string, string>): void {
+  mockReaddir.mockImplementation((async () => Object.keys(files)) as never);
+  mockReadFile.mockImplementation((async (abs: string) => {
+    const hit = Object.entries(files).find(([name]) => String(abs).endsWith(`/${name}`));
+    if (!hit) throw new Error(`ENOENT ${abs}`);
+    return hit[1];
+  }) as never);
+}
 
 const ok = (stdout = "") => ({ code: 0, stdout, stderr: "" });
 const fail = (stderr = "boom") => ({ code: 1, stdout: "", stderr });
@@ -35,6 +63,9 @@ const callMatching = (pred: (a: string[]) => boolean) => calls().find(pred);
 
 beforeEach(() => {
   mockRun.mockReset();
+  mockReaddir.mockReset();
+  mockReadFile.mockReset();
+  vi.mocked(writeFile).mockClear();
 });
 
 afterEach(() => {
@@ -201,7 +232,7 @@ describe("proposeRepoFix", () => {
     mockRun.mockImplementation(gitOk());
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response(JSON.stringify({ message: "Validation Failed" }), { status: 422 })),
+      vi.fn(async (_url: unknown, _init?: unknown) => new Response(JSON.stringify({ message: "Validation Failed" }), { status: 422 })),
     );
     const res = await proposeRepoFix(input);
     expect(res.ok).toBe(false);
@@ -212,7 +243,7 @@ describe("proposeRepoFix", () => {
     mockRun.mockImplementation(gitOk());
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
+      vi.fn(async (_url: unknown, _init?: unknown) =>
         new Response(JSON.stringify({ html_url: "https://github.com/owner/repo/pull/7", number: 7 }), { status: 201 }),
       ),
     );
@@ -222,7 +253,7 @@ describe("proposeRepoFix", () => {
 
   test("labels the PR with rigel + its origin, creating the labels first", async () => {
     mockRun.mockImplementation(gitOk());
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn(async (_url: unknown, _init?: unknown) =>
       new Response(JSON.stringify({ html_url: "https://github.com/owner/repo/pull/7", number: 7 }), { status: 201 }),
     );
     vi.stubGlobal("fetch", fetchMock);
@@ -243,7 +274,7 @@ describe("proposeRepoFix", () => {
 
   test("uses the chat origin label for chat-opened PRs", async () => {
     mockRun.mockImplementation(gitOk());
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn(async (_url: unknown, _init?: unknown) =>
       new Response(JSON.stringify({ html_url: "https://github.com/owner/repo/pull/7", number: 7 }), { status: 201 }),
     );
     vi.stubGlobal("fetch", fetchMock);
@@ -271,11 +302,171 @@ describe("proposeRepoFix", () => {
 
   test("skips labelling when no origin is given", async () => {
     mockRun.mockImplementation(gitOk());
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn(async (_url: unknown, _init?: unknown) =>
       new Response(JSON.stringify({ html_url: "https://github.com/owner/repo/pull/7", number: 7 }), { status: 201 }),
     );
     vi.stubGlobal("fetch", fetchMock);
     await proposeRepoFix(input);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  test("a typed edit plans the change from the repo, commits the planned file and opens the PR", async () => {
+    mockRun.mockImplementation(gitOk());
+    repoTree({ "web.yaml": DEPLOY });
+    const fetchMock = vi.fn(async (_url: unknown, _init?: unknown) =>
+      new Response(JSON.stringify({ html_url: "https://github.com/owner/repo/pull/7", number: 7 }), { status: 201 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await proposeRepoFix({
+      source: target,
+      token: "TOK",
+      title: "Scale web to 4",
+      target: { kind: "deployment", name: "web", namespace: "shop" },
+      edit: { op: "scale", replicas: 4 },
+    });
+    expect(res.ok).toBe(true);
+
+    // The file the planner picked is the one committed, path relative to the repo.
+    expect(vi.mocked(writeFile).mock.calls[0]![0]).toContain("/k8s/web.yaml");
+    expect(String(vi.mocked(writeFile).mock.calls[0]![1])).toContain("replicas: 4");
+    expect(callMatching((a) => a[0] === "-C" && a.includes("add") && a.includes("k8s/web.yaml"))).toBeDefined();
+    // The planned file comes back, because only the planner knew which it was.
+    expect(res.filePath).toBe("k8s/web.yaml");
+    expect(res.repoSlug).toBe("owner/repo");
+  });
+
+  test("a typed edit the planner refuses never runs a git write", async () => {
+    mockRun.mockImplementation(gitOk());
+    repoTree({ "web.yaml": DEPLOY });
+    const res = await proposeRepoFix({
+      source: target,
+      token: "TOK",
+      title: "Scale api",
+      target: { kind: "deployment", name: "api", namespace: "shop" },
+      edit: { op: "scale", replicas: 4 },
+    });
+    expect(res.ok).toBe(false);
+    expect(res.message).toContain("api");
+    expect(callMatching((a) => a.includes("commit"))).toBeUndefined();
+    expect(callMatching((a) => a.includes("push"))).toBeUndefined();
+  });
+
+  test("giving both a file and an edit, or neither, is refused before any clone", async () => {
+    const both = await proposeRepoFix({ ...input, target: { kind: "deployment", name: "web", namespace: "shop" }, edit: { op: "scale", replicas: 4 } });
+    expect(both.ok).toBe(false);
+    const neither = await proposeRepoFix({ source: target, token: "TOK", title: "t" });
+    expect(neither.ok).toBe(false);
+    expect(mockRun).not.toHaveBeenCalled();
+  });
+
+  test("a PR that fails to open deletes the branch it pushed", async () => {
+    mockRun.mockImplementation(gitOk());
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: unknown, _init?: unknown) => new Response(JSON.stringify({ message: "Validation Failed" }), { status: 422 })),
+    );
+    const res = await proposeRepoFix(input);
+    expect(res.ok).toBe(false);
+    const deleted = callMatching((a) => a.includes("push") && a.includes("--delete"));
+    expect(deleted).toBeDefined();
+    expect(deleted).toContain(res.branch);
+  });
+
+  test("labels a voice-opened PR as rigel:voice", async () => {
+    mockRun.mockImplementation(gitOk());
+    const fetchMock = vi.fn(async (_url: unknown, _init?: unknown) =>
+      new Response(JSON.stringify({ html_url: "https://github.com/owner/repo/pull/7", number: 7 }), { status: 201 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await proposeRepoFix({ ...input, origin: "voice" });
+    const add = fetchMock.mock.calls.find((c) => String(c[0]).endsWith("/issues/7/labels"));
+    const sent = JSON.parse((add![1] as RequestInit).body as string) as { labels: string[] };
+    expect(sent.labels).toEqual(["rigel", "rigel:voice"]);
+  });
+});
+
+describe("a typed edit against a source whose path is wrong", () => {
+  test("a manifest directory that is not in the repo says so, rather than blaming the workload", async () => {
+    mockRun.mockImplementation(gitOk());
+    mockReaddir.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+    const res = await proposeRepoFix({
+      source: target,
+      token: "TOK",
+      title: "Scale web",
+      target: { kind: "deployment", name: "web", namespace: "shop" },
+      edit: { op: "scale", replicas: 4 },
+    });
+    expect(res.ok).toBe(false);
+    expect(res.message).toContain("k8s");
+    expect(res.message).toContain("main");
+    expect(res.message).toMatch(/not in the repository/i);
+    expect(res.message).not.toMatch(/no manifest/i);
+  });
+
+  test("a directory with no YAML in it is named as empty, not as a missing workload", async () => {
+    mockRun.mockImplementation(gitOk());
+    repoTree({ "README.md": "# nothing here", "kustomization.json": "{}" });
+    const res = await proposeRepoFix({
+      source: target,
+      token: "TOK",
+      title: "Scale web",
+      target: { kind: "deployment", name: "web", namespace: "shop" },
+      edit: { op: "scale", replicas: 4 },
+    });
+    expect(res.ok).toBe(false);
+    expect(res.message).toMatch(/no YAML/i);
+    expect(res.message).toContain("k8s");
+  });
+
+  test("a source with no manifest path searches the whole repository", async () => {
+    mockRun.mockImplementation(gitOk());
+    repoTree({ "deploy/web.yaml": DEPLOY });
+    const fetchMock = vi.fn(async (_url: unknown, _init?: unknown) =>
+      new Response(JSON.stringify({ html_url: "https://github.com/owner/repo/pull/7", number: 7 }), { status: 201 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await proposeRepoFix({
+      source: { ...target, path: "" },
+      token: "TOK",
+      title: "Scale web",
+      target: { kind: "deployment", name: "web", namespace: "shop" },
+      edit: { op: "scale", replicas: 4 },
+    });
+
+    expect(res.ok).toBe(true);
+    // Found without a configured directory, and reported at its repo path.
+    expect(res.filePath).toBe("deploy/web.yaml");
+  });
+});
+
+describe("previewRepoFix with a typed edit", () => {
+  test("returns the planned change's diff without committing", async () => {
+    mockRun.mockImplementation(gitOk("@@ -6 +6 @@\n-  replicas: 2\n+  replicas: 4"));
+    repoTree({ "web.yaml": DEPLOY });
+    const res = await previewRepoFix({
+      source: target,
+      token: "TOK",
+      title: "Scale web to 4",
+      target: { kind: "deployment", name: "web", namespace: "shop" },
+      edit: { op: "scale", replicas: 4 },
+    });
+    expect(res.ok).toBe(true);
+    expect(res.diff).toContain("replicas: 4");
+    expect(callMatching((a) => a.includes("commit"))).toBeUndefined();
+  });
+
+  test("surfaces the planner's refusal", async () => {
+    mockRun.mockImplementation(gitOk());
+    repoTree({ "web.yaml": DEPLOY });
+    const res = await previewRepoFix({
+      source: target,
+      token: "TOK",
+      title: "t",
+      target: { kind: "deployment", name: "web", namespace: "shop" },
+      edit: { op: "scale", replicas: 2 },
+    });
+    expect(res.ok).toBe(false);
+    expect(res.message).toContain("already");
   });
 });

@@ -43,12 +43,33 @@ describe("announceAgentState", () => {
   });
 });
 
+const fakeAgent = () => ({ updateChatCtx: vi.fn(async () => {}) });
+const fakeSession = () => ({ interrupt: vi.fn(() => {}) });
+
 describe("endDesktopSession", () => {
   test("drops proposals outstanding from the last session", async () => {
     const state = emptySessionState();
     state.awaitingClick.set("call-1", "Delete pod web-1");
-    await endDesktopSession(state, { updateChatCtx: vi.fn(async () => {}) });
+    await endDesktopSession(state, fakeAgent(), fakeSession());
     expect(state.awaitingClick.size).toBe(0);
+  });
+
+  test("stops whatever the agent is saying, so it is not still talking to an empty room", async () => {
+    const session = fakeSession();
+    await endDesktopSession(emptySessionState(), fakeAgent(), session);
+    expect(session.interrupt).toHaveBeenCalled();
+  });
+
+  test("an interrupt that throws still clears the session", async () => {
+    const state = emptySessionState();
+    state.activeContext = "prod";
+    const session = {
+      interrupt: vi.fn(() => {
+        throw new Error("nothing is being said");
+      }),
+    };
+    await endDesktopSession(state, fakeAgent(), session);
+    expect(state.activeContext).toBeNull();
   });
 
   test("drops the spoken context and the cluster keyterms", async () => {
@@ -58,7 +79,7 @@ describe("endDesktopSession", () => {
     state.keyterms = [...state.keyterms, "reddex"];
     const before = state.keyterms.length;
 
-    await endDesktopSession(state, { updateChatCtx: vi.fn(async () => {}) });
+    await endDesktopSession(state, fakeAgent(), fakeSession());
 
     expect(state.activeContext).toBeNull();
     expect(state.contextLines).toEqual([]);
@@ -70,14 +91,14 @@ describe("endDesktopSession", () => {
     const state = emptySessionState();
     const contextLines = state.contextLines;
     contextLines.push("deployment web: 1/3 ready");
-    await endDesktopSession(state, { updateChatCtx: vi.fn(async () => {}) });
+    await endDesktopSession(state, fakeAgent(), fakeSession());
     expect(state.contextLines).toEqual([]);
     expect(state.contextLines).not.toBe(contextLines);
   });
 
   test("empties the agent's chat history", async () => {
     const updateChatCtx = vi.fn(async (_chatCtx: llm.ChatContext) => {});
-    await endDesktopSession(emptySessionState(), { updateChatCtx });
+    await endDesktopSession(emptySessionState(), { updateChatCtx }, fakeSession());
     expect(updateChatCtx).toHaveBeenCalledTimes(1);
     expect(updateChatCtx.mock.calls[0]![0].items).toEqual([]);
   });

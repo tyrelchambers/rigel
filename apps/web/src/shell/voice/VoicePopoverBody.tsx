@@ -4,15 +4,11 @@
  * the mutations the worker has proposed. Must be rendered inside a
  * RoomContext.Provider.
  */
-import { useEffect, useRef, useState } from "react";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronDown } from "@awesome.me/kit-6050953220/icons/classic/solid";
+import { useEffect, useRef, type ReactNode } from "react";
 import { useMultibandTrackVolume, useTranscriptions, type AgentState } from "@livekit/components-react";
 import { MessageScroller, useMessageScroller } from "@shadcn/react/message-scroller";
 import { CommandBlock } from "@/components/CommandBlock";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { isDestructiveAction } from "@/lib/actionBlocks";
-import { MENTION_KIND_LABEL, type MentionCandidate } from "@/panels/chat/mentions";
 import { useCluster } from "@/store/cluster";
 import { useAssistantState, useMicTrackRef } from "./useVoiceRoom";
 import {
@@ -260,12 +256,111 @@ function actionTarget(action: VoiceAction["action"]): string {
   return [action.kind, name, action.namespace && `in ${action.namespace}`].filter(Boolean).join(" ");
 }
 
+/** The workload a repo fix targets, the way the operator says it out loud. */
+function workloadLine(action: VoiceAction["action"]): string {
+  return [action.name, action.namespace && `in ${action.namespace}`].filter(Boolean).join(" ");
+}
+
 /**
- * A change, command first. Two shapes: one the agent is running because the
- * operator asked for it, which shows what it is doing and offers no button,
- * and one waiting for approval, which the operator runs through the same
- * confirm sheet the chat panel uses. Nothing here is ever run by a spoken
- * word.
+ * A typed manifest edit in the words the operator used, not the JSON the model
+ * sent. Falls through to the kind's own label when the edit is a shape this
+ * does not model, which keeps an unknown op visible rather than blank.
+ */
+function editLine(action: VoiceAction["action"]): string {
+  const edit = action.edit;
+  if (!edit || typeof edit !== "object") return action.label ?? "";
+  const pairs = (map: Record<string, string | null> | undefined) =>
+    Object.entries(map ?? {})
+      .map(([k, v]) => (v === null ? `remove ${k}` : `set ${k} to ${v}`))
+      .join(", ");
+  switch (edit.op) {
+    case "annotate":
+      return pairs(edit.annotations);
+    case "label":
+      return pairs(edit.labels);
+    case "setImage":
+      return `use image ${edit.image}${edit.container ? ` on ${edit.container}` : ""}`;
+    case "scale":
+      return `scale to ${edit.replicas} replicas`;
+    default:
+      return action.label ?? "";
+  }
+}
+
+/** One `key   value` row inside a card's detail block. */
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-2">
+      <span className="w-[62px] shrink-0 text-2xs" style={{ color: "var(--fg-tertiary)" }}>
+        {label}
+      </span>
+      <span className="min-w-0 flex-1 font-mono text-2xs break-words" style={{ color: "var(--fg-primary)" }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+/** The dark inset every card puts its content in. */
+function CardBlock({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="flex flex-col gap-1.5 rounded-lg border px-[11px] py-2.5"
+      style={{ background: "#00000059", borderColor: "var(--border-subtle)" }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** kind · state, with the blast radius or outcome noted on the right. */
+function CardHead({ kind, state, stateColor, note }: { kind: string; state: string; stateColor: string; note?: string }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="font-mono text-3xs font-semibold tracking-wider" style={{ color: "var(--fg-tertiary)" }}>
+        {kind}
+      </span>
+      <span className="text-3xs" style={{ color: "var(--fg-tertiary)" }}>
+        ·
+      </span>
+      <span className="font-mono text-3xs font-semibold tracking-wider" style={{ color: stateColor }}>
+        {state}
+      </span>
+      {note && (
+        <span className="ml-auto font-mono text-3xs tracking-wider" style={{ color: "var(--fg-tertiary)" }}>
+          {note}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** A dot and a sentence: what the agent did, or is doing, with no button. */
+function CardStatus({ color, text, trailing }: { color: string; text: string; trailing?: ReactNode }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="size-1.5 shrink-0 rounded-full" style={{ background: color }} />
+      <span className="text-2xs font-semibold" style={{ color }}>
+        {text}
+      </span>
+      {trailing && <span className="ml-auto">{trailing}</span>}
+    </div>
+  );
+}
+
+/**
+ * A change, in whichever state it has reached. The head reads the same in every
+ * one of them, so the eye lands in the same place whether the card is asking
+ * for a tap or reporting what it did, and colour carries the state without ever
+ * being the only signal.
+ *
+ * Three shapes of content. A kubectl change shows its command, because the card
+ * is the receipt. A pull request has no command to show, so it names the repo,
+ * the workload and the change instead, and once it is open the number leads,
+ * since that is what the operator repeats to a colleague. A failure shows the
+ * reason in full, because that is usually the thing that says what to fix.
+ *
+ * Nothing here is ever run by a spoken word.
  */
 function ProposalCard({
   action,
@@ -276,11 +371,35 @@ function ProposalCard({
   onRunClick: (a: VoiceAction) => void;
   onDismiss: (a: VoiceAction) => void;
 }) {
+  const { done } = action;
+  const isRepoFix = action.action.kind === "proposeRepoFix";
   const destructive = isDestructiveAction(action.action);
-  const accent = action.auto ? "var(--accent-primary)" : destructive ? "var(--status-failed)" : "var(--status-pending)";
-  // The command box keys off risk exactly as the ConfirmSheet's does, so the
-  // same command reads the same in both places.
-  const commandAccent = destructive ? "var(--status-failed)" : "var(--accent-primary)";
+
+  const accent = done
+    ? done.ok
+      ? "var(--status-running)"
+      : "var(--status-failed)"
+    : action.auto
+      ? "var(--accent-primary)"
+      : destructive
+        ? "var(--status-failed)"
+        : "var(--status-pending)";
+
+  const state = done ? (done.ok ? (isRepoFix ? "open" : "done") : "failed") : action.auto ? (isRepoFix ? "opening" : "running") : "needs approval";
+  const note = done
+    ? isRepoFix
+      ? done.ok
+        ? "awaiting review"
+        : "nothing pushed"
+      : undefined
+    : isRepoFix
+      ? "no cluster change"
+      : action.auto
+        ? undefined
+        : destructive
+          ? "irreversible"
+          : "reversible";
+
   return (
     <div
       className="flex shrink-0 flex-col gap-2 border-t px-4 pt-3.5 pb-4"
@@ -294,61 +413,104 @@ function ProposalCard({
         }}
       >
         <div className="flex flex-col gap-2.5 p-3">
-          {action.command ? (
-            <CommandBlock command={action.command} accent={commandAccent} compact />
+          <CardHead kind={action.action.kind} state={state} stateColor={accent} note={note} />
+
+          {done && !done.ok ? (
+            <CardBlock>
+              <span className="text-2xs leading-[17px]" style={{ color: "var(--fg-primary)" }}>
+                {done.summary || "It failed."}
+              </span>
+            </CardBlock>
+          ) : isRepoFix && done?.ok ? (
+            <CardBlock>
+              <div className="flex items-baseline gap-2">
+                <span className="text-sm font-bold" style={{ color: "var(--fg-primary)" }}>
+                  {`#${done.summary.match(/#(\d+)/)?.[1] ?? "?"}`}
+                </span>
+                <span className="min-w-0 flex-1 text-2xs leading-[16px]" style={{ color: "var(--fg-secondary)" }}>
+                  {action.action.title ?? action.action.label}
+                </span>
+              </div>
+              {done.repoSlug && <DetailRow label="repository" value={done.repoSlug} />}
+            </CardBlock>
+          ) : isRepoFix ? (
+            <CardBlock>
+              {action.action.source && <DetailRow label="source" value={action.action.source} />}
+              <DetailRow label="workload" value={workloadLine(action.action)} />
+              <DetailRow label="change" value={editLine(action.action)} />
+            </CardBlock>
+          ) : action.command ? (
+            <CommandBlock
+              command={action.command}
+              accent={destructive ? "var(--status-failed)" : "var(--accent-primary)"}
+              compact
+            />
           ) : (
-            // purge, applyManifest and proposeRepoFix carry no command: the
-            // ConfirmSheet builds their preview. Naming the target is all this
-            // card can honestly show.
+            // purge and applyManifest carry no command: the ConfirmSheet builds
+            // their preview. Naming the target is all this card can honestly show.
             <span className="text-2xs" style={{ color: "var(--fg-secondary)" }}>
               {actionTarget(action.action)}
             </span>
           )}
-          <div className="flex items-center gap-2">
-            {action.done ? (
-              <span
-                className="text-2xs font-semibold"
-                style={{ color: action.done.ok ? "var(--status-running)" : "var(--status-failed)" }}
-              >
-                {action.done.ok ? "Ran" : action.done.summary || "Failed"}
-              </span>
-            ) : action.auto ? (
-              <span className="text-2xs font-semibold" style={{ color: "var(--accent-primary)" }}>
-                Running…
-              </span>
+
+          {done ? (
+            done.ok ? (
+              <CardStatus
+                color={accent}
+                text={isRepoFix ? "Nothing changed on the cluster" : done.summary || "Done"}
+                trailing={
+                  done.prUrl ? (
+                    <a
+                      href={done.prUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-2xs font-semibold"
+                      style={{ color: "var(--accent-primary)" }}
+                    >
+                      View pull request
+                    </a>
+                  ) : undefined
+                }
+              />
             ) : (
-              <>
-                <button
-                  onClick={() => onRunClick(action)}
-                  // The label is the model's, so its length is not ours to
-                  // assume: "Delete pod canada-hires-web-6f8c94" alone is
-                  // wider than the card. It truncates rather than pushing
-                  // Dismiss out of a card that clips its overflow.
-                  className="min-w-0 shrink cursor-pointer truncate rounded-lg px-3 py-1.5 text-2xs font-semibold transition-opacity hover:opacity-90"
-                  style={{ background: "var(--accent-primary)", color: "var(--fg-inverse)" }}
-                  title={action.action.label ?? "Review and run"}
-                >
-                  {action.action.label ?? "Review and run"}
-                </button>
-                <button
-                  onClick={() => onDismiss(action)}
-                  className="shrink-0 cursor-pointer rounded-lg border px-3 py-1.5 text-2xs font-semibold transition-opacity hover:opacity-90"
-                  style={{
-                    background: "var(--surface-elevated)",
-                    borderColor: "var(--border-strong)",
-                    color: "var(--fg-secondary)",
-                  }}
-                >
-                  Dismiss
-                </button>
-                {destructive && (
-                  <span className="ml-auto shrink-0 text-3xs" style={{ color: "var(--fg-tertiary)" }}>
-                    needs your approval
-                  </span>
-                )}
-              </>
-            )}
-          </div>
+              <CardStatus color={accent} text={isRepoFix ? "No branch was left behind" : "Nothing changed"} />
+            )
+          ) : action.auto ? (
+            <CardStatus color={accent} text={isRepoFix ? "Opening a pull request" : "Running"} />
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => onRunClick(action)}
+                // The label is the model's, so its length is not ours to
+                // assume: "Delete pod canada-hires-web-6f8c94" alone is wider
+                // than the card. It truncates rather than pushing Dismiss out
+                // of a card that clips its overflow.
+                className="min-w-0 shrink cursor-pointer truncate rounded-lg px-3 py-1.5 text-2xs font-semibold transition-opacity hover:opacity-90"
+                style={{
+                  // Same rule as the ConfirmSheet this button opens: red for
+                  // destructive, the brand accent for everything else. An
+                  // outage that destroys nothing keeps the neutral button and
+                  // says irreversible in the head instead.
+                  background: destructive ? "var(--status-failed)" : "var(--accent-primary)",
+                  color: destructive ? "var(--fg-primary)" : "var(--fg-inverse)",
+                }}
+                title={action.action.label ?? "Review and run"}
+              >
+                {action.action.label ?? "Review and run"}
+              </button>
+              <button
+                onClick={() => onDismiss(action)}
+                className="shrink-0 cursor-pointer rounded-lg border px-3 py-1.5 text-2xs font-semibold transition-opacity hover:opacity-90"
+                style={{
+                  background: "var(--surface-elevated)",
+                  borderColor: "var(--border-strong)",
+                  color: "var(--fg-secondary)",
+                }}
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
         </div>
       </div>
       {action.unreported && (
@@ -360,68 +522,15 @@ function ProposalCard({
   );
 }
 
-function Pills({ pills }: { pills: MentionCandidate[] }) {
-  const [open, setOpen] = useState(true);
-  if (pills.length === 0) return null;
-  return (
-    <Collapsible
-      open={open}
-      onOpenChange={setOpen}
-      className="shrink-0 border-t"
-      style={{ borderColor: "var(--border-subtle)" }}
-    >
-      <CollapsibleTrigger className="flex w-full cursor-pointer items-center gap-2 px-4 pt-2.5 pb-2 text-left">
-        <span className="text-2xs font-semibold" style={{ color: "var(--fg-tertiary)" }}>
-          Referenced this session
-        </span>
-        <span
-          className="rounded-full px-1.5 py-px font-mono text-3xs font-semibold"
-          style={{ background: "var(--surface-sunken)", color: "var(--fg-secondary)" }}
-        >
-          {pills.length}
-        </span>
-        <FontAwesomeIcon
-          icon={faChevronDown}
-          className={`ml-auto size-3 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
-          style={{ color: "var(--fg-tertiary)" }}
-          aria-hidden
-        />
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <div className="flex max-h-[7.5rem] flex-wrap items-center gap-1.5 overflow-y-auto px-4 pb-3.5">
-          {pills.map((p) => (
-            <span
-              key={p.id}
-              className="inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-2xs"
-              style={{
-                background: "var(--surface-sunken)",
-                borderColor: "var(--border-subtle)",
-                color: "var(--fg-secondary)",
-              }}
-            >
-              <span className="font-mono text-3xs font-semibold" style={{ color: "var(--accent-primary)" }}>
-                {MENTION_KIND_LABEL[p.kind]}
-              </span>
-              {p.name}
-            </span>
-          ))}
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
-
 export function VoicePopoverBody({
   onEnd,
   report,
-  pills,
   actions,
   onRunClick,
   onCancel,
 }: {
   onEnd: () => void;
   report: AgentReport;
-  pills: MentionCandidate[];
   actions: VoiceAction[];
   onRunClick: (a: VoiceAction) => void;
   onCancel: (a: VoiceAction) => void;
@@ -432,7 +541,6 @@ export function VoicePopoverBody({
       <StateRow onEnd={onEnd} report={report} />
       <Waveform report={report} />
       <Transcript actions={actions} />
-      <Pills pills={pills} />
       {actions.map((a) => (
         <ProposalCard key={a.id} action={a} onRunClick={onRunClick} onDismiss={onCancel} />
       ))}

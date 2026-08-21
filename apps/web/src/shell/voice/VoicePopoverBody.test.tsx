@@ -69,7 +69,7 @@ function renderPopover(actions: VoiceAction[]) {
   return render(
     <VoicePopoverBody
       report={REPORT}
-      pills={[]}
+     
       actions={actions}
       onRunClick={vi.fn()}
       onCancel={vi.fn()}
@@ -113,7 +113,7 @@ test("forces a smooth reveal the moment a voice confirmation arms", () => {
   expect(h.scrollToEnd).not.toHaveBeenCalled();
 
   rerender(
-    <VoicePopoverBody report={REPORT} pills={[]} actions={[pendingAction("a1")]} onRunClick={vi.fn()} onCancel={vi.fn()} onEnd={vi.fn()} />,
+    <VoicePopoverBody report={REPORT} actions={[pendingAction("a1")]} onRunClick={vi.fn()} onCancel={vi.fn()} onEnd={vi.fn()} />,
   );
   expect(h.scrollToEnd).toHaveBeenCalledTimes(1);
   expect(h.scrollToEnd).toHaveBeenLastCalledWith({ behavior: "smooth" });
@@ -126,7 +126,7 @@ test("does not re-reveal for the same confirmation on unrelated re-renders", () 
   rerender(
     <VoicePopoverBody
       report={REPORT}
-      pills={[]}
+     
       actions={[pendingAction("a1")]}
       onRunClick={vi.fn()}
       onCancel={vi.fn()}
@@ -143,7 +143,7 @@ test("reveals again for a second confirmation later in the same session", () => 
   rerender(
     <VoicePopoverBody
       report={REPORT}
-      pills={[]}
+     
       actions={[{ ...pendingAction("a1"), done: { ok: true, summary: "ran" } }, pendingAction("a2")]}
       onRunClick={vi.fn()}
       onCancel={vi.fn()}
@@ -159,7 +159,7 @@ test("reveals instantly instead of smoothly when the reader prefers reduced moti
   const { rerender } = renderPopover([]);
 
   rerender(
-    <VoicePopoverBody report={REPORT} pills={[]} actions={[pendingAction("a1")]} onRunClick={vi.fn()} onCancel={vi.fn()} onEnd={vi.fn()} />,
+    <VoicePopoverBody report={REPORT} actions={[pendingAction("a1")]} onRunClick={vi.fn()} onCancel={vi.fn()} onEnd={vi.fn()} />,
   );
   expect(h.scrollToEnd).toHaveBeenCalledWith({ behavior: "auto" });
 });
@@ -227,37 +227,11 @@ test("a fragmented agent answer renders as one bubble, not one per segment", () 
 
 // ---------------------------------------------------------------------------
 // referenced-resources accordion + proposal card
-// ---------------------------------------------------------------------------
-const PILLS = [
-  { id: "u-1", kind: "deployment" as const, name: "canada-hires-web", context: "1/1 ready" },
-  { id: "u-2", kind: "pod" as const, name: "canada-hires-web-6f8c94", context: "Running" },
-];
-
-test("referenced resources open as an accordion, with the count on the header", async () => {
-  render(
-    <VoicePopoverBody report={REPORT} pills={PILLS} actions={[]} onRunClick={vi.fn()} onCancel={vi.fn()} onEnd={vi.fn()} />,
-  );
-  const trigger = screen.getByRole("button", { name: /Referenced this session/ });
-  expect(trigger.getAttribute("aria-expanded")).toBe("true");
-  expect(screen.getByText("canada-hires-web")).toBeInTheDocument();
-
-  await userEvent.click(trigger);
-  expect(trigger.getAttribute("aria-expanded")).toBe("false");
-});
-
-test("the header keeps the count while the list is collapsed", async () => {
-  render(
-    <VoicePopoverBody report={REPORT} pills={PILLS} actions={[]} onRunClick={vi.fn()} onCancel={vi.fn()} onEnd={vi.fn()} />,
-  );
-  await userEvent.click(screen.getByRole("button", { name: /Referenced this session/ }));
-  expect(screen.getByText("2")).toBeInTheDocument();
-});
-
 test("dismissing a proposal reports it rather than only dimming the card", async () => {
   const onCancel = vi.fn();
   const action = pendingAction("a1");
   render(
-    <VoicePopoverBody report={REPORT} pills={[]} actions={[action]} onRunClick={vi.fn()} onCancel={onCancel} onEnd={vi.fn()} />,
+    <VoicePopoverBody report={REPORT} actions={[action]} onRunClick={vi.fn()} onCancel={onCancel} onEnd={vi.fn()} />,
   );
   await userEvent.click(screen.getByRole("button", { name: "Dismiss" }));
   expect(onCancel).toHaveBeenCalledWith(action);
@@ -267,44 +241,44 @@ test("running a proposal goes through the confirm sheet, never a spoken word", a
   const onRunClick = vi.fn();
   const action = pendingAction("a1");
   render(
-    <VoicePopoverBody report={REPORT} pills={[]} actions={[action]} onRunClick={onRunClick} onCancel={vi.fn()} onEnd={vi.fn()} />,
+    <VoicePopoverBody report={REPORT} actions={[action]} onRunClick={onRunClick} onCancel={vi.fn()} onEnd={vi.fn()} />,
   );
   expect(screen.queryByText(/confirm/i)).toBeNull();
   await userEvent.click(screen.getByRole("button", { name: "Restart web" }));
   expect(onRunClick).toHaveBeenCalledWith(action);
 });
 
-test("only a destructive change is tagged, and it is tagged with what to do about it", () => {
+test("the blast radius is named in words in every waiting state", () => {
   const { rerender } = render(
-    <VoicePopoverBody report={REPORT} pills={[]} actions={[pendingAction("a1")]} onRunClick={vi.fn()} onCancel={vi.fn()} onEnd={vi.fn()} />,
+    <VoicePopoverBody report={REPORT} actions={[pendingAction("a1")]} onRunClick={vi.fn()} onCancel={vi.fn()} onEnd={vi.fn()} />,
   );
-  expect(screen.queryByText("reversible")).toBeNull();
+  expect(screen.getByText("reversible")).toBeInTheDocument();
 
   rerender(
     <VoicePopoverBody
       report={REPORT}
-      pills={[]}
+     
       actions={[{ ...pendingAction("a1"), action: { kind: "deletePod", label: "Delete web-1", pod: "web-1" } }]}
       onRunClick={vi.fn()}
       onCancel={vi.fn()}
       onEnd={vi.fn()}
     />,
   );
-  expect(screen.getByText("needs your approval")).toBeInTheDocument();
+  expect(screen.getByText("irreversible")).toBeInTheDocument();
 });
 
 test("a change the agent is running offers no button to press", () => {
   render(
     <VoicePopoverBody
       report={REPORT}
-      pills={[]}
+     
       actions={[{ ...pendingAction("a1"), auto: true }]}
       onRunClick={vi.fn()}
       onCancel={vi.fn()}
       onEnd={vi.fn()}
     />,
   );
-  expect(screen.getByText("Running…")).toBeInTheDocument();
+  expect(screen.getByText("Running")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Restart web" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Dismiss" })).toBeNull();
 });
@@ -313,19 +287,140 @@ test("a change the agent ran reports the outcome in place of the button", () => 
   render(
     <VoicePopoverBody
       report={REPORT}
-      pills={[]}
+     
       actions={[{ ...pendingAction("a1"), auto: true, done: { ok: true, summary: "ran" } }]}
       onRunClick={vi.fn()}
       onCancel={vi.fn()}
       onEnd={vi.fn()}
     />,
   );
-  expect(screen.getByText("Ran")).toBeInTheDocument();
+  expect(screen.getByText("ran")).toBeInTheDocument();
+});
+
+const prAction = (over: Record<string, unknown> = {}) => ({
+  ...pendingAction("pr1"),
+  auto: true,
+  command: null,
+  action: {
+    kind: "proposeRepoFix" as const,
+    label: "Open a PR annotating web",
+    name: "reddex-deploy",
+    namespace: "default",
+    source: "reddex-v3",
+    title: "Annotate reddex-deploy with its owner",
+    edit: { op: "annotate" as const, annotations: { "rigel.dev/owner": "platform" } },
+  },
+  ...over,
+});
+
+const cardText = () => document.body.textContent ?? "";
+
+test("every state names the kind and the state in the same place", () => {
+  render(
+    <VoicePopoverBody report={REPORT} actions={[pendingAction("a1")]} onRunClick={vi.fn()} onCancel={vi.fn()} onEnd={vi.fn()} />,
+  );
+  expect(screen.getAllByText("restart").length).toBeGreaterThan(0);
+  expect(screen.getByText("needs approval")).toBeInTheDocument();
+});
+
+test("a removal says irreversible and confirms in red, a reversible change does not", () => {
+  const { rerender } = render(
+    <VoicePopoverBody
+      report={REPORT}
+     
+      actions={[{ ...pendingAction("a1"), action: { kind: "deleteResource", label: "Delete svc web", name: "web", resourceKind: "service" } }]}
+      onRunClick={vi.fn()}
+      onCancel={vi.fn()}
+      onEnd={vi.fn()}
+    />,
+  );
+  expect(screen.getByText("irreversible")).toBeInTheDocument();
+  const confirm = screen.getByRole("button", { name: "Delete svc web" });
+  expect(confirm.style.background).toContain("status-failed");
+
+  rerender(
+    <VoicePopoverBody report={REPORT} actions={[pendingAction("a1")]} onRunClick={vi.fn()} onCancel={vi.fn()} onEnd={vi.fn()} />,
+  );
+  expect(screen.getByText("reversible")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Restart web" }).style.background).toContain("accent-primary");
+});
+
+test("a change the agent ran says what happened, not the word Ran", () => {
+  render(
+    <VoicePopoverBody
+      report={REPORT}
+     
+      actions={[{ ...pendingAction("a1"), auto: true, done: { ok: true, summary: "ran" } }]}
+      onRunClick={vi.fn()}
+      onCancel={vi.fn()}
+      onEnd={vi.fn()}
+    />,
+  );
+  expect(screen.getByText("done")).toBeInTheDocument();
+  expect(screen.queryByText("Ran")).toBeNull();
+});
+
+test("a pull request being opened names the workload and the change, with no command", () => {
+  render(
+    <VoicePopoverBody report={REPORT} actions={[prAction()]} onRunClick={vi.fn()} onCancel={vi.fn()} onEnd={vi.fn()} />,
+  );
+  expect(screen.getByText("opening")).toBeInTheDocument();
+  expect(screen.getByText("no cluster change")).toBeInTheDocument();
+  expect(cardText()).toContain("reddex-deploy in default");
+  expect(cardText()).toContain("rigel.dev/owner");
+  expect(cardText()).toContain("platform");
+  expect(document.querySelector("pre")).toBeNull();
+});
+
+test("an opened pull request leads with the number and links out, showing no diff", () => {
+  render(
+    <VoicePopoverBody
+      report={REPORT}
+     
+      actions={[
+        prAction({
+          done: {
+            ok: true,
+            summary: "opened pull request #248",
+            prUrl: "https://github.com/tyrelchambers/reddex-v3/pull/248",
+            repoSlug: "tyrelchambers/reddex-v3",
+          },
+        }),
+      ]}
+      onRunClick={vi.fn()}
+      onCancel={vi.fn()}
+      onEnd={vi.fn()}
+    />,
+  );
+  expect(screen.getByText("#248")).toBeInTheDocument();
+  expect(screen.getByText("Annotate reddex-deploy with its owner")).toBeInTheDocument();
+  expect(cardText()).toContain("tyrelchambers/reddex-v3");
+  expect(cardText()).toContain("Nothing changed on the cluster");
+  const link = screen.getByRole("link", { name: "View pull request" });
+  expect(link).toHaveAttribute("href", "https://github.com/tyrelchambers/reddex-v3/pull/248");
+  expect(document.querySelector("pre")).toBeNull();
+});
+
+test("a pull request that failed shows the reason in full and says nothing was pushed", () => {
+  const reason = "No manifest in the repository defines deployment reddex-deploy in namespace default.";
+  render(
+    <VoicePopoverBody
+      report={REPORT}
+     
+      actions={[prAction({ done: { ok: false, summary: reason } })]}
+      onRunClick={vi.fn()}
+      onCancel={vi.fn()}
+      onEnd={vi.fn()}
+    />,
+  );
+  expect(screen.getByText(reason)).toBeInTheDocument();
+  expect(screen.getByText("nothing pushed")).toBeInTheDocument();
+  expect(screen.queryByRole("link")).toBeNull();
 });
 
 test("the command renders in the same block the confirm sheet uses, prompt and all", () => {
   render(
-    <VoicePopoverBody report={REPORT} pills={[]} actions={[pendingAction("a1")]} onRunClick={vi.fn()} onCancel={vi.fn()} onEnd={vi.fn()} />,
+    <VoicePopoverBody report={REPORT} actions={[pendingAction("a1")]} onRunClick={vi.fn()} onCancel={vi.fn()} onEnd={vi.fn()} />,
   );
   const block = document.querySelector("pre");
   expect(block?.textContent).toBe("$ kubectl rollout restart deployment/web -n default");
@@ -338,7 +433,7 @@ test("a proposal with no command names its target instead of rendering an empty 
   render(
     <VoicePopoverBody
       report={REPORT}
-      pills={[]}
+     
       actions={[{ id: "a1", action: { kind: "purge", label: "Remove memos", name: "memos", namespace: "default" }, command: null }]}
       onRunClick={vi.fn()}
       onCancel={vi.fn()}
@@ -353,7 +448,7 @@ test("a long action label truncates instead of pushing Dismiss out of the card",
   render(
     <VoicePopoverBody
       report={REPORT}
-      pills={[]}
+     
       actions={[
         {
           id: "a1",

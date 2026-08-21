@@ -3,7 +3,7 @@
 // destructive ones are published for approval on the desktop. Nothing listens
 // for a spoken word.
 import { llm, voice } from "@livekit/agents";
-import { ACTION_KINDS, type SuggestedAction } from "@rigel/k8s/src/actionBlocks";
+import { ACTION_KINDS, isAutoRunnable, type SuggestedAction } from "@rigel/k8s/src/actionBlocks";
 import { voiceSystemPrompt } from "@rigel/server/src/systemPrompt";
 import { z } from "zod";
 import { decideMutationRoute } from "./mutationFlow.js";
@@ -40,6 +40,72 @@ export function unknownKindRefusal(kind: unknown): string {
   ].join(" ");
 }
 
+/**
+ * The refusal a proposeRepoFix missing its parts gets. Names the shape and the
+ * tool that supplies the source, so the model can retry in the same turn.
+ */
+/** The near-miss keys a model reaches for when it means the one on the left. */
+const ALIASES: Record<string, string[]> = {
+  source: ["sourceId", "sourceID", "source_id"],
+  name: ["deployment", "workload", "resource"],
+  title: ["prTitle", "pullRequestTitle"],
+  edit: ["edits", "change", "changes"],
+};
+
+/**
+ * Straighten out the shapes a model reaches for around proposeRepoFix: the
+ * near-miss key names above, and an `edit` wrapped in a one-item array.
+ *
+ * This is correction at the model boundary, not a loosening of the contract:
+ * /api/git/propose-fix still takes exactly the documented fields, and what
+ * leaves here is exactly that. It earns its place because the SDK caps a turn
+ * at three tool steps, so a model that spends two of them guessing at a field
+ * name has none left to open the pull request with. A live session spent all
+ * three on "sourceId" and gave up.
+ */
+export function normalizeRepoFix(action: SuggestedAction): SuggestedAction {
+  const sent = action as unknown as Record<string, unknown>;
+  const out: Record<string, unknown> = { ...sent };
+  for (const [field, aliases] of Object.entries(ALIASES)) {
+    if (out[field] !== undefined) continue;
+    const used = aliases.find((alias) => sent[alias] !== undefined);
+    if (used) out[field] = sent[used];
+  }
+  // One pull request carries one change, so a single-item array is the same
+  // thing wrapped; anything longer is a different request and is refused below.
+  if (Array.isArray(out.edit) && out.edit.length === 1) out.edit = out.edit[0];
+  return out as unknown as SuggestedAction;
+}
+
+/**
+ * What is wrong with a proposeRepoFix, named field by field, or null when it
+ * carries everything /api/git/propose-fix needs. Runs on the NORMALIZED action,
+ * so it never reports a field the model did send under another name.
+ *
+ * The wording matters more than it looks. The first version listed all four
+ * required fields whatever was actually wrong, and a model that had sent
+ * "sourceId" instead of "source" could not tell which one to change: it re-sent
+ * the same key five times and finally told the operator the refusal was for an
+ * unclear reason. Name only what is wrong.
+ */
+export function repoFixRefusal(action: SuggestedAction): string | null {
+  const problems: string[] = [];
+  if (!action.source) problems.push('"source" is missing, which is the source id checkGitLink returned.');
+  if (!action.name) problems.push('"name" is missing, which is the workload to change.');
+  if (!action.title) problems.push('"title" is missing, which is the pull request\'s title.');
+  if (action.edit === undefined || action.edit === null) {
+    problems.push(
+      '"edit" is missing, which is the change: {"op":"annotate","annotations":{...}}, {"op":"label","labels":{...}}, {"op":"setImage","container":"...","image":"..."} or {"op":"scale","replicas":N}, where a null annotation or label value removes the key.',
+    );
+  } else if (Array.isArray(action.edit)) {
+    problems.push('"edit" carries more than one change, and one pull request makes one change. Send them one at a time.');
+  } else if (typeof action.edit !== "object") {
+    problems.push('"edit" is one object describing the change, not a string.');
+  }
+  if (problems.length === 0) return null;
+  return `Refused: ${problems.join(" ")} Resend the same action with only that corrected; the rest of what you sent was right.`;
+}
+
 export function buildAgent(state: SessionState, server: ServerClient, room: PublishRoom): voice.Agent {
   return new (class extends voice.Agent {
     constructor() {
@@ -69,6 +135,27 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
               }
             },
           }),
+          checkGitLink: llm.tool({
+            description:
+              "Whether a workload is deployed from a Git repository, and which one. Ask before proposing a change to a workload, and always before offering a pull request.",
+            parameters: z.object({
+              kind: z.string().optional(),
+              name: z.string(),
+              namespace: z.string().optional(),
+            }),
+            execute: async ({ kind, name, namespace }) => {
+              try {
+                const { linked, link } = await server.repoLink({ kind, name, namespace }, state.activeContext);
+                if (!linked || !link) {
+                  return `Not managed from Git: ${name} carries no Rigel source annotation, so there is no repository to open a pull request against. Say that in one sentence if the user asked for one, and change the cluster instead if they want it changed now.`;
+                }
+                return `Managed from Git: source ${link.source}, repository ${link.repo}, branch ${link.branch}, path ${link.path}. A change here belongs in a pull request, because the next sync overwrites anything patched on the cluster. To open one, call proposeMutation with kind proposeRepoFix and "source":"${link.source}" spelled exactly that way.`;
+              } catch (err) {
+                console.error(`checkGitLink ${name} failed:`, err);
+                return String(err);
+              }
+            },
+          }),
           proposeMutation: llm.tool({
             description:
               "Propose a cluster change as a Rigel action object ({label, kind, name, namespace, ...}). Never claims to run anything; follow the returned instruction verbatim.",
@@ -80,10 +167,40 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
               }
               const id = opts.toolCallId;
 
-              // purge, applyManifest and proposeRepoFix cannot be previewed at
-              // all: /api/action short-circuits purge to {purge,name,namespace}
-              // with no command field, and throws outright for the other two,
-              // which route to /api/apply and /api/git/propose-fix. They go to
+              // A pull request changes no cluster state, lands on a branch, and
+              // is read on GitHub before it merges, so the agent opens it on the
+              // operator's instruction (see AUTO_RUNNABLE_KINDS). It is not a
+              // kubectl command, so it never goes near /api/action.
+              if (a.kind === "proposeRepoFix" && isAutoRunnable(a)) {
+                const fix = normalizeRepoFix(a);
+                const wrong = repoFixRefusal(fix);
+                if (wrong) return wrong;
+                await publishJson(room, "rigel.action", { id, action: fix, command: null, auto: true });
+                try {
+                  const res = await server.proposeFix(fix, state.activeContext);
+                  if (!res.ok) {
+                    await publishJson(room, "rigel.action.result", { id, ok: false, summary: res.message ?? "failed" });
+                    return `That failed: ${res.message ?? "the pull request could not be opened"}. Nothing was pushed. Tell the user in one sentence.`;
+                  }
+                  await publishJson(room, "rigel.action.result", {
+                    id,
+                    ok: true,
+                    summary: `opened pull request #${res.number ?? 0}`,
+                    prUrl: res.prUrl,
+                    repoSlug: res.repoSlug,
+                  });
+                  return `Done: pull request #${res.number ?? 0} is open at ${res.prUrl}. Tell the user the pull request is open, name the repository and the number, and say the URL; the link is in the popover and the change itself is on GitHub. Nothing was changed on the cluster.`;
+                } catch (err) {
+                  await publishJson(room, "rigel.action.result", { id, ok: false, summary: String(err) });
+                  return `That failed: ${String(err)}. Nothing was pushed. Tell the user in one sentence.`;
+                }
+              }
+
+              // purge, applyManifest and a downgraded proposeRepoFix cannot be
+              // previewed at all: /api/action short-circuits purge to
+              // {purge,name,namespace} with no command field, and throws outright
+              // for the other two, which route to /api/apply and
+              // /api/git/propose-fix. They go to
               // the desktop without a command string; the ConfirmSheet builds
               // its own preview there.
               if (!PREVIEWABLE(a)) {

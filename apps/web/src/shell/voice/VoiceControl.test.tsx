@@ -197,12 +197,17 @@ test("a failed token request surfaces the retry copy instead of hanging on Conne
 test("Room.connect rejecting lands on error and stays there once the deferred Disconnected fires", async () => {
   h.status.data = { enabled: true, configured: true };
   h.behavior.failConnect = true;
+  const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
   render(<VoiceControl />);
   await userEvent.click(screen.getByLabelText("Voice assistant"));
 
   expect(await screen.findByText(/Could not connect/)).toBeTruthy();
   await waitFor(() => expect(h.rooms).toHaveLength(1));
   expect(h.rooms[0]!.disconnect).toHaveBeenCalled();
+  // The popover can only say "could not connect", so the real reason has to
+  // reach the console or a media-path failure leaves no trace anywhere.
+  expect(consoleError).toHaveBeenCalledWith("voice connect failed:", expect.anything());
+  consoleError.mockRestore();
 
   await waitFor(() => expect(h.rooms[0]!.handlers.has("disconnected")).toBe(false));
   expect(screen.getByText(/Could not connect/)).toBeTruthy();
@@ -271,7 +276,7 @@ test("agent lines and user lines land on opposite sides of the transcript", asyn
   expect(screen.getByText("Rigel")).toBeTruthy();
 });
 
-test("a resource the user named shows up as a pill and its summary reaches the worker", async () => {
+test("a resource the user named has its summary published to the worker", async () => {
   h.status.data = { enabled: true, configured: true };
   useCluster.setState({
     resources: {
@@ -288,12 +293,13 @@ test("a resource the user named shows up as a pill and its summary reaches the w
   render(<VoiceControl />);
   await userEvent.click(screen.getByLabelText("Voice assistant"));
 
-  expect(await screen.findByText("DEPLOY")).toBeTruthy();
-  expect(screen.getByText("cert-manager")).toBeTruthy();
-  const published = h.rooms[0]!.localParticipant.publishData.mock.calls.map(
-    ([payload]) => JSON.parse(new TextDecoder().decode(payload as Uint8Array)),
+  const published = () =>
+    h.rooms[0]!.localParticipant.publishData.mock.calls.map(([payload]) =>
+      JSON.parse(new TextDecoder().decode(payload as Uint8Array)),
+    );
+  await waitFor(() =>
+    expect(published()).toContainEqual({ id: "dep-u-cm", context: "Deployment cert-manager in default: 2/2 ready, image —" }),
   );
-  expect(published).toContainEqual({ id: "dep-u-cm", context: "Deployment cert-manager in default: 2/2 ready, image —" });
 });
 
 test("the header mark ends the session instead of only hiding the popover", async () => {
@@ -307,19 +313,18 @@ test("the header mark ends the session instead of only hiding the popover", asyn
   render(<VoiceControl />);
   const button = screen.getByLabelText("Voice assistant");
   await userEvent.click(button);
-  expect(await screen.findByText("NODE")).toBeTruthy();
+  expect(await screen.findByText("End session")).toBeTruthy();
   expect(button.getAttribute("aria-label")).toBe("End voice session");
   expect(button.getAttribute("title")).toBe("End voice session");
 
   await userEvent.click(button);
   expect(h.rooms[0]!.disconnect).toHaveBeenCalled();
-  await waitFor(() => expect(screen.queryByText("NODE")).toBeNull());
+  await waitFor(() => expect(screen.queryByText("End session")).toBeNull());
   expect(button.getAttribute("aria-label")).toBe("Voice assistant");
 
   h.transcriptions = [];
   await userEvent.click(button);
   await waitFor(() => expect(h.rooms).toHaveLength(2));
-  expect(screen.queryByText("NODE")).toBeNull();
 });
 
 test("clicking again while connecting cancels instead of leaving an orphaned Room", async () => {
@@ -434,7 +439,7 @@ test("voiceButtonLabel only names the ending action while the popover is open on
   expect(voiceButtonLabel(true, "connected")).toBe("End voice session");
 });
 
-test("a new session starts with no pills from the last one", async () => {
+test("a new session republishes a resource the last one had already pinned", async () => {
   h.status.data = { enabled: true, configured: true };
   useCluster.setState({
     resources: {
@@ -445,15 +450,131 @@ test("a new session starts with no pills from the last one", async () => {
   render(<VoiceControl />);
   const button = screen.getByLabelText("Voice assistant");
   await userEvent.click(button);
-  expect(await screen.findByText("NODE")).toBeTruthy();
+  const contextFrames = (i: number) =>
+    h.rooms[i]!.localParticipant.publishData.mock.calls
+      .map(([payload]) => JSON.parse(new TextDecoder().decode(payload as Uint8Array)) as { id?: string })
+      .filter((f) => f.id === "node-u-node");
+  await waitFor(() => expect(contextFrames(0)).toHaveLength(1));
 
   await userEvent.click(await screen.findByText("End session"));
-  h.transcriptions = [];
+  await userEvent.click(button);
+  await waitFor(() => expect(h.rooms).toHaveLength(2));
+
+  // The new session pins its own context rather than inheriting what the last
+  // one had already told the worker.
+  await waitFor(() => expect(contextFrames(1)).toHaveLength(1));
+});
+
+test("clicking again while connecting cancels instead of leaving an orphaned Room", async () => {
+  h.status.data = { enabled: true, configured: true };
+  let resolveToken: ((v: { url: string; token: string }) => void) | undefined;
+  h.fetchVoiceToken.mockImplementationOnce(
+    () => new Promise((resolve) => { resolveToken = resolve; }),
+  );
+  render(<VoiceControl />);
+  const button = screen.getByLabelText("Voice assistant");
+
+  await userEvent.click(button);
+  expect(await screen.findByText("Connecting…")).toBeTruthy();
+  expect(h.rooms).toHaveLength(0);
+
+  await userEvent.click(button);
+  expect(screen.queryByText("Connecting…")).toBeNull();
+
+  await act(async () => {
+    resolveToken?.({ url: "wss://example", token: "jwt" });
+  });
+
+  await waitFor(() => expect(h.rooms).toHaveLength(1));
+  expect(h.rooms[0]!.connect).toHaveBeenCalled();
+  await waitFor(() => expect(h.rooms[0]!.disconnect).toHaveBeenCalled());
+  expect(screen.queryByLabelText("End voice session")).toBeNull();
+  expect(screen.queryByText("End session")).toBeNull();
+});
+
+test("closing while connecting never leaves a Room reachable through a later reconnect", async () => {
+  h.status.data = { enabled: true, configured: true };
+  let resolveToken: ((v: { url: string; token: string }) => void) | undefined;
+  h.fetchVoiceToken.mockImplementationOnce(
+    () => new Promise((resolve) => { resolveToken = resolve; }),
+  );
+  render(<VoiceControl />);
+  const button = screen.getByLabelText("Voice assistant");
+  await userEvent.click(button);
+  await userEvent.click(button);
+  await act(async () => {
+    resolveToken?.({ url: "wss://example", token: "jwt" });
+  });
+  await waitFor(() => expect(h.rooms).toHaveLength(1));
+  await waitFor(() => expect(h.rooms[0]!.disconnect).toHaveBeenCalled());
+
+  await userEvent.click(button);
+  await waitFor(() => expect(h.rooms).toHaveLength(2));
+  expect(await screen.findByText("End session")).toBeTruthy();
+});
+
+test("closing and reopening before Disconnected lands reconnects instead of dead-ending on Connecting", async () => {
+  h.status.data = { enabled: true, configured: true };
+  h.behavior.holdDisconnect = true;
+  render(<VoiceControl />);
+  const button = screen.getByLabelText("Voice assistant");
+  await userEvent.click(button);
+  await screen.findByText("End session");
+
+  await userEvent.click(button);
   await userEvent.click(button);
 
   await waitFor(() => expect(h.rooms).toHaveLength(2));
   expect(await screen.findByText("End session")).toBeTruthy();
-  expect(screen.queryByText("NODE")).toBeNull();
+
+  // The hung-up room's Disconnected finally arrives. It belongs to a session
+  // that has already been replaced and must not tear down the live one.
+  act(() => h.pendingDisconnects.forEach((fire) => fire()));
+  expect(screen.getByText("End session")).toBeTruthy();
+  expect(screen.queryByText("Connecting…")).toBeNull();
+});
+
+test("cancelling a connect and reopening before it settles lands a session, not a dead Connecting", async () => {
+  h.status.data = { enabled: true, configured: true };
+  let resolveToken: ((v: { url: string; token: string }) => void) | undefined;
+  h.fetchVoiceToken.mockImplementationOnce(
+    () => new Promise((resolve) => { resolveToken = resolve; }),
+  );
+  render(<VoiceControl />);
+  const button = screen.getByLabelText("Voice assistant");
+
+  await userEvent.click(button);
+  expect(await screen.findByText("Connecting…")).toBeTruthy();
+  await userEvent.click(button);
+  await userEvent.click(button);
+  expect(screen.getByText("Connecting…")).toBeTruthy();
+
+  await act(async () => {
+    resolveToken?.({ url: "wss://example", token: "jwt" });
+  });
+
+  await waitFor(() => expect(h.rooms).toHaveLength(1));
+  expect(await screen.findByText("End session")).toBeTruthy();
+  expect(h.rooms[0]!.disconnect).not.toHaveBeenCalled();
+});
+
+test("a denied microphone reaches the popover as a permission problem, not a keys problem", async () => {
+  h.status.data = { enabled: true, configured: true };
+  h.behavior.failMicDenied = true;
+  render(<VoiceControl />);
+  await userEvent.click(screen.getByLabelText("Voice assistant"));
+
+  expect(await screen.findByText(/microphone access/)).toBeTruthy();
+  expect(screen.queryByText(/keys in Settings/)).toBeNull();
+});
+
+test("voiceButtonLabel only names the ending action while the popover is open on a live or in-flight session", () => {
+  expect(voiceButtonLabel(false, "idle")).toBe("Voice assistant");
+  expect(voiceButtonLabel(true, "idle")).toBe("Voice assistant");
+  expect(voiceButtonLabel(true, "error")).toBe("Voice assistant");
+  expect(voiceButtonLabel(false, "connected")).toBe("Voice assistant");
+  expect(voiceButtonLabel(true, "connecting")).toBe("End voice session");
+  expect(voiceButtonLabel(true, "connected")).toBe("End voice session");
 });
 
 test("two connect() calls fired before the token resolves only produce one Room", async () => {
@@ -582,6 +703,37 @@ test("clicking the button opens the ConfirmSheet on the exact action block", asy
   expect(JSON.parse(screen.getByTestId("confirm-action").textContent!)).toEqual(CLICK_FRAME.action);
 });
 
+test("pressing Escape ends the session, because closing the window means leaving", async () => {
+  h.status.data = { enabled: true, configured: true };
+  render(<VoiceControl />);
+  await userEvent.click(screen.getByLabelText("Voice assistant"));
+  await waitFor(() => expect(h.rooms).toHaveLength(1));
+
+  await userEvent.keyboard("{Escape}");
+
+  await waitFor(() => expect(h.rooms[0]!.disconnect).toHaveBeenCalled());
+});
+
+test("clicking away ends the session too", async () => {
+  h.status.data = { enabled: true, configured: true };
+  render(<VoiceControl />);
+  await userEvent.click(screen.getByLabelText("Voice assistant"));
+  await waitFor(() => expect(h.rooms).toHaveLength(1));
+
+  await userEvent.click(document.body);
+
+  await waitFor(() => expect(h.rooms[0]!.disconnect).toHaveBeenCalled());
+});
+
+test("a proposal's confirm sheet closes the popover without hanging up on the session", async () => {
+  await openWithClickProposal();
+  await userEvent.click(await screen.findByRole("button", { name: "Delete pod web-1" }));
+
+  // The sheet steals focus, which closes the popover. Ending the session here
+  // would drop the room before the result could be reported back to the worker.
+  expect(h.rooms[0]!.disconnect).not.toHaveBeenCalled();
+});
+
 test("a successful run is published back to the worker and marked on the row", async () => {
   await openWithClickProposal();
   await userEvent.click(await screen.findByRole("button", { name: "Delete pod web-1" }));
@@ -591,7 +743,7 @@ test("a successful run is published back to the worker and marked on the row", a
   // Opening the confirm dialog dismisses the popover, which is why the sheet is
   // mounted outside it; the row is still there when the popover comes back.
   await userEvent.click(screen.getByLabelText("Voice assistant"));
-  expect(await screen.findByText("Ran")).toBeTruthy();
+  expect(await screen.findByText("ran")).toBeTruthy();
 });
 
 test("a failed run reports the first stderr line rather than a generic failure", async () => {
@@ -629,7 +781,7 @@ test("a rigel.action.result marks the proposal done and retires its button", asy
 
   deliver("rigel.action.result", { id: "call-1", ok: true, summary: "ran" }, AGENT);
 
-  expect(await screen.findByText("Ran")).toBeTruthy();
+  expect(await screen.findByText("ran")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Delete pod web-1" })).toBeNull();
 });
 
@@ -721,7 +873,6 @@ test("a timed-out report reaches the popover's failure label, which the hook cou
     <VoicePopoverBody
       report={{ state: null, timedOut: true }}
       onEnd={() => {}}
-      pills={[]}
       actions={[]}
       onRunClick={() => {}}
       onCancel={() => {}}

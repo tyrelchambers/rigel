@@ -289,9 +289,14 @@ describe("what the voice agent may run itself", () => {
   });
 
   test("raw patches, arbitrary commands and manifests are surfaced", () => {
-    for (const kind of ["command", "applyManifest", "proposeRepoFix", "setEnvRef", "setImagePullSecrets"]) {
+    for (const kind of ["command", "applyManifest", "setEnvRef", "setImagePullSecrets"]) {
       expect(isAutoRunnable({ kind })).toBe(false);
     }
+  });
+
+  test("opening a pull request is auto-runnable, and a destructive hint still downgrades it", () => {
+    expect(isAutoRunnable({ kind: "proposeRepoFix" })).toBe(true);
+    expect(isAutoRunnable({ kind: "proposeRepoFix", destructive: true })).toBe(false);
   });
 
   test("label and triggerCronJob are surfaced despite not destroying anything", () => {

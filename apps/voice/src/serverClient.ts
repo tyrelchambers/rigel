@@ -1,6 +1,8 @@
 // The worker's only line to the local Rigel server: bootstrap config, and the
 // SAME /api/action route the ConfirmSheet uses (identical execution + guards).
 import type { SuggestedAction } from "@rigel/k8s/src/actionBlocks";
+import type { RepoLink } from "@rigel/k8s/src/gitSources";
+import type { RepoFixResult } from "@rigel/k8s/src/repoFix";
 
 export interface AgentConfig {
   url: string;
@@ -35,14 +37,33 @@ export class VoiceNotConfiguredError extends Error {
   }
 }
 
+/** The workload a Git-link question is about; kind defaults to a Deployment. */
+export interface WorkloadRef {
+  kind?: string;
+  name: string;
+  namespace?: string;
+}
+
 export interface ServerClient {
   agentConfig(): Promise<AgentConfig>;
+  /** Whether a workload is deployed from a Git source, and which one. */
+  repoLink(workload: WorkloadRef, context: string | null): Promise<{ linked: boolean; link: RepoLink | null }>;
+  /** Opens a pull request for the change the action describes. Changes no
+   *  cluster state, so the agent may reach this on the operator's instruction
+   *  without a click; the server stamps the PR `rigel:voice`. */
+  proposeFix(action: SuggestedAction, context: string | null): Promise<RepoFixResult>;
   previewAction(action: SuggestedAction, context: string | null): Promise<string[]>;
   /** Runs a change the operator asked for. Reachable ONLY for kinds
    *  isAutoRunnable admits: destructive work goes to the desktop's confirm
    *  sheet instead, and no spoken word reaches this. The server stamps the
    *  ledger entry `source: "voice"`, so it is attributable afterwards. */
   runAction(action: SuggestedAction, context: string | null): Promise<ActionResult>;
+}
+
+/** The server's own reason for a refusal, so the agent can speak it. */
+async function errorMessage(res: { status: number; json(): Promise<unknown> }, what: string): Promise<string> {
+  const body = (await res.json().catch(() => ({}))) as { error?: string };
+  return body.error ?? `${what} failed: ${res.status}`;
 }
 
 export function createServerClient(
@@ -66,6 +87,33 @@ export function createServerClient(
       }
       if (!res.ok) throw new Error(`agent-config failed: ${res.status}`);
       return (await res.json()) as AgentConfig;
+    },
+    async repoLink(workload, context) {
+      const query = new URLSearchParams({
+        namespace: workload.namespace ?? "default",
+        deployment: workload.name,
+        kind: workload.kind ?? "deployment",
+      });
+      const res = await fetchFn(`${base}/api/git/link?${query}`, { headers: headers(context) });
+      if (!res.ok) throw new Error(await errorMessage(res, "git link"));
+      return (await res.json()) as { linked: boolean; link: RepoLink | null };
+    },
+    async proposeFix(action, context) {
+      const res = await fetchFn(`${base}/api/git/propose-fix`, {
+        method: "POST",
+        headers: headers(context),
+        body: JSON.stringify({
+          source: action.source,
+          title: action.title,
+          ...(action.body ? { body: action.body } : {}),
+          name: action.name,
+          ...(action.namespace ? { namespace: action.namespace } : {}),
+          ...(action.resourceKind ? { resourceKind: action.resourceKind } : {}),
+          edit: action.edit,
+        }),
+      });
+      if (!res.ok) throw new Error(await errorMessage(res, "propose-fix"));
+      return (await res.json()) as RepoFixResult;
     },
     async previewAction(action, context) {
       const res = await fetchFn(`${base}/api/action?preview=1`, {

@@ -15,7 +15,7 @@ vi.mock("./install", () => ({ applyManifest: applyManifestMock }));
 
 import {
   planRepoLink, provenanceId, linkRepo, ClusterWriteError, derivePrState, githubPrStatus,
-  recordChatPullRequest,
+  recordChatPullRequest, parseProposeFixRequest, resolveDeploymentLink,
 } from "./git";
 import { SOURCE_REPO_ANNOTATION, SOURCE_PATH_ANNOTATION, type GitSource } from "@rigel/k8s/src/gitSources";
 
@@ -326,5 +326,94 @@ describe("recordChatPullRequest", () => {
     const res = await recordChatPullRequest(null, record);
     expect(res.ok).toBe(false);
     expect(res.message).toContain("boom");
+  });
+});
+
+describe("parseProposeFixRequest", () => {
+  test("accepts the file shape chat sends", () => {
+    const parsed = parseProposeFixRequest({
+      source: "default-web-82b3ade",
+      title: "Raise the memory limit",
+      body: "OOMKilled",
+      filePath: "k8s/web.yaml",
+      content: "apiVersion: apps/v1\n",
+    });
+    expect(parsed).toEqual({
+      source: "default-web-82b3ade",
+      title: "Raise the memory limit",
+      body: "OOMKilled",
+      dryRun: false,
+      change: { filePath: "k8s/web.yaml", content: "apiVersion: apps/v1\n" },
+    });
+  });
+
+  test("accepts the typed-edit shape voice sends, defaulting the kind and namespace", () => {
+    const parsed = parseProposeFixRequest({
+      source: "default-web-82b3ade",
+      title: "Annotate web",
+      name: "web",
+      edit: { op: "annotate", annotations: { "example.com/owner": "platform" } },
+    });
+    expect(parsed).toMatchObject({
+      change: {
+        target: { kind: "deployment", name: "web", namespace: "default" },
+        edit: { op: "annotate", annotations: { "example.com/owner": "platform" } },
+      },
+    });
+  });
+
+  test("carries a non-deployment resourceKind and an explicit namespace", () => {
+    const parsed = parseProposeFixRequest({
+      source: "s", title: "t", name: "nightly", namespace: "jobs", resourceKind: "cronjob",
+      edit: { op: "scale", replicas: 2 },
+    });
+    expect(parsed).toMatchObject({ change: { target: { kind: "cronjob", namespace: "jobs" } } });
+  });
+
+  test("requires a source and a title", () => {
+    expect(typeof parseProposeFixRequest({ title: "t", filePath: "f", content: "c" })).toBe("string");
+    expect(typeof parseProposeFixRequest({ source: "s", filePath: "f", content: "c" })).toBe("string");
+  });
+
+  test("refuses both shapes at once, and neither", () => {
+    const both = parseProposeFixRequest({
+      source: "s", title: "t", filePath: "f", content: "c", name: "web", edit: { op: "scale", replicas: 1 },
+    });
+    expect(typeof both).toBe("string");
+    expect(typeof parseProposeFixRequest({ source: "s", title: "t" })).toBe("string");
+  });
+
+  test("refuses an edit whose op is not one Rigel can make", () => {
+    const parsed = parseProposeFixRequest({ source: "s", title: "t", name: "web", edit: { op: "patch" } });
+    expect(typeof parsed).toBe("string");
+    expect(String(parsed)).toContain("patch");
+  });
+
+  test("refuses an edit with the wrong payload for its op", () => {
+    expect(typeof parseProposeFixRequest({ source: "s", title: "t", name: "web", edit: { op: "setImage" } })).toBe("string");
+    expect(typeof parseProposeFixRequest({ source: "s", title: "t", name: "web", edit: { op: "scale", replicas: "two" } })).toBe("string");
+    expect(typeof parseProposeFixRequest({ source: "s", title: "t", name: "web", edit: { op: "label", labels: "tier" } })).toBe("string");
+  });
+
+  test("carries dryRun through", () => {
+    const parsed = parseProposeFixRequest({ source: "s", title: "t", filePath: "f", content: "c", dryRun: true });
+    expect(parsed).toMatchObject({ dryRun: true });
+  });
+});
+
+describe("resolveDeploymentLink", () => {
+  beforeEach(() => {
+    kubectlMock.mockReset();
+    kubectlMock.mockResolvedValue({ code: 1, stdout: "", stderr: "NotFound" });
+  });
+
+  test("reads the deployment by default", async () => {
+    await resolveDeploymentLink(null, "shop", "web");
+    expect(kubectlMock.mock.calls[0]![1]).toEqual(["get", "deployment", "web", "-n", "shop", "-o", "json"]);
+  });
+
+  test("reads the kind it is given, so a statefulset resolves too", async () => {
+    await resolveDeploymentLink(null, "shop", "web", "statefulset");
+    expect(kubectlMock.mock.calls[0]![1]).toEqual(["get", "statefulset", "web", "-n", "shop", "-o", "json"]);
   });
 });

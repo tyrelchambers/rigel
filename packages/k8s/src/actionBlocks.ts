@@ -4,6 +4,7 @@
 // once here. See docs/parity/contracts.md § 1 for the JSON schema.
 
 import type { SuggestedAlert } from "./alerts";
+import type { ManifestEdit } from "./manifestEdit";
 
 /**
  * SuggestedAction — the fenced ```action JSON Claude emits for any cluster
@@ -51,6 +52,9 @@ export interface SuggestedAction {
   body?: string;
   /** proposeRepoFix only — the paired NEW file content, attached by the parser. */
   content?: string;
+  /** proposeRepoFix only — the change as an intent, so the server builds the file
+   *  instead of the model retyping it. Alternative to filePath + content. */
+  edit?: ManifestEdit;
   /** annotate only — desired annotations; a null value removes the key. */
   annotations?: Record<string, string | null>;
   /** label only — desired labels; a null value removes the key. */
@@ -156,6 +160,14 @@ export function isDestructiveAction(action: Pick<SuggestedAction, "kind" | "dest
  * but fail silently: `label`, because labels feed selectors, and
  * `triggerCronJob`, because the job it starts can do anything.
  *
+ * `proposeRepoFix` is in the set even though a pull request is not undoable in
+ * the way a rollout is (HELM-125 asked for the reasoning to be recorded here).
+ * For: it changes no cluster state, it lands on a branch, and a human reads the
+ * diff on GitHub before anything merges, which makes it the safest answer to a
+ * change request on a Git-managed workload. Against: it is outward-facing, so
+ * it appears under the operator's GitHub account and notifies reviewers.
+ * Decided for, because the review the PR itself forces is the gate.
+ *
  * Deny-by-default: a kind added to ACTION_KINDS later without an explicit
  * opt-in here falls through `.has()` to false. The command classifier in
  * commandPolicy is the second, stricter gate, run on the built command.
@@ -174,6 +186,7 @@ export const AUTO_RUNNABLE_KINDS = new Set<string>([
   "setResources",
   "annotate",
   "createNamespace",
+  "proposeRepoFix",
 ]);
 
 /**

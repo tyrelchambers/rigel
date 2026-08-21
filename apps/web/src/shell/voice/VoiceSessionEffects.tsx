@@ -11,7 +11,7 @@ import type { Room } from "livekit-client";
 import { useDataChannel, useTranscriptions, type AgentState } from "@livekit/components-react";
 import type { ActionBlock } from "@/lib/api";
 import { useCluster } from "@/store/cluster";
-import { buildMentions, type MentionCandidate } from "@/panels/chat/mentions";
+import { buildMentions } from "@/panels/chat/mentions";
 import { voiceKeytermNames } from "./keyterms";
 import { matchTranscript } from "./transcriptMatch";
 
@@ -36,7 +36,6 @@ export function toReportedAgentState(body: unknown): AgentState | null {
 
 /** Every resource named this session is listed, so the bound is a runaway
  *  guard rather than a display cap. */
-const MAX_PILLS = 60;
 
 /** A mutation the worker proposed, exactly as it arrives on `rigel.action`. */
 export interface VoiceActionFrame {
@@ -51,7 +50,7 @@ export interface VoiceActionFrame {
    * rebuilds the command from the action block itself.
    */
   command: string | null;
-  done?: { ok: boolean; summary: string };
+  done?: { ok: boolean; summary: string; prUrl?: string; repoSlug?: string };
 }
 
 /** A frame plus renderer-only state, which does not cross the wire. */
@@ -92,7 +91,12 @@ export function toVoiceActionFrame(topic: string | undefined, body: unknown): Vo
       id: m.id,
       action: { kind: "" },
       command: null,
-      done: { ok: m.ok === true, summary: typeof m.summary === "string" ? m.summary : "" },
+      done: {
+        ok: m.ok === true,
+        summary: typeof m.summary === "string" ? m.summary : "",
+        ...(typeof m.prUrl === "string" ? { prUrl: m.prUrl } : {}),
+        ...(typeof m.repoSlug === "string" ? { repoSlug: m.repoSlug } : {}),
+      },
     };
   }
   if (topic !== ACTION_TOPIC) return null;
@@ -109,28 +113,23 @@ export function toVoiceActionFrame(topic: string | undefined, body: unknown): Vo
 
 export function VoiceSessionEffects({
   room,
-  onPills,
   onAction,
   onAgentState,
 }: {
   room: Room;
-  onPills: (pills: MentionCandidate[]) => void;
   onAction: (frame: VoiceActionFrame) => void;
   onAgentState: (state: AgentState) => void;
 }) {
   const transcriptions = useTranscriptions();
   const publishedIds = useRef(new Set<string>());
-  const pillsRef = useRef<MentionCandidate[]>([]);
   const keytermsRef = useRef<string | null>(null);
 
-  // Pills belong to a session, but they are held above this component so they
-  // survive the popover. Ending one session and starting another mounts a new
-  // instance, which is where they have to be dropped.
+  // A resource is published to the worker once per session. Ending one session
+  // and starting another mounts a new instance, which is where that memory is
+  // dropped so the new session pins its own context.
   useEffect(() => {
     publishedIds.current = new Set();
-    pillsRef.current = [];
-    onPills([]);
-  }, [room, onPills]);
+  }, [room]);
 
   useEffect(() => {
     const publish = () => void publishJson(room, "rigel.state", { activeContext: useCluster.getState().activeContext });
@@ -200,7 +199,6 @@ export function VoiceSessionEffects({
 
   useEffect(() => {
     const candidates = buildMentions(useCluster.getState().resources);
-    let changed = false;
     // Interim results rewrite the tail entry in place, so the whole array is
     // rescanned each tick; publishedIds is what keeps that idempotent.
     for (const t of transcriptions) {
@@ -209,12 +207,9 @@ export function VoiceSessionEffects({
         if (publishedIds.current.has(m.id)) continue;
         publishedIds.current.add(m.id);
         void publishJson(room, "rigel.context", { id: m.id, context: m.context });
-        pillsRef.current = [...pillsRef.current, m].slice(-MAX_PILLS);
-        changed = true;
       }
     }
-    if (changed) onPills(pillsRef.current);
-  }, [transcriptions, room, onPills]);
+  }, [transcriptions, room]);
 
   return null;
 }

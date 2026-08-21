@@ -53,12 +53,15 @@ never asks for one — anyone within earshot could say it. What the agent may do
 is keyed on the ACTION, not on what it hears:
 - Non-destructive kinds (`AUTO_RUNNABLE_KINDS`: restart, rollback, pause,
   resume, suspend/resumeCronJob, uncordon, scale, setImage, setEnv,
-  setResources, annotate, createNamespace) run on the operator's own
-  instruction. They destroy nothing and can be undone.
+  setResources, annotate, createNamespace, proposeRepoFix) run on the operator's
+  own instruction. They destroy nothing and can be undone. `proposeRepoFix`
+  belongs here because a pull request changes no cluster state, lands on a
+  branch, and is read on GitHub before it merges; the reasoning is recorded
+  beside `AUTO_RUNNABLE_KINDS`.
 - Everything else is surfaced in the desktop popover for the operator to
   approve: the delete family, drain, cordon, purge, raw patches (setEnvRef,
-  setImagePullSecrets), `command`, `applyManifest`, `proposeRepoFix`, plus
-  `label` (feeds selectors) and `triggerCronJob` (starts arbitrary work).
+  setImagePullSecrets), `command`, `applyManifest`, plus `label` (feeds
+  selectors) and `triggerCronJob` (starts arbitrary work).
 - A destructive hint downgrades any kind, `scale` to 0 replicas is treated as
   an outage rather than a scale, and `classifyTier` on the built command is the
   second, stricter gate: a kind that would otherwise run is surfaced when its
@@ -68,13 +71,31 @@ Additional kinds:
 - `applyManifest` — install/self-host a new app. The `action` block is
   IMMEDIATELY followed by a ` ```yaml ` block; the parser attaches it as
   `manifest` and the app applies it via `kubectl apply -f -`.
-- `proposeRepoFix` — fix a GitOps-managed app via pull request. Fields:
-  `source` (git source name), `filePath` (manifest path in the repo), `title`,
-  `body`. The `action` block is IMMEDIATELY followed by a fenced code block with
-  the COMPLETE new file content (attached as `content`). The confirm sheet shows
-  a `git diff` and, on confirm, branches/commits/pushes and opens a PR via
-  `/api/git/propose-fix` — nothing is applied to the cluster. Used when a broken
-  workload carries the `rigel.dev/source-repo` annotation (stamped on sync).
+- `proposeRepoFix` — fix a GitOps-managed app via pull request. Always carries
+  `source` (the git source name, i.e. the `rigel.dev/source-repo` value),
+  `title` and `body`, plus the change in ONE of two shapes:
+  - `filePath` + `content`: the `action` block is IMMEDIATELY followed by a
+    fenced code block with the COMPLETE new file content (attached as
+    `content`). This is the chat shape.
+  - `name` + `edit` (+ `namespace`, and `resourceKind` when the workload is not
+    a Deployment): the change as an intent, and the server finds the manifest
+    and writes it. `edit` is one of `{"op":"annotate","annotations":{…}}`,
+    `{"op":"label","labels":{…}}`, `{"op":"setImage","container":"…",
+    "image":"…"}`, `{"op":"scale","replicas":N}`, with a null annotation or
+    label value removing the key. This is the voice shape.
+
+  Both or neither is a 422, never a silent preference. The voice worker
+  corrects a small set of near-miss field names before it posts (`sourceId` for
+  `source`, `deployment` for `name`, an `edit` wrapped in a one-item array),
+  because a turn is capped at three tool calls and a model that spends two of
+  them guessing at a key never opens the PR. The route itself takes only the
+  documented names. The manifest is located
+  by matching kind + name + namespace across the source's directory; zero
+  matches, several matches, or a templated (Helm) tree refuses with the reason
+  rather than editing on a guess. Nothing is applied to the cluster: the chat
+  path shows a `git diff` in the confirm sheet before the operator confirms,
+  and voice opens the PR itself and speaks its number and URL. The opened PR is
+  labelled `rigel` + `rigel:<chat|voice|agent>`.
 
 Examples:
 

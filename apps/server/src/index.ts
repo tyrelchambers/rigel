@@ -25,7 +25,7 @@ import { browseArtifactHub } from "./artifactHub";
 import { handlePurge, type PurgeRequest } from "./purge";
 import { discoverRecent, undoBatch } from "./recentDeploys";
 import {
-  loadSources, saveSources, diffSource, applySource, previewRepoFix, proposeRepoFix,
+  loadSources, saveSources, diffSource, applySource, previewRepoFix, proposeRepoFix, parseProposeFixRequest,
   loadGithubToken, githubAccountStatus, connectGithub, disconnectGithub, listGithubRepos, listRepoTree, readRepoFile,
   linkRepo, resolveDeploymentLink, ClusterWriteError, githubPrStatus,
   loadPullRequests, recordChatPullRequest,
@@ -1041,7 +1041,9 @@ async function handler(req: Request): Promise<Response> {
       if (!namespace || !deployment) {
         return Response.json({ error: "missing namespace or deployment" }, { status: 422 });
       }
-      return Response.json(await resolveDeploymentLink(context, namespace, deployment));
+      return Response.json(
+        await resolveDeploymentLink(context, namespace, deployment, url.searchParams.get("kind") ?? undefined),
+      );
     }
 
     // POST /api/git/link — bind a running Deployment to a GitOps source (the
@@ -1114,23 +1116,30 @@ async function handler(req: Request): Promise<Response> {
     // { source, filePath, content, title, body?, dryRun? }. dryRun → git diff
     // preview; otherwise branch + commit + push + open a PR via the GitHub API.
     if (url.pathname === "/api/git/propose-fix" && req.method === "POST") {
-      let body: { source?: string; filePath?: string; content?: string; title?: string; body?: string; dryRun?: boolean };
+      let raw: unknown;
       try {
-        body = (await req.json()) as typeof body;
+        raw = await req.json();
       } catch {
         return Response.json({ error: "invalid JSON body" }, { status: 400 });
       }
-      if (!body.source || !body.filePath || typeof body.content !== "string" || !body.title) {
-        return Response.json({ error: "missing source, filePath, content, or title" }, { status: 422 });
-      }
+      const parsed = parseProposeFixRequest(raw);
+      if (typeof parsed === "string") return Response.json({ error: parsed }, { status: 422 });
       const sources = await loadSources(context);
       // `source` is the deployment's provenance id (the value of the
       // rigel.dev/source-repo annotation stamped on the workload).
-      const found = findByDeployment(sources, body.source);
+      const found = findByDeployment(sources, parsed.source);
       if (!found) return Response.json({ error: "unknown source" }, { status: 404 });
       const token = await loadGithubToken(context);
-      const input = { source: resolveTarget(found.repo, found.dep), token, filePath: body.filePath, content: body.content, title: body.title, body: body.body, origin: "chat" as const };
-      if (body.dryRun === true) return Response.json(await previewRepoFix(input));
+      const origin = isVoiceWorkerRequest(req) ? ("voice" as const) : ("chat" as const);
+      const input = {
+        source: resolveTarget(found.repo, found.dep),
+        token,
+        title: parsed.title,
+        body: parsed.body,
+        origin,
+        ...parsed.change,
+      };
+      if (parsed.dryRun) return Response.json(await previewRepoFix(input));
       const result = await proposeRepoFix(input);
       if (result.ok && result.prUrl) {
         const slug = parseRepoSlug(input.source.repoURL);
@@ -1140,11 +1149,12 @@ async function handler(req: Request): Promise<Response> {
           number: result.number ?? 0,
           repoSlug: slug ? `${slug.owner}/${slug.repo}` : input.source.repoURL,
           repoName: found.repo.name,
-          source: body.source,
-          title: body.title,
+          source: parsed.source,
+          title: parsed.title,
           branch: result.branch ?? "",
-          filePath: body.filePath,
+          filePath: result.filePath ?? "",
           createdAt: new Date().toISOString(),
+          origin,
         });
       }
       return Response.json(result);

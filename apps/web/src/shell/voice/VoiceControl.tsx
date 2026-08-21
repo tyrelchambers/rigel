@@ -12,7 +12,6 @@ import { RoomAudioRenderer, RoomContext, useTrackVolume } from "@livekit/compone
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useVoiceStatus, type ActionResult } from "@/lib/api";
-import type { MentionCandidate } from "@/panels/chat/mentions";
 import { VoiceMark, visualStateFor, type AgentReport } from "./VoiceMark";
 import { VoicePopoverBody } from "./VoicePopoverBody";
 import {
@@ -65,10 +64,10 @@ export function notReadyMessage(
   return "Connecting…";
 }
 
-/** What the header mark's next click will do. Reachable outside interactions
- * (a proposal's ConfirmSheet stealing focus, Escape, an outside click) close
- * the popover without ending the session, so this only switches to the
- * ending copy while the popover is open on a live or in-flight session. */
+/** What the header mark's next click will do. A nested dialog taking focus (a
+ * proposal's ConfirmSheet) closes the popover without ending the session, so
+ * this only switches to the ending copy while the popover is open on a live or
+ * in-flight session. */
 export function voiceButtonLabel(open: boolean, status: VoiceConnection): string {
   return open && (status === "connecting" || status === "connected") ? "End voice session" : "Voice assistant";
 }
@@ -78,12 +77,11 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
   const { room, status, failure, connect, disconnect } = useVoiceRoom();
   const { report, onAgentState } = useAgentReport(room);
   const [open, setOpen] = useState(false);
-  const [pills, setPills] = useState<MentionCandidate[]>([]);
   const [actions, setActions] = useState<VoiceAction[]>([]);
   const [confirmAction, setConfirmAction] = useState<VoiceAction | null>(null);
 
-  // Proposals belong to a session. Pills are dropped by VoiceSessionEffects
-  // remounting; actions are held here, so they are dropped here.
+  // Proposals belong to a session, and they are held here rather than in
+  // VoiceSessionEffects, so this is where a new room drops them.
   useEffect(() => {
     setActions([]);
     setConfirmAction(null);
@@ -135,7 +133,7 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
       {room && (
         <RoomContext.Provider value={room}>
           <RoomAudioRenderer />
-          <VoiceSessionEffects room={room} onPills={setPills} onAction={onAction} onAgentState={onAgentState} />
+          <VoiceSessionEffects room={room} onAction={onAction} onAgentState={onAgentState} />
           <ConfirmSheet
             action={confirmAction?.action ?? null}
             open={confirmAction != null}
@@ -156,17 +154,24 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
       )}
       <Popover
         open={open}
-        onOpenChange={(o, eventDetails) => {
-          // Only a press on our own mark drives the session: an outside
-          // press or a nested dialog stealing focus (a proposal's
-          // ConfirmSheet) also closes the popover, and must not hang up on
-          // a session the user never asked to end.
-          if (eventDetails.reason !== "trigger-press") {
-            setOpen(o);
+        onOpenChange={(o) => {
+          if (o) {
+            openSession();
             return;
           }
-          if (o) openSession();
-          else closeSession();
+          // Closing the window is leaving, however it was closed: the mark, a
+          // press outside, Escape. An agent that keeps talking to a window that
+          // is not there is worse than having to say hello again.
+          //
+          // The exception is a proposal's ConfirmSheet, which takes focus and
+          // closes the popover without the operator going anywhere. Hanging up
+          // there would drop the room before the result could be published back
+          // to the worker, so the sheet being up is what tells the two apart.
+          if (confirmAction != null) {
+            setOpen(false);
+            return;
+          }
+          closeSession();
         }}
       >
         <PopoverTrigger
@@ -192,7 +197,6 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
             <RoomContext.Provider value={room}>
               <VoicePopoverBody
                 report={report}
-                pills={pills}
                 actions={actions}
                 onRunClick={setConfirmAction}
                 onCancel={(a) => void reportResult(a, false, "cancelled")}
