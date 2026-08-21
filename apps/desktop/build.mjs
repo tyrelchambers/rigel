@@ -161,6 +161,7 @@ const voiceBundle = build({
 // reaping kubectl/PTY children instead of leaving orphans. The interval is
 // unref()'d so it never prevents the server from exiting naturally.
 import { mkdirSync, writeFileSync } from "node:fs";
+import { flattenVoiceDeps } from "./scripts/flattenVoiceDeps.mjs";
 // esbuild's build() calls above create dist/, but they're async and awaited at
 // the end — this synchronous write runs first, so on a CLEAN checkout (CI) dist/
 // doesn't exist yet → ENOENT. Ensure it exists before writing.
@@ -189,3 +190,11 @@ await import("./voice.mjs");
 );
 
 await Promise.all([electronBundles, serverBundle, permissionHookBundle, permissionHookMjsBundle, voiceBundle]);
+
+// The worker's externals cannot ship as pnpm symlinks into a store the app
+// bundle will not contain, so flatten their closure into a real node_modules
+// per target. See scripts/flattenVoiceDeps.mjs for why this is not a plain
+// directory copy.
+for (const { target, packages } of await flattenVoiceDeps()) {
+  console.log(`  voice deps → dist/voice-deps/${target} (${packages} packages)`);
+}
