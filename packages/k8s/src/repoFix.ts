@@ -6,12 +6,14 @@
 // the argv runner — no shell); everything else is the pure helpers in
 // gitSources.ts. NO server-only or browser-only imports live here, so this is
 // safe to import from plain Node in the cluster.
-import { rm, mkdir, writeFile } from "node:fs/promises";
+import { rm, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { planManifestEdit, type ManifestEdit, type ManifestFile, type ManifestTarget } from "./manifestEdit.js";
 import { runProcess } from "./run.js";
 import {
   buildAuthedCloneURL,
   fixBranchName,
+  normalizeManifestPath,
   parseRepoSlug,
   redactURL,
   safeRepoFilePath,
@@ -65,14 +67,25 @@ export async function ensureCheckout(
 // AI fix → pull request (feature 3c)
 // ---------------------------------------------------------------------------
 
-/** Who asked for the fix: the desktop chat assistant, or the in-cluster agent. */
-export type RepoFixOrigin = "chat" | "agent";
+/** Who asked for the fix: chat, the voice assistant, or the in-cluster agent. */
+export type RepoFixOrigin = "chat" | "agent" | "voice";
 
+/**
+ * The change to propose, in one of two shapes, never both:
+ *
+ * - `filePath` + `content`: the complete replacement file, which is what chat
+ *   and the in-cluster agent produce.
+ * - `target` + `edit`: the change as an intent. The manifest defining `target`
+ *   is located in the checkout and edited here, so nothing has to retype a file
+ *   it cannot see. See manifestEdit.ts.
+ */
 export interface RepoFixInput {
   source: ResolvedTarget;
   token: string | null;
-  filePath: string;
-  content: string;
+  filePath?: string;
+  content?: string;
+  target?: Omit<ManifestTarget, "dir">;
+  edit?: ManifestEdit;
   title: string;
   body?: string;
   /** Stamps `rigel` + `rigel:<origin>` labels on the PR. Omit to skip labelling. */
@@ -94,18 +107,75 @@ export interface RepoFixResult {
   message?: string;
 }
 
+/**
+ * Reject a malformed request before anything is cloned: exactly one of the two
+ * shapes, and a file path that cannot escape the checkout.
+ */
+function validateChangeShape(input: RepoFixInput): string | null {
+  const hasFile = typeof input.filePath === "string" && typeof input.content === "string";
+  const hasEdit = input.target !== undefined && input.edit !== undefined;
+  if (hasFile === hasEdit) {
+    return "a fix carries either a file path with its new content, or a target with a typed edit, and not both";
+  }
+  if (hasFile) {
+    try {
+      safeRepoFilePath(input.filePath!);
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  }
+  return null;
+}
+
+type ResolvedChange = { ok: true; rel: string; content: string } | { ok: false; message: string };
+
+/**
+ * Turn the request into the one file to write, relative to the repo root. The
+ * file shape passes straight through; a typed edit reads the source's manifest
+ * directory out of the checkout and plans the edit against it.
+ */
+async function resolveChange(dir: string, input: RepoFixInput): Promise<ResolvedChange> {
+  if (typeof input.filePath === "string" && typeof input.content === "string") {
+    return { ok: true, rel: safeRepoFilePath(input.filePath), content: input.content };
+  }
+  const manifestDir = normalizeManifestPath(input.source.path);
+  const files = await readManifestFiles(dir, manifestDir);
+  const plan = planManifestEdit(files, { ...input.target!, dir: manifestDir }, input.edit!);
+  if (!plan.ok) return plan;
+  return { ok: true, rel: safeRepoFilePath(plan.filePath), content: plan.content };
+}
+
+/** Every manifest under the source's directory, keyed by its repo-relative path. */
+async function readManifestFiles(dir: string, manifestDir: string): Promise<ManifestFile[]> {
+  const base = manifestDir === "." ? dir : `${dir}/${manifestDir}`;
+  let names: string[];
+  try {
+    names = (await readdir(base, { recursive: true })) as unknown as string[];
+  } catch {
+    return [];
+  }
+  const out: ManifestFile[] = [];
+  for (const name of names) {
+    if (!/\.ya?ml$/i.test(name)) continue;
+    const path = manifestDir === "." ? name : `${manifestDir}/${name}`;
+    out.push({ path, content: String(await readFile(`${base}/${name}`, "utf8")) });
+  }
+  return out;
+}
+
 /** Clone, write the proposed file, and return the `git diff` (no commit/push). */
 export async function previewRepoFix(input: RepoFixInput): Promise<RepoFixPreview> {
-  let rel: string;
-  try {
-    rel = safeRepoFilePath(input.filePath);
-  } catch (e) {
-    return { ok: false, message: e instanceof Error ? e.message : String(e) };
-  }
+  const invalid = validateChangeShape(input);
+  if (invalid) return { ok: false, message: invalid };
+
   const co = await ensureCheckout(input.source, input.token);
   if (!co.ok || !co.dir) return { ok: false, message: co.message };
 
-  await writeProposedFile(co.dir, rel, input.content);
+  const change = await resolveChange(co.dir, input);
+  if (!change.ok) return { ok: false, message: change.message };
+  const rel = change.rel;
+
+  await writeProposedFile(co.dir, rel, change.content);
   // --intent-to-add makes brand-new files show up in `git diff`.
   await runGit(["-C", co.dir, "add", "--intent-to-add", rel]);
   const diff = await runGit(["-C", co.dir, "diff", "--", rel]);
@@ -118,22 +188,22 @@ export async function proposeRepoFix(input: RepoFixInput): Promise<RepoFixResult
   if (!slug) return { ok: false, message: "could not parse owner/repo from the source repoURL" };
   if (!input.token) return { ok: false, message: "a token with repo + pull-request scope is required to open a PR" };
 
-  let rel: string;
-  try {
-    rel = safeRepoFilePath(input.filePath);
-  } catch (e) {
-    return { ok: false, message: e instanceof Error ? e.message : String(e) };
-  }
+  const invalid = validateChangeShape(input);
+  if (invalid) return { ok: false, message: invalid };
 
   // Full single-branch clone (not shallow) so pushing the new branch is accepted.
   const co = await ensureCheckout(input.source, input.token, false);
   if (!co.ok || !co.dir) return { ok: false, message: co.message };
 
+  const change = await resolveChange(co.dir, input);
+  if (!change.ok) return { ok: false, message: change.message };
+  const rel = change.rel;
+
   const branch = fixBranchName(input.title, randomSuffix());
   const created = await runGit(["-C", co.dir, "checkout", "-b", branch]);
   if (created.code !== 0) return { ok: false, message: created.stderr || "failed to create branch" };
 
-  await writeProposedFile(co.dir, rel, input.content);
+  await writeProposedFile(co.dir, rel, change.content);
   await runGit(["-C", co.dir, "add", rel]);
   const commit = await runGit([
     "-C", co.dir,
@@ -156,7 +226,13 @@ export async function proposeRepoFix(input: RepoFixInput): Promise<RepoFixResult
     base: input.source.branch,
     body: input.body ?? "",
   });
-  if (result.ok && result.number && input.origin) {
+  if (!result.ok) {
+    // The branch is pushed but nothing points at it, so take it back rather
+    // than leaving a dangling branch behind on the operator's repo.
+    await runGit(["-C", co.dir, "push", authed, "--delete", branch]);
+    return result;
+  }
+  if (result.number && input.origin) {
     await labelPullRequest(slug, input.token, result.number, input.origin);
   }
   return result;
@@ -199,6 +275,7 @@ const LABEL_META: Record<string, { color: string; description: string }> = {
   rigel: { color: "38BDF8", description: "Opened by Rigel" },
   "rigel:agent": { color: "A855F7", description: "Opened by the in-cluster Rigel agent" },
   "rigel:chat": { color: "22D3EE", description: "Opened by Rigel from chat" },
+  "rigel:voice": { color: "F472B6", description: "Opened by the Rigel voice assistant" },
 };
 
 /**

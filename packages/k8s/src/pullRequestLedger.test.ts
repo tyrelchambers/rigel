@@ -23,6 +23,11 @@ describe("addPrRecord", () => {
     expect(out.map((r) => r.id)).toEqual(["new", "old"]);
   });
 
+  it("carries the surface that opened the pull request", () => {
+    const out = addPrRecord([], rec({ origin: "voice" }), { now: NOW });
+    expect(parsePullRequests(JSON.stringify(out))[0]!.origin).toBe("voice");
+  });
+
   it("dedupes by prUrl", () => {
     const existing = rec({ id: "old", prUrl: "https://github.com/o/r/pull/1" });
     const out = addPrRecord([existing], rec({ id: "new", prUrl: "https://github.com/o/r/pull/1" }), { now: NOW });
