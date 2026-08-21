@@ -27,6 +27,8 @@ export interface SuggestedAction {
   replicas?: number;
   /** setEnv */
   env?: Record<string, string>;
+  /** setEnv — variables to remove (kubectl's `KEY-` syntax). */
+  unsetEnv?: string[];
   /** setImage / setResources */
   container?: string;
   /** setImage */
@@ -55,6 +57,10 @@ export interface SuggestedAction {
   /** proposeRepoFix only — the change as an intent, so the server builds the file
    *  instead of the model retyping it. Alternative to filePath + content. */
   edit?: ManifestEdit;
+  /** setImagePullSecrets — the full desired list; an empty array clears it. */
+  imagePullSecrets?: string[];
+  /** setEnvRef — env vars sourced from a Secret or ConfigMap key. */
+  envRefs?: Array<{ name: string; source: "secret" | "configMap"; resourceName: string; key: string }>;
   /** annotate only — desired annotations; a null value removes the key. */
   annotations?: Record<string, string | null>;
   /** label only — desired labels; a null value removes the key. */
