@@ -12,7 +12,7 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, safeStorage, session, shell, utilityProcess, type BrowserWindowConstructorOptions, type UtilityProcess } from "electron";
 import { createServer } from "node:net";
 import { join } from "node:path";
-import { readFileSync, writeFileSync, chmodSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, chmodSync, mkdirSync, existsSync, readdirSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { InstallStore } from "./installStore";
 import { submitSignup, deliver } from "./signup";
@@ -61,8 +61,8 @@ const APPS_DIR = join(DESKTOP_DIR, ".."); // apps
 // wrapper that imports server.mjs) so the server self-terminates if the Electron
 // main process is killed with SIGKILL. Both files live in dist/ next to main.js.
 const SERVER_BUNDLE_DEV = join(__dirname, "server-entry.mjs");
-// The voice worker is bundled the same way (see build.mjs). Not forked in a
-// packaged app yet (see voiceAvailable); packaging it is a later task.
+// The voice worker is bundled the same way (see build.mjs). A packaged app
+// runs the copy in resources/voice instead — see voiceAvailable.
 const VOICE_BUNDLE_DEV = join(__dirname, "voice-entry.mjs");
 const WEB_DIST_DEV = join(APPS_DIR, "web", "dist");
 // The Rigel app icon. The packaged .app embeds build/icon.icns via
@@ -379,9 +379,9 @@ function forkServer(port: number): UtilityProcess {
 }
 
 // ── Voice worker fork ────────────────────────────────────────────────────────
-// Forks the desktop-bundled voice.mjs (see build.mjs) alongside the server.
-// Packaging (resourcesPath layout, crash-restart, etc.) is a later task, so a
-// packaged app does not fork this and does not advertise voice either.
+// Forks the desktop-bundled voice.mjs (see build.mjs) alongside the server: in
+// dev from apps/desktop/dist, in a packaged app from resources/voice, where
+// electron-builder puts the bundle and the node_modules it resolves from.
 //
 // utilityProcess.fork relaunches the SAME Electron helper binary with
 // --type=utility, so this child still links Electron Framework (which
@@ -400,13 +400,51 @@ function forkServer(port: number): UtilityProcess {
 // binary instead of Electron's own executable, which is a bigger call
 // than a log-noise cleanup.
 /**
- * Whether this build can run the voice worker at all. Packaging it is still
- * open work — the resourcesPath layout and crash-restart are not done — so a
- * packaged app has no worker and must not advertise one. There is deliberately
- * no env var here: voice is a feature, not something to switch on per launch.
+ * Whether this build can run the voice worker at all. One predicate answers
+ * for both halves: it gates the fork, and (through the RIGEL_VOICE it sets on
+ * the forked server) whether the header offers voice at all. They cannot
+ * disagree, so the app never shows a button with nothing behind it.
+ *
+ * Packaged builds are checked rather than assumed. The layout is produced by
+ * scripts/flattenVoiceDeps.mjs and electron-builder.yml's extraResources, and
+ * a platform whose native bindings failed to pack simply fails this test and
+ * stays silent. That is deliberately how a platform is staged in or out: no
+ * hardcoded list of which OSes are ready.
+ *
+ * There is no env var here. Voice is a feature, not something to switch on per
+ * launch.
  */
+let voiceAvailableAnswer: boolean | null = null;
+
 function voiceAvailable(): boolean {
-  return !app.isPackaged;
+  voiceAvailableAnswer ??= computeVoiceAvailable();
+  return voiceAvailableAnswer;
+}
+
+function computeVoiceAvailable(): boolean {
+  if (!app.isPackaged) return true;
+  const dir = join(process.resourcesPath, "voice");
+  if (!existsSync(join(dir, "voice-entry.mjs")) || !existsSync(join(dir, "voice.mjs"))) {
+    console.log("[rigel] voice is unavailable: the worker bundle was not packaged");
+    return false;
+  }
+  const livekit = join(dir, "node_modules", "@livekit");
+  if (!existsSync(livekit)) {
+    console.log("[rigel] voice is unavailable: no native addons were packaged");
+    return false;
+  }
+  // Every LiveKit platform package is named <prefix>-<platform>-<arch>[-abi],
+  // so this catches a tree packed for the wrong architecture as well as a
+  // missing one — the failure an Intel build would otherwise hit at runtime.
+  const packed = readdirSync(livekit);
+  const triple = `${process.platform}-${process.arch}`;
+  for (const prefix of ["rtc-ffi-bindings-", "local-inference-"]) {
+    if (!packed.some((name) => name.startsWith(`${prefix}${triple}`))) {
+      console.log(`[rigel] voice is unavailable: no ${prefix}${triple} (packed: ${packed.join(", ")})`);
+      return false;
+    }
+  }
+  return true;
 }
 
 function forkVoiceWorker(port: number): UtilityProcess | null {
