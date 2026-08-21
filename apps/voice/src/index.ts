@@ -106,7 +106,19 @@ async function main(): Promise<void> {
       // utterance near the agent's speech as a backchannel and discards it.
       // "stop" and "no" over a long answer are exactly that shape, and being
       // unable to cut the agent off is the worse failure.
-      interruption: { mode: "vad" },
+      //
+      // resumeFalseInterruption is the SDK's default and it is wrong here: an
+      // interruption with no user transcript within two seconds is treated as
+      // false, and the answer the operator just stopped starts playing again.
+      // In the field that read as the interruption not working, and closing the
+      // popover and reopening it found the agent still finishing a reply that
+      // had been cut off. An operator who interrupts meant it, and asking again
+      // is cheaper than being talked over.
+      //
+      // minDuration is halved from 500ms for the same reason: the cost of a
+      // cough stopping the agent is one repeated question, and the cost of
+      // missing a real interruption is talking over the person.
+      interruption: { mode: "vad", resumeFalseInterruption: false, minDuration: 250 },
       // A streaming turn detector silently opts the session into
       // streamingEndpointingOptions, whose minDelay is 300ms. Half a second of
       // thought mid-sentence read as the end of the turn, and the agent
