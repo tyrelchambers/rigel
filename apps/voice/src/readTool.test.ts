@@ -158,10 +158,13 @@ describe("runRead", () => {
     expect(calls[0]?.args).toEqual(["events", "-A"]);
   });
 
-  test("caps oversized output and marks it truncated", async () => {
+  test("a cut-off read says how much is missing and how to narrow it", async () => {
     const { spawnFn } = fakeSpawn({ stdout: "x".repeat(20000) });
     const out = await runRead(["get", "pods", "-A"], null, spawnFn);
-    expect(out).toBe("x".repeat(8192) + "\n[truncated]");
+    expect(out.startsWith("x".repeat(8192))).toBe(true);
+    expect(out).toContain("20000 characters");
+    expect(out).toContain("may end mid-object");
+    expect(out).toContain("custom-columns");
   });
 
   test("a non-zero exit surfaces the code and the (capped) output", async () => {
@@ -269,7 +272,7 @@ describe("runRead NotFound recovery", () => {
       { stdout: "NAME\n" + "x".repeat(20000) },
     ]);
     const out = await runRead(["get", "deployment", "zzz", "-n", "default"], null, spawnFn);
-    expect(out).toContain("[truncated]");
+    expect(out).toContain("[truncated:");
     expect(out.length).toBeLessThan(8192 + 512);
   });
 

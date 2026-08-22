@@ -29,6 +29,23 @@ export type SpawnRead = (command: string, args: string[]) => ReadChild;
 
 const OUTPUT_CAP = 8192;
 
+/**
+ * What a cut-off read says for itself. A bare "[truncated]" leaves the model
+ * holding half a YAML object with no idea how much is missing or what to do
+ * about it, which is how a read of every Service in a busy namespace becomes a
+ * dead end. Naming the size and the ways to narrow lets it finish the job:
+ * chaining reads (a workload's selector, then the Service matching it, then the
+ * Ingress behind that) is exactly the reasoning this cap was silently blocking.
+ */
+function truncationNote(total: number): string {
+  return [
+    `[truncated: ${total} characters, ${OUTPUT_CAP} shown. This output is incomplete and may end mid-object.`,
+    "Narrow it and read again: name one resource, use -o custom-columns to pick only the fields you need",
+    "(e.g. -o custom-columns=NAME:.metadata.name,SELECTOR:.spec.selector),",
+    "add --field-selector, or select with -l once you know the labels.]",
+  ].join(" ");
+}
+
 const spawnKubectl: SpawnRead = (command, args) => spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
 
 export function assertRead(argv: string[], context: string | null): void {
@@ -99,7 +116,7 @@ function spawnOnce(
     child.on("error", (err) => resolve({ ok: false, text: `kubectl failed to start: ${err.message}` }));
     child.on("close", (code) => {
       const safe = redactSecretValues(out);
-      const capped = safe.length > OUTPUT_CAP ? `${safe.slice(0, OUTPUT_CAP)}\n[truncated]` : safe;
+      const capped = safe.length > OUTPUT_CAP ? `${safe.slice(0, OUTPUT_CAP)}\n${truncationNote(safe.length)}` : safe;
       if (code === 0) resolve({ ok: true, text: capped || "(no output)" });
       else resolve({ ok: false, text: `kubectl exited ${code}:\n${capped}` });
     });

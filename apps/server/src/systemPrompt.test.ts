@@ -70,6 +70,16 @@ describe("voiceSystemPrompt", () => {
     expect(p).toContain("Secret values are removed");
   });
 
+  // It guessed app=reddex, then app.kubernetes.io/instance=reddex, got two
+  // empty lists and reported nothing found, in a Rancher cluster whose real
+  // selector is workload.user.cattle.io/workloadselector=...
+  test("teaches following the cluster rather than guessing a selector", () => {
+    const p = voiceSystemPrompt("prod");
+    expect(p).toContain("never by guessing a label");
+    expect(p).toContain("spec.selector.matchLabels");
+    expect(p).toContain("An empty result means your filter was wrong");
+  });
+
   test("pins the turn to the question just asked", () => {
     expect(voiceSystemPrompt("prod")).toContain("Answer the question just asked");
   });
