@@ -206,6 +206,31 @@ export function classifyTier(command: string): TierVerdict {
 /** 2-tier compatibility for the in-app assistant + the agent read-shim: any
  *  mutation (reversible or destructive) denies to an action block; reads allow.
  *  Preserves the cross-context steer. */
+/**
+ * A read that would print a Secret's values, rather than its shape.
+ *
+ * Surfaces that own their output redact instead of refusing (see
+ * secretRedaction.ts), but a shell command's output goes straight into the
+ * model's context and into a persisted transcript with nothing in between, so
+ * here the command itself is what has to be stopped. kubectl's own `describe
+ * secret` prints the keys, types and byte counts with no values, which is the
+ * same shape a redacted read gives, so the refusal names it.
+ *
+ * Deliberately NOT part of classifyCommand, which answers what a command does
+ * rather than what its output carries. Whether a Secret read is refused depends
+ * on whether the caller can redact: the voice read path can and does, the chat
+ * shell cannot, so each applies this itself.
+ */
+export function printsSecretValues(command: string): boolean {
+  if (!/\bkubectl\b/.test(command)) return false;
+  if (!/\bsecrets?\b|\bsecret\//.test(command)) return false;
+  if (!/\bget\b/.test(command)) return false;
+  return /-o[= ]?\s*(yaml|json|jsonpath|go-template|custom-columns)/.test(command);
+}
+
+export const SECRET_VALUES_HINT =
+  "denied: that would print a Secret's values into the transcript. Use `kubectl describe secret <name> -n <ns>`, which gives you the keys, their types and their sizes without the values.";
+
 export function classifyCommand(command: string, activeContext?: string | null): CommandVerdict {
   const { tier } = classifyTier(command);
   if (tier === "read") return { decision: "allow", reason: "non-mutating — read/investigation command" };

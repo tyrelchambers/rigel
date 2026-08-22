@@ -7,7 +7,7 @@
 // Wired via `--settings` in claudeBridge.ts (matcher: Bash). Output contract:
 //   {"hookSpecificOutput":{"hookEventName":"PreToolUse",
 //     "permissionDecision":"allow"|"deny","permissionDecisionReason":"..."}}
-import { classifyCommand } from "@rigel/k8s";
+import { classifyCommand, printsSecretValues, SECRET_VALUES_HINT } from "@rigel/k8s";
 
 function emit(decision: "allow" | "deny", reason: string): void {
   process.stdout.write(
@@ -38,6 +38,16 @@ async function main() {
   const command: unknown = input?.tool_input?.command;
   if (typeof command !== "string" || command.trim() === "") {
     emit("allow", "no command");
+    return;
+  }
+
+  // A shell command's output goes straight into the model's context and into a
+  // persisted transcript, with nothing in between that could redact it. The
+  // surfaces that own their output redact instead; here the command is what
+  // stops, and the reason names `describe secret`, which is the same shape
+  // without the values.
+  if (printsSecretValues(command)) {
+    emit("deny", SECRET_VALUES_HINT);
     return;
   }
 

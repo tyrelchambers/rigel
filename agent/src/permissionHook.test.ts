@@ -17,3 +17,15 @@ describe("agent permission hook decide()", () => {
     expect(decide("kubectl port-forward svc/a 80:80").permissionDecision).toBe("deny");
   });
 });
+
+describe("secret values never reach the ledger", () => {
+  test("a read that would print them is denied and names describe", () => {
+    const d = decide("kubectl get secret db -n default -o yaml");
+    expect(d.permissionDecision).toBe("deny");
+    expect(d.permissionDecisionReason).toContain("describe secret");
+  });
+
+  test("the shape is still readable", () => {
+    expect(decide("kubectl describe secret db -n default").permissionDecision).toBe("allow");
+  });
+});
