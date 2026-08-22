@@ -57,6 +57,16 @@ export interface RelatedResource {
   namespace: string;
 }
 
+/** One pull request as the ledger holds it. */
+export interface LedgerPullRequest {
+  prUrl: string;
+  number: number;
+  repoSlug: string;
+  title: string;
+  createdAt: string;
+  origin?: string;
+}
+
 export interface RelatedResources {
   name: string;
   namespace: string;
@@ -77,6 +87,8 @@ export interface ServerClient {
   ): Promise<RelatedResources>;
   /** Records a request no action kind expresses, so the gap is visible. */
   reportUnsupported(request: string, context: string | null): Promise<void>;
+  /** Pull requests Rigel opened, with their live state. */
+  pullRequests(context: string | null): Promise<{ pullRequests: LedgerPullRequest[] }>;
   /** Whether a workload is deployed from a Git source, and which one. */
   repoLink(workload: WorkloadRef, context: string | null): Promise<{ linked: boolean; link: RepoLink | null }>;
   /** Opens a pull request for the change the action describes. Changes no
@@ -124,6 +136,11 @@ export function createServerClient(
       const res = await fetchFn(`${base}/api/discover?${query}`, { headers: headers(context) });
       if (!res.ok) throw new Error(await errorMessage(res, "discover"));
       return (await res.json()) as RelatedResources;
+    },
+    async pullRequests(context) {
+      const res = await fetchFn(`${base}/api/git/pull-requests`, { headers: headers(context) });
+      if (!res.ok) throw new Error(await errorMessage(res, "reading pull requests"));
+      return (await res.json()) as { pullRequests: LedgerPullRequest[] };
     },
     async reportUnsupported(request, context) {
       const res = await fetchFn(`${base}/api/ai/unsupported`, {

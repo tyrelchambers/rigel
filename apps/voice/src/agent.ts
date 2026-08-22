@@ -60,12 +60,26 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
             description:
               "Ask Rigel what it already knows. query \"related\" returns everything belonging to a workload: the Services that select its pods, the Ingresses routing to them, and what its pods read. Prefer this over inventing a label selector.",
             parameters: z.object({
-              query: z.literal("related"),
-              name: z.string().describe("the app or workload name"),
+              query: z.enum(["related", "pullRequests"]),
+              name: z.string().optional().describe("the app or workload name, for related"),
               namespace: z.string().optional(),
               kind: z.string().optional().describe("workload kind if not a Deployment"),
             }),
-            execute: async ({ name, namespace, kind }) => {
+            execute: async ({ query, name, namespace, kind }) => {
+              if (query === "pullRequests") {
+                try {
+                  const { pullRequests } = await server.pullRequests(state.activeContext);
+                  if (pullRequests.length === 0) return "Rigel has not opened any pull requests.";
+                  const listed = pullRequests
+                    .map((pr) => `#${pr.number} in ${pr.repoSlug}: ${pr.title} (${pr.prUrl})`)
+                    .join("; ");
+                  return `${pullRequests.length} pull requests Rigel opened: ${listed}. To merge one, propose kind mergePullRequest with its prUrl.`;
+                } catch (err) {
+                  console.error("queryRigel pullRequests failed:", err);
+                  return String(err);
+                }
+              }
+              if (!name) return "Refused: a related query needs the workload's name.";
               try {
                 const found = await server.relatedResources(name, namespace ?? "default", state.activeContext, kind);
                 if (found.resources.length === 0) {

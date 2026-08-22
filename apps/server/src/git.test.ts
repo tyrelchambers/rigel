@@ -15,7 +15,7 @@ vi.mock("./install", () => ({ applyManifest: applyManifestMock }));
 
 import {
   planRepoLink, provenanceId, linkRepo, ClusterWriteError, derivePrState, githubPrStatus,
-  recordChatPullRequest, parseProposeFixRequest, resolveDeploymentLink,
+  recordChatPullRequest, parseProposeFixRequest, resolveDeploymentLink, mergePullRequest,
 } from "./git";
 import { SOURCE_REPO_ANNOTATION, SOURCE_PATH_ANNOTATION, type GitSource } from "@rigel/k8s/src/gitSources";
 
@@ -415,5 +415,40 @@ describe("resolveDeploymentLink", () => {
   test("reads the kind it is given, so a statefulset resolves too", async () => {
     await resolveDeploymentLink(null, "shop", "web", "statefulset");
     expect(kubectlMock.mock.calls[0]![1]).toEqual(["get", "statefulset", "web", "-n", "shop", "-o", "json"]);
+  });
+});
+
+describe("mergePullRequest", () => {
+  const url = "https://github.com/owner/repo/pull/7";
+
+  test("squash-merges and reports it", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ merged: true, message: "Pull Request successfully merged" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await mergePullRequest("TOK", url);
+    expect(res).toMatchObject({ ok: true, merged: true });
+    const [called, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(String(called)).toBe("https://api.github.com/repos/owner/repo/pulls/7/merge");
+    expect(init.method).toBe("PUT");
+    expect(JSON.parse(init.body as string)).toMatchObject({ merge_method: "squash" });
+  });
+
+  // GitHub's own reason is the useful part: a failing check and a required
+  // review need different things from the operator.
+  test("passes GitHub's refusal through rather than flattening it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ message: "Required status check \"ci\" is failing" }), { status: 405 })),
+    );
+    const res = await mergePullRequest("TOK", url);
+    expect(res.ok).toBe(false);
+    expect(res.message).toContain("ci");
+  });
+
+  test("a url that is not a pull request never reaches GitHub", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await mergePullRequest("TOK", "https://example.com/nope");
+    expect(res.ok).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

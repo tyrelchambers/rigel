@@ -288,6 +288,12 @@ describe("what the voice agent may run itself", () => {
     }
   });
 
+  // Opening a PR runs unaided because a human reads it before it merges.
+  // Merging is that human, so it is one tap rather than one sentence.
+  test("merging a pull request is never something a sentence does", () => {
+    expect(isAutoRunnable({ kind: "mergePullRequest" })).toBe(false);
+  });
+
   test("arbitrary manifests and raw patches are surfaced", () => {
     for (const kind of ["applyManifest", "setEnvRef", "setImagePullSecrets"]) {
       expect(isAutoRunnable({ kind })).toBe(false);

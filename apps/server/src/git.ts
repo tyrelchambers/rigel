@@ -570,6 +570,35 @@ export async function githubPrStatus(token: string, prUrl: string): Promise<PrSt
   return { number: Number(num), state: derivePrState(j) };
 }
 
+export interface MergeResult {
+  ok: boolean;
+  merged?: boolean;
+  message: string;
+}
+
+/**
+ * Merge one pull request. GitHub refuses on its own terms and those refusals
+ * are the useful part, so they are passed through rather than flattened: a
+ * failing check, a required review, a conflict and a branch-protection rule all
+ * come back as GitHub's own sentence, which is what the operator needs to hear.
+ */
+export async function mergePullRequest(token: string, prUrl: string): Promise<MergeResult> {
+  const m = prUrl.match(PR_URL_RE);
+  if (!m) return { ok: false, message: `not a pull request URL: ${prUrl}` };
+  const [, owner, repo, num] = m;
+  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${num}/merge`, {
+    method: "PUT",
+    headers: githubHeaders(token),
+    body: JSON.stringify({ merge_method: "squash" }),
+  });
+  const body = (await res.json().catch(() => ({}))) as { merged?: boolean; message?: string };
+  if (!res.ok) {
+    // 405 is "not mergeable", 409 is a changed head; GitHub explains both.
+    return { ok: false, message: body.message ?? `GitHub refused the merge (${res.status})` };
+  }
+  return { ok: true, merged: body.merged === true, message: body.message ?? "merged" };
+}
+
 /** Extract the `rel="next"` URL from a GitHub Link header, or null. */
 function nextLink(header: string | null): string | null {
   if (!header) return null;

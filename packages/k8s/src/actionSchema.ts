@@ -148,6 +148,11 @@ const variants = [
     edit: manifestEditSchema,
   }),
   z.object({
+    ...base,
+    kind: z.literal("mergePullRequest"),
+    prUrl: z.string().describe("the pull request's URL"),
+  }),
+  z.object({
     ...namespaced,
     kind: z.literal("adoptWorkload"),
     name: z.string().describe("workload to export"),

@@ -66,6 +66,9 @@ const CANONICAL: Record<string, SuggestedAction> = {
   purge: { label: "Purge memos", kind: "purge", name: "memos", namespace: "default" },
   command: { label: "Patch web", kind: "command", args: ["patch", "deployment/web", "-n", "default"] },
   applyManifest: { label: "Install memos", kind: "applyManifest", manifest: "apiVersion: v1\nkind: Namespace\n" },
+  mergePullRequest: {
+    label: "Merge #7", kind: "mergePullRequest", prUrl: "https://github.com/owner/repo/pull/7",
+  },
   adoptWorkload: {
     label: "Adopt web into Git", kind: "adoptWorkload", name: "web", namespace: "shop", resourceKind: "deployment",
     source: "shop-web-82b3ade", title: "Add manifests for web", body: "so it can be redeployed",
