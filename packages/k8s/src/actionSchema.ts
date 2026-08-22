@@ -38,7 +38,7 @@ const nullableMap = z.record(z.string(), z.union([z.string(), z.null()]));
  * the change right and was rejected for the button text.
  */
 const base = {
-  label: z.string().optional().describe("short button text for the desktop card"),
+  label: z.string().optional().describe("button text"),
   destructive: z.boolean().optional(),
 };
 
@@ -51,9 +51,9 @@ const resourceKind = z.string().optional();
 const manifestEditSchema = z.discriminatedUnion("op", [
   z.object({
     op: z.literal("annotate"),
-    annotations: nullableMap.describe("a null value removes the annotation"),
+    annotations: nullableMap.describe("null removes the key"),
   }),
-  z.object({ op: z.literal("label"), labels: nullableMap.describe("a null value removes the label") }),
+  z.object({ op: z.literal("label"), labels: nullableMap.describe("null removes the key") }),
   z.object({ op: z.literal("setImage"), container: z.string().optional(), image: z.string() }),
   z.object({ op: z.literal("scale"), replicas: z.int().min(0) }),
 ]);
@@ -70,7 +70,7 @@ const variants = [
     name: z.string(),
     resourceKind,
     container: z.string(),
-    image: z.string().describe("full image reference including the tag"),
+    image: z.string().describe("full image ref with tag"),
   }),
   z.object({
     ...namespaced,
@@ -78,7 +78,7 @@ const variants = [
     name: z.string(),
     container: z.string().optional(),
     env: z.record(z.string(), z.string()),
-    unsetEnv: z.array(z.string()).optional().describe("variables to remove"),
+    unsetEnv: z.array(z.string()).optional().describe("vars to remove"),
   }),
   z.object({
     ...namespaced,
@@ -94,7 +94,7 @@ const variants = [
     kind: z.literal("setImagePullSecrets"),
     name: z.string(),
     resourceKind,
-    imagePullSecrets: z.array(z.string()).describe("the full desired list; an empty array clears it"),
+    imagePullSecrets: z.array(z.string()).describe("full desired list; [] clears"),
   }),
   z.object({
     ...namespaced,
@@ -118,7 +118,7 @@ const variants = [
     ...namespaced,
     kind: z.literal("triggerCronJob"),
     name: z.string(),
-    pod: z.string().optional().describe("name for the created Job"),
+    pod: z.string().optional().describe("created Job name"),
   }),
   z.object({ ...base, kind: z.enum(["cordon", "uncordon", "drain"]), node: z.string() }),
   z.object({ ...namespaced, kind: z.literal("deletePod"), pod: z.string() }),
@@ -127,25 +127,34 @@ const variants = [
     ...namespaced,
     kind: z.literal("deleteResource"),
     name: z.string(),
-    resourceKind: z.string().describe('the resource type, e.g. "service", "configmap", "pvc"'),
+    resourceKind: z.string().describe('type, e.g. "service", "pvc"'),
   }),
   z.object({ ...base, kind: z.enum(["createNamespace", "deleteNamespace"]), name: z.string() }),
   z.object({ ...namespaced, kind: z.literal("purge"), name: z.string() }),
   z.object({
     ...base,
     kind: z.literal("command"),
-    args: z.array(z.string()).describe("literal kubectl arguments, without the binary or --context"),
+    args: z.array(z.string()).describe("kubectl args, no binary or --context"),
   }),
   z.object({ ...base, kind: z.literal("applyManifest"), manifest: z.string().describe("complete manifest YAML") }),
   z.object({
     ...namespaced,
     kind: z.literal("proposeRepoFix"),
-    name: z.string().describe("the workload the change targets"),
+    name: z.string().describe("workload to change"),
     resourceKind,
-    source: z.string().describe("the source id checkGitLink returned"),
+    source: z.string().describe("source id from checkGitLink"),
     title: z.string(),
     body: z.string().optional(),
     edit: manifestEditSchema,
+  }),
+  z.object({
+    ...namespaced,
+    kind: z.literal("adoptWorkload"),
+    name: z.string().describe("workload to export"),
+    resourceKind,
+    source: z.string().describe("source id from checkGitLink"),
+    title: z.string(),
+    body: z.string().optional(),
   }),
 ] as const;
 

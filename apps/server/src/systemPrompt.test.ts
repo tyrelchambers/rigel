@@ -91,6 +91,13 @@ describe("voiceSystemPrompt", () => {
     expect(p).toContain("An empty result means your filter was wrong");
   });
 
+  test("names the kind that adds manifests a repo does not have yet", () => {
+    const p = voiceSystemPrompt("prod");
+    expect(p).toContain("adoptWorkload");
+    expect(p).toContain("redeployed");
+    expect(p).toContain("redacted examples");
+  });
+
   test("gives an unsupported request somewhere to go other than a wrong action", () => {
     const p = voiceSystemPrompt("prod");
     expect(p).toContain("Never approximate a request with a different action");

@@ -703,3 +703,57 @@ describe("reportUnsupported", () => {
     expect(out).toMatch(/cannot/i);
   });
 });
+
+describe("adoptWorkload", () => {
+  const ADOPT = {
+    kind: "adoptWorkload",
+    label: "Adopt reddex-deploy into Git",
+    source: "reddex-v3",
+    title: "Add manifests for reddex-deploy",
+    body: "so it can be redeployed from Git",
+    name: "reddex-deploy",
+    namespace: "default",
+  } satisfies SuggestedAction;
+
+  // The request that failed three times: "open a PR that gathers all the
+  // related resources so it can be easily redeployed".
+  test("opens the pull request itself and says what it carried", async () => {
+    const server = fakeServer({
+      proposeFix: async (action) => {
+        expect(action.kind).toBe("adoptWorkload");
+        return {
+          ok: true,
+          prUrl: "https://github.com/tyrelchambers/reddex-v3/pull/12",
+          number: 12,
+          repoSlug: "tyrelchambers/reddex-v3",
+          included: ["deployment/reddex-deploy", "service/reddex-deploy", "ingress/reddex-ingress"],
+          message: "ok",
+        };
+      },
+    });
+    const { room, frames } = fakeRoom();
+
+    const out = await propose(buildAgent(emptySessionState(), server, room), ADOPT, toolOpts("call-9").opts);
+
+    expect(out).toMatch(/^Done:/);
+    expect(out).toContain("12");
+    expect(out).toContain("3 resources");
+    expect(out).toContain("ingress/reddex-ingress");
+    expect(frames[0]!.payload).toMatchObject({ auto: true, command: null });
+  });
+
+  test("carries no edit, because the server builds every file", async () => {
+    const server = fakeServer();
+    await propose(buildAgent(emptySessionState(), server, fakeRoom().room), ADOPT, toolOpts().opts);
+    expect(server.proposals[0]!.edit).toBeUndefined();
+  });
+
+  test("a refusal is spoken as its own reason", async () => {
+    const server = fakeServer({
+      proposeFix: async () => ({ ok: false, message: "reddex-deploy is a Helm release (sh.helm.release.v1.reddex.v3)." }),
+    });
+    const out = await propose(buildAgent(emptySessionState(), server, fakeRoom().room), ADOPT, toolOpts().opts);
+    expect(out).toContain("Helm release");
+    expect(out).not.toMatch(/^Done:/);
+  });
+});

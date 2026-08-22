@@ -4,6 +4,12 @@ import type { SuggestedAction } from "@rigel/k8s/src/actionBlocks";
 import type { RepoLink } from "@rigel/k8s/src/gitSources";
 import type { RepoFixResult } from "@rigel/k8s/src/repoFix";
 
+/** What the propose-fix route answers with, plus what adoption committed. */
+export interface ProposeFixResult extends RepoFixResult {
+  /** kind/name of every resource an adoption pull request carries. */
+  included?: string[];
+}
+
 export interface AgentConfig {
   url: string;
   token: string;
@@ -71,7 +77,7 @@ export interface ServerClient {
   /** Opens a pull request for the change the action describes. Changes no
    *  cluster state, so the agent may reach this on the operator's instruction
    *  without a click; the server stamps the PR `rigel:voice`. */
-  proposeFix(action: SuggestedAction, context: string | null): Promise<RepoFixResult>;
+  proposeFix(action: SuggestedAction, context: string | null): Promise<ProposeFixResult>;
   previewAction(action: SuggestedAction, context: string | null): Promise<string[]>;
   /** Runs a change the operator asked for. Reachable ONLY for kinds
    *  isAutoRunnable admits: destructive work goes to the desktop's confirm
@@ -143,11 +149,13 @@ export function createServerClient(
           name: action.name,
           ...(action.namespace ? { namespace: action.namespace } : {}),
           ...(action.resourceKind ? { resourceKind: action.resourceKind } : {}),
-          edit: action.edit,
+          // Adoption carries no edit: the server reads the cluster and builds
+          // every file, which is the whole point of it.
+          ...(action.kind === "adoptWorkload" ? { adopt: true } : { edit: action.edit }),
         }),
       });
       if (!res.ok) throw new Error(await errorMessage(res, "propose-fix"));
-      return (await res.json()) as RepoFixResult;
+      return (await res.json()) as ProposeFixResult;
     },
     async previewAction(action, context) {
       const res = await fetchFn(`${base}/api/action?preview=1`, {

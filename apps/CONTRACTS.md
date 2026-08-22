@@ -94,6 +94,18 @@ Additional kinds:
   and voice opens the PR itself and speaks its number and URL. The opened PR is
   labelled `rigel` + `rigel:<chat|voice|agent>`.
 
+- `adoptWorkload` — export a live workload and everything around it into the
+  repo as manifests, and open a pull request, so an app that exists only in the
+  cluster can be redeployed from Git. Fields: `source`, `name`, `namespace`,
+  `resourceKind` when it is not a Deployment, `title`, `body`. No `edit` and no
+  `content`: the server discovers the related resources (the same engine purge
+  uses, instance label then name prefix), reads each one, cleans it with
+  `cleanExportedManifest`, and writes one file per resource at
+  `<manifest path>/<kind>-<name>.yaml`. A referenced Secret is committed as
+  `<kind>-<name>.yaml.example` with its values redacted, which `kubectl apply
+  -R` ignores, so a later sync can never write it over the live Secret. A Helm
+  release refuses, naming it, because rendered manifests drift from the chart.
+
 ### The voice tool is schema-constrained
 
 The chat surface emits action blocks as fenced JSON and `extractActionBlocks`

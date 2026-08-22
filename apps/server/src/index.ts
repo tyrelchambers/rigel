@@ -23,6 +23,7 @@ import {
 } from "@rigel/k8s/src/helm";
 import { browseArtifactHub } from "./artifactHub";
 import { discover, handlePurge, type PurgeRequest } from "./purge";
+import { planAdoption } from "./adopt";
 import { discoverRecent, undoBatch } from "./recentDeploys";
 import {
   loadSources, saveSources, diffSource, applySource, previewRepoFix, proposeRepoFix, parseProposeFixRequest,
@@ -1157,15 +1158,27 @@ async function handler(req: Request): Promise<Response> {
       if (!found) return Response.json({ error: "unknown source" }, { status: 404 });
       const token = await loadGithubToken(context);
       const origin = isVoiceWorkerRequest(req) ? ("voice" as const) : ("chat" as const);
+      const target = resolveTarget(found.repo, found.dep);
+      // Adoption resolves to files here rather than in the repo-fix core,
+      // because it reads the CLUSTER: discovery, export and cleaning are all
+      // kubectl work, and the core's job starts once there are files to commit.
+      let change: Record<string, unknown> = parsed.change as Record<string, unknown>;
+      let included: string[] = [];
+      if ("adopt" in parsed.change) {
+        const plan = await planAdoption(context, parsed.change.adopt, normalizeManifestPath(target.path));
+        if (!plan.ok) return Response.json({ ok: false, message: plan.message }, { status: 200 });
+        change = { files: plan.files };
+        included = plan.included ?? [];
+      }
       const input = {
-        source: resolveTarget(found.repo, found.dep),
+        source: target,
         token,
         title: parsed.title,
         body: parsed.body,
         origin,
-        ...parsed.change,
+        ...change,
       };
-      if (parsed.dryRun) return Response.json(await previewRepoFix(input));
+      if (parsed.dryRun) return Response.json({ ...(await previewRepoFix(input)), included });
       const result = await proposeRepoFix(input);
       if (result.ok && result.prUrl) {
         const slug = parseRepoSlug(input.source.repoURL);
@@ -1183,7 +1196,7 @@ async function handler(req: Request): Promise<Response> {
           origin,
         });
       }
-      return Response.json(result);
+      return Response.json({ ...result, included });
     }
 
     // GET /api/git/pull-requests — chat-opened PRs (the Pending PRs card).

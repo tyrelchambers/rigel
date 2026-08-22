@@ -127,6 +127,7 @@ export const ACTION_KINDS = [
   "command",
   "applyManifest",
   "proposeRepoFix",
+  "adoptWorkload",
 ] as const;
 
 /**
@@ -193,6 +194,9 @@ export const AUTO_RUNNABLE_KINDS = new Set<string>([
   "annotate",
   "createNamespace",
   "proposeRepoFix",
+  // Same argument as proposeRepoFix: it changes no cluster state, it lands on a
+  // branch, and a human reads the diff on GitHub before anything merges.
+  "adoptWorkload",
 ]);
 
 /**

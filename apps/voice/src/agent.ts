@@ -115,7 +115,7 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
                 if (!linked || !link) {
                   return `Not managed from Git: ${name} carries no Rigel source annotation, so there is no repository to open a pull request against. Say that in one sentence if the user asked for one, and change the cluster instead if they want it changed now.`;
                 }
-                return `Managed from Git: source ${link.source}, repository ${link.repo}, branch ${link.branch}, path ${link.path}. A change here belongs in a pull request, because the next sync overwrites anything patched on the cluster. To open one, call proposeMutation with kind proposeRepoFix and "source":"${link.source}" spelled exactly that way.`;
+                return `Managed from Git: source ${link.source}, repository ${link.repo}, branch ${link.branch}, path ${link.path}. A change here belongs in a pull request, because the next sync overwrites anything patched on the cluster. To change a manifest the repository already has, call proposeMutation with kind proposeRepoFix and "source":"${link.source}". To ADD manifests it does not have yet, so the app can be redeployed from Git, use kind adoptWorkload with the same source.`;
               } catch (err) {
                 console.error(`checkGitLink ${name} failed:`, err);
                 return String(err);
@@ -137,7 +137,9 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
               // is read on GitHub before it merges, so the agent opens it on the
               // operator's instruction (see AUTO_RUNNABLE_KINDS). It is not a
               // kubectl command, so it never goes near /api/action.
-              if (a.kind === "proposeRepoFix" && isAutoRunnable(a)) {
+              // Both PR kinds take the same route: they change no cluster
+              // state, land on a branch, and are read on GitHub before merging.
+              if ((a.kind === "proposeRepoFix" || a.kind === "adoptWorkload") && isAutoRunnable(a)) {
                 await publishJson(room, "rigel.action", { id, action: a, command: null, auto: true });
                 try {
                   const res = await server.proposeFix(a, state.activeContext);
@@ -152,7 +154,11 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
                     prUrl: res.prUrl,
                     repoSlug: res.repoSlug,
                   });
-                  return `Done: pull request #${res.number ?? 0} is open at ${res.prUrl}. Tell the user the pull request is open, name the repository and the number, and say the URL; the link is in the popover and the change itself is on GitHub. Nothing was changed on the cluster.`;
+                  const carried =
+                    res.included && res.included.length > 0
+                      ? ` It carries ${res.included.length} resources: ${res.included.join(", ")}.`
+                      : "";
+                  return `Done: pull request #${res.number ?? 0} is open at ${res.prUrl}.${carried} Tell the user the pull request is open, name the repository and the number, say the URL, and say how many resources it covers; the link is in the popover and the change itself is on GitHub. Nothing was changed on the cluster.`;
                 } catch (err) {
                   await publishJson(room, "rigel.action.result", { id, ok: false, summary: String(err) });
                   return `That failed: ${String(err)}. Nothing was pushed. Tell the user in one sentence.`;
