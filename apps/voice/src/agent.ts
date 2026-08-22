@@ -51,6 +51,34 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
               }
             },
           }),
+          // Rigel's own answers, as one tool with a variant per question, so
+          // it grows by variants rather than by tools. The model improvising
+          // kubectl is exactly where it fails: asked for everything belonging to
+          // an app it invents a label selector, gets an empty list, and reports
+          // that nothing is there.
+          queryRigel: llm.tool({
+            description:
+              "Ask Rigel what it already knows. query \"related\" returns every resource belonging to an app, found the way that app is actually labelled. Prefer this over inventing a label selector.",
+            parameters: z.object({
+              query: z.literal("related"),
+              name: z.string().describe("the app or workload name"),
+              namespace: z.string().optional(),
+            }),
+            execute: async ({ name, namespace }) => {
+              try {
+                const found = await server.relatedResources(name, namespace ?? "default", state.activeContext);
+                if (found.resources.length === 0) {
+                  return `No resources found for ${name} in namespace ${found.namespace}. Check the name with a listing read before telling the user there is nothing there.`;
+                }
+                const listed = found.resources.map((r) => `${r.kind}/${r.name}`).join(", ");
+                const helm = found.helmRelease ? ` It is a Helm release (${found.helmRelease}).` : "";
+                return `${found.resources.length} resources belong to ${name} in ${found.namespace}: ${listed}.${helm} Say the count and the kinds; name individual resources only if asked.`;
+              } catch (err) {
+                console.error(`queryRigel related ${name} failed:`, err);
+                return String(err);
+              }
+            },
+          }),
           checkGitLink: llm.tool({
             description:
               "Whether a workload is deployed from a Git repository, and which one. Ask before proposing a change to a workload, and always before offering a pull request.",

@@ -53,6 +53,15 @@ function fakeServer(overrides: Partial<ServerClient> = {}): FakeServer {
     runs,
     proposals,
     repoLink: async () => ({ linked: true, link: LINK }),
+    relatedResources: async (name, namespace) => ({
+      name,
+      namespace,
+      resources: [
+        { kind: "deployment", name: "reddex-deploy", namespace },
+        { kind: "service", name: "reddex-deploy", namespace },
+        { kind: "ingress", name: "reddex-ingress", namespace },
+      ],
+    }),
     proposeFix: async (action) => {
       proposals.push(action);
       return { ok: true, prUrl: "https://github.com/owner/repo/pull/7", number: 7, branch: "rigel/fix-x", repoSlug: "owner/repo", message: "ok" };
@@ -611,5 +620,48 @@ describe("proposeRepoFix from voice", () => {
     expect(out).toBe(SENT_TO_DESKTOP);
     expect(state.awaitingClick.get("call-3")).toBe(FIX.label);
     expect(frames[0]!.payload.command).toBeNull();
+  });
+});
+
+describe("queryRigel", () => {
+  const ask = (agent: voice.Agent, args: unknown) =>
+    agent.toolCtx.getFunctionTool("queryRigel")!.execute(args as never, {} as never) as Promise<string>;
+
+  // It guessed app=reddex, then app.kubernetes.io/instance=reddex, got two
+  // empty lists and said nothing was found, in a cluster whose real selector is
+  // workload.user.cattle.io/workloadselector. The server already knows.
+  test("related names every resource belonging to an app, without a selector", async () => {
+    const out = await ask(buildAgent(emptySessionState(), fakeServer(), fakeRoom().room), {
+      query: "related",
+      name: "reddex-deploy",
+      namespace: "default",
+    });
+    expect(out).toContain("reddex-deploy");
+    expect(out).toContain("reddex-ingress");
+    expect(out).toContain("deployment");
+    expect(out).toContain("ingress");
+  });
+
+  test("nothing found says so plainly, and does not pretend the app is empty", async () => {
+    const server = fakeServer({
+      relatedResources: async (name, namespace) => ({ name, namespace, resources: [] }),
+    });
+    const out = await ask(buildAgent(emptySessionState(), server, fakeRoom().room), {
+      query: "related",
+      name: "ghost",
+    });
+    expect(out).toMatch(/no resources/i);
+    expect(out).toContain("ghost");
+  });
+
+  test("a server that cannot answer comes back as text, not a thrown tool call", async () => {
+    const server = fakeServer({
+      relatedResources: async () => {
+        throw new Error("socket hang up");
+      },
+    });
+    await expect(
+      ask(buildAgent(emptySessionState(), server, fakeRoom().room), { query: "related", name: "web" }),
+    ).resolves.toContain("socket hang up");
   });
 });

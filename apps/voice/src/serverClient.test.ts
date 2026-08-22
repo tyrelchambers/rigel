@@ -101,6 +101,29 @@ describe("createServerClient", () => {
     ).rejects.toThrow("unknown source");
   });
 
+  test("relatedResources asks the server, which knows how the cluster labels things", async () => {
+    const f = fakeFetch(200, {
+      name: "reddex-deploy",
+      namespace: "default",
+      resources: [
+        { kind: "deployment", name: "reddex-deploy", namespace: "default" },
+        { kind: "service", name: "reddex-deploy", namespace: "default" },
+        { kind: "ingress", name: "reddex-ingress", namespace: "default" },
+      ],
+    });
+    const c = createServerClient(BASE, "sess", "wt", f);
+    const res = await c.relatedResources("reddex-deploy", "default", "prod");
+    expect(res.resources).toHaveLength(3);
+    const [urlArg, init] = (f as unknown as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(String(urlArg)).toBe(`${BASE}/api/discover?name=reddex-deploy&namespace=default`);
+    expect((init as RequestInit).headers).toMatchObject({ "X-Rigel-Context": "prod" });
+  });
+
+  test("relatedResources throws the server's reason", async () => {
+    const c = createServerClient(BASE, "sess", "wt", fakeFetch(422, { error: "missing name" }));
+    await expect(c.relatedResources("", "default", null)).rejects.toThrow("missing name");
+  });
+
   test("runAction posts the action and returns the kubectl result", async () => {
     const ok = createServerClient(BASE, "sess", "wt", fakeFetch(200, { code: 0, stdout: "restarted", stderr: "" }));
     expect((await ok.runAction({ kind: "restart", label: "x", name: "web" }, null)).code).toBe(0);

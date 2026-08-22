@@ -22,7 +22,7 @@ import {
   type HelmChartSource,
 } from "@rigel/k8s/src/helm";
 import { browseArtifactHub } from "./artifactHub";
-import { handlePurge, type PurgeRequest } from "./purge";
+import { discover, handlePurge, type PurgeRequest } from "./purge";
 import { discoverRecent, undoBatch } from "./recentDeploys";
 import {
   loadSources, saveSources, diffSource, applySource, previewRepoFix, proposeRepoFix, parseProposeFixRequest,
@@ -1163,6 +1163,28 @@ async function handler(req: Request): Promise<Response> {
     // GET /api/git/pull-requests — chat-opened PRs (the Pending PRs card).
     if (url.pathname === "/api/git/pull-requests" && req.method === "GET") {
       return Response.json({ pullRequests: await loadPullRequests(context) });
+    }
+
+    // GET /api/discover?name=&namespace= — every resource belonging to one app.
+    //
+    // The same engine purge runs on: the instance label first, then a
+    // name-prefix pass, which is what finds an app in a cluster that labels
+    // things its own way (a Rancher-provisioned workload carries
+    // workload.user.cattle.io/workloadselector, which nothing would guess).
+    // Read-only and unframed by removal, so the assistant can answer "show me
+    // everything for X" without going anywhere near the purge flow.
+    if (url.pathname === "/api/discover" && req.method === "GET") {
+      const name = url.searchParams.get("name");
+      if (!name) return Response.json({ error: "missing name" }, { status: 422 });
+      const namespace = url.searchParams.get("namespace") || "default";
+      const res = await discover(context, namespace, name);
+      return Response.json({
+        name,
+        namespace,
+        resources: res.discovered,
+        ...(res.helmRelease ? { helmRelease: res.helmRelease } : {}),
+        ...(res.blockedReason ? { blockedReason: res.blockedReason } : {}),
+      });
     }
 
     // POST /api/purge — full app-removal flow (docs/parity/purge.md).

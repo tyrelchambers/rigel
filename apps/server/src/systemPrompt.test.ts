@@ -77,6 +77,13 @@ describe("voiceSystemPrompt", () => {
   // It guessed app=reddex, then app.kubernetes.io/instance=reddex, got two
   // empty lists and reported nothing found, in a Rancher cluster whose real
   // selector is workload.user.cattle.io/workloadselector=...
+  test("sends the operator's opening question to the tool that answers it", () => {
+    const p = voiceSystemPrompt("prod");
+    expect(p).toContain("queryRigel");
+    expect(p).toContain('query "related"');
+    expect(p).toContain("before any manual hunt");
+  });
+
   test("teaches following the cluster rather than guessing a selector", () => {
     const p = voiceSystemPrompt("prod");
     expect(p).toContain("never by guessing a label");
