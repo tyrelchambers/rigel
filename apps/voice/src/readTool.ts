@@ -37,6 +37,16 @@ const OUTPUT_CAP = 8192;
  * chaining reads (a workload's selector, then the Service matching it, then the
  * Ingress behind that) is exactly the reasoning this cap was silently blocking.
  */
+/**
+ * Reads whose interesting end is the LAST line, not the first. Capping a log
+ * from the front returns whatever the container printed when it booted, which
+ * for a pod up for a week is not what anyone asking about it wants.
+ */
+function keepsTail(args: string[]): boolean {
+  const verb = args.find((a) => !a.startsWith("-"));
+  return verb === "logs" || verb === "events";
+}
+
 function truncationNote(total: number): string {
   return [
     `[truncated: ${total} characters, ${OUTPUT_CAP} shown. This output is incomplete and may end mid-object.`,
@@ -116,7 +126,12 @@ function spawnOnce(
     child.on("error", (err) => resolve({ ok: false, text: `kubectl failed to start: ${err.message}` }));
     child.on("close", (code) => {
       const safe = redactSecretValues(out);
-      const capped = safe.length > OUTPUT_CAP ? `${safe.slice(0, OUTPUT_CAP)}\n${truncationNote(safe.length)}` : safe;
+      const capped =
+        safe.length <= OUTPUT_CAP
+          ? safe
+          : keepsTail(argv)
+            ? `${truncationNote(safe.length)}\n${safe.slice(safe.length - OUTPUT_CAP)}`
+            : `${safe.slice(0, OUTPUT_CAP)}\n${truncationNote(safe.length)}`;
       if (code === 0) resolve({ ok: true, text: capped || "(no output)" });
       else resolve({ ok: false, text: `kubectl exited ${code}:\n${capped}` });
     });

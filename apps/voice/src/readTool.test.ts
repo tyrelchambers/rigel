@@ -143,6 +143,21 @@ describe("runRead", () => {
     expect(calls[0]?.args).toEqual(["get", "deployment,svc", "-o", "yaml"]);
   });
 
+  // A log capped from the front is whatever the container said when it booted.
+  test("a long log keeps its tail, because the end is the part that matters", async () => {
+    const { spawnFn } = fakeSpawn({ stdout: "OLD BOOT LINE\n" + "x".repeat(20000) + "\nTHE CRASH" });
+    const out = await runRead(["logs", "web-1", "--tail", "500"], null, spawnFn);
+    expect(out).toContain("THE CRASH");
+    expect(out).not.toContain("OLD BOOT LINE");
+    expect(out).toContain("[truncated:");
+  });
+
+  test("a listing still keeps its head", async () => {
+    const { spawnFn } = fakeSpawn({ stdout: "FIRST ROW\n" + "x".repeat(20000) });
+    const out = await runRead(["get", "pods", "-A"], null, spawnFn);
+    expect(out.startsWith("FIRST ROW")).toBe(true);
+  });
+
   test("spawns kubectl with the active context in front of the built argv", async () => {
     const { spawnFn, calls } = fakeSpawn({ stdout: "NAME  READY\n" });
     const out = await runRead(["get", "pods", "-n", "prod", "-o", "wide"], "kind-rigel", spawnFn);

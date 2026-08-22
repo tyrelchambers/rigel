@@ -63,9 +63,13 @@ describe("voiceSystemPrompt", () => {
 
   // The three-call ceiling is what turned a copy-these-resources request into a
   // turn of narration: one resource per call ran the budget out before it acted.
-  test("tells it to batch reads, because a turn only gets three tool calls", () => {
+  // It said "three" while maxToolSteps was raised to 8, which rationed the
+  // model out of the follow-up reads the work actually needs. Pinned so the
+  // prompt and the session option cannot drift apart again.
+  test("does not tell the model it has fewer tool calls than it has", () => {
     const p = voiceSystemPrompt("prod");
-    expect(p).toContain("three tool calls");
+    expect(p).not.toContain("three tool calls");
+    expect(p).toContain("several tool calls");
     expect(p).toContain("-o yaml");
     expect(p).toContain("Secret values are removed");
   });
