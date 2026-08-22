@@ -181,10 +181,10 @@ importers:
     dependencies:
       '@livekit/agents':
         specifier: latest
-        version: 1.6.4(@livekit/rtc-node@0.13.34)(@types/node@26.2.0)(typescript@7.0.2)(zod@4.4.3)
+        version: 1.7.0(@livekit/rtc-node@0.13.34)(@types/node@26.2.0)(typescript@7.0.2)(zod@4.4.3)
       '@livekit/agents-plugin-openai':
         specifier: latest
-        version: 1.6.4(@livekit/agents@1.6.4(@livekit/rtc-node@0.13.34)(@types/node@26.2.0)(typescript@7.0.2)(zod@4.4.3))(@livekit/rtc-node@0.13.34)(zod@4.4.3)
+        version: 1.7.0(@livekit/agents@1.7.0(@livekit/rtc-node@0.13.34)(@types/node@26.2.0)(typescript@7.0.2)(zod@4.4.3))(@livekit/rtc-node@0.13.34)(zod@4.4.3)
       '@livekit/rtc-node':
         specifier: latest
         version: 0.13.34
@@ -447,6 +447,9 @@ importers:
       yaml:
         specifier: latest
         version: 2.9.0
+      zod:
+        specifier: latest
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: latest
@@ -1731,18 +1734,18 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@livekit/agents-plugin-openai@1.6.4':
-    resolution: {integrity: sha512-dqLFo4GkXdgZXECUdUkvW/WYSPzB5q3jRwXOr2iLGPFUBWQL5aSHAmpVVJTKmJK3Vt+8nE1JgU/FOB2kYvJQvA==}
+  '@livekit/agents-plugin-openai@1.7.0':
+    resolution: {integrity: sha512-3bmybid1rdfEbvE77EFbigMq7UCVPCenttMPIiGuz2Ae/4m/0wPn52KyF8dGMiBdLu2mh0OuXbhhTX8ei86I2w==}
     peerDependencies:
-      '@livekit/agents': 1.6.4
-      '@livekit/rtc-node': ^0.13.33
+      '@livekit/agents': 1.7.0
+      '@livekit/rtc-node': ^0.13.34
       zod: ^3.25.76 || ^4.1.8
 
-  '@livekit/agents@1.6.4':
-    resolution: {integrity: sha512-Q+qlXmR8wLB4aMm2K5bt1ijItuMcoyfHvAHp047ORf2+yhIwR6csKfo95ErPbszWzgnLf7nIGSvJjvNVSh9okA==}
+  '@livekit/agents@1.7.0':
+    resolution: {integrity: sha512-VsiZQ/+fNPDvdx0X3P5vJzERGvapzL8xPifYmktiRpfw4hRM/GCclOy7zzmEn0Bc6KLvABQpxmMJm2aBOdBcoA==}
     hasBin: true
     peerDependencies:
-      '@livekit/rtc-node': ^0.13.33
+      '@livekit/rtc-node': ^0.13.34
       zod: ^3.25.76 || ^4.1.8
 
   '@livekit/av-darwin-arm64@10.0.0':
@@ -1801,8 +1804,18 @@ packages:
     cpu: [arm64]
     os: [darwin]
 
+  '@livekit/local-inference-darwin-arm64@0.2.7':
+    resolution: {integrity: sha512-di4SAKcV/i9tCozvbtwZLBtRPAJYWCcLNNVWduqAQSaV2/klT2CZsGpoN0s7t8NamvL78q1LxzL2iJVc6pc75g==}
+    cpu: [arm64]
+    os: [darwin]
+
   '@livekit/local-inference-darwin-x64@0.2.6':
     resolution: {integrity: sha512-fSicCqoYA5iOtW2jZfB91RIcNafXs19xRNPH5QSHvrRXljvCn8WMh+7do1jEg1f2U98TDsyptZ91laiDSh8xNg==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@livekit/local-inference-darwin-x64@0.2.7':
+    resolution: {integrity: sha512-5e2HnjLSOwh1QfHQKbAgy0HDxAZhpOMLpwcUSXWIPeQEGOu+iu0s1f8xsRvz/LWxPOsZJn0bxFkfadnh5dvPMg==}
     cpu: [x64]
     os: [darwin]
 
@@ -1811,8 +1824,18 @@ packages:
     cpu: [arm64]
     os: [linux]
 
+  '@livekit/local-inference-linux-arm64-gnu@0.2.7':
+    resolution: {integrity: sha512-zUP9RverLt66kQ9slr+T3FY1Ad9IwJ3BPnJsEB/NxUeflq5g0dbUjIjGvjBCL6DktqLRyXixEJx1J5QUKUWUsw==}
+    cpu: [arm64]
+    os: [linux]
+
   '@livekit/local-inference-linux-x64-gnu@0.2.6':
     resolution: {integrity: sha512-L9MagQm/5tm0r82/GXecIZU8jz/2LY8DsMzRPlkz/2Et6qR4zz+8wEOUifuLC520L8MFN7HN6yf+PNbQnSfvWA==}
+    cpu: [x64]
+    os: [linux]
+
+  '@livekit/local-inference-linux-x64-gnu@0.2.7':
+    resolution: {integrity: sha512-QG/0k0BwqnSz/qMU+Z/k0411iXkbVEdZ8XMBPjZGOorVYTQuMlovYd9hkSZvgnD84o/xeAMJekC6NcXv45FlGg==}
     cpu: [x64]
     os: [linux]
 
@@ -1821,8 +1844,17 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@livekit/local-inference-win32-x64-msvc@0.2.7':
+    resolution: {integrity: sha512-8KB0xfDgYstfvOtAshRsL0zRkwGOIGzOI4NqGMq1HBr+3wMuCrVEjspjpHvuMHCYVzihprE9L/ivYqpXBAGrXw==}
+    cpu: [x64]
+    os: [win32]
+
   '@livekit/local-inference@0.2.6':
     resolution: {integrity: sha512-HtA5tC+gdDHoWAkb0QJYVCIoLL6/53VGXVoRY68zIeTUik9kAW/EOuYirEqRuGlL2UCzjWRRhRSkxLleLyucmQ==}
+    engines: {node: '>=18.0.0'}
+
+  '@livekit/local-inference@0.2.7':
+    resolution: {integrity: sha512-3XniFtpZHiIlAgVibhIU1YDaHbh8uScYojwtqaI1Em440w+fzix3wPXLv+IPePAmuusJzvHLrEFaTwojaBLk4w==}
     engines: {node: '>=18.0.0'}
 
   '@livekit/mutex@1.1.1':
@@ -8014,9 +8046,9 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@livekit/agents-plugin-openai@1.6.4(@livekit/agents@1.6.4(@livekit/rtc-node@0.13.34)(@types/node@26.2.0)(typescript@7.0.2)(zod@4.4.3))(@livekit/rtc-node@0.13.34)(zod@4.4.3)':
+  '@livekit/agents-plugin-openai@1.7.0(@livekit/agents@1.7.0(@livekit/rtc-node@0.13.34)(@types/node@26.2.0)(typescript@7.0.2)(zod@4.4.3))(@livekit/rtc-node@0.13.34)(zod@4.4.3)':
     dependencies:
-      '@livekit/agents': 1.6.4(@livekit/rtc-node@0.13.34)(@types/node@26.2.0)(typescript@7.0.2)(zod@4.4.3)
+      '@livekit/agents': 1.7.0(@livekit/rtc-node@0.13.34)(@types/node@26.2.0)(typescript@7.0.2)(zod@4.4.3)
       '@livekit/mutex': 1.1.1
       '@livekit/rtc-node': 0.13.34
       openai: 6.49.0(ws@8.21.3)(zod@4.4.3)
@@ -8029,11 +8061,11 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@livekit/agents@1.6.4(@livekit/rtc-node@0.13.34)(@types/node@26.2.0)(typescript@7.0.2)(zod@4.4.3)':
+  '@livekit/agents@1.7.0(@livekit/rtc-node@0.13.34)(@types/node@26.2.0)(typescript@7.0.2)(zod@4.4.3)':
     dependencies:
       '@bufbuild/protobuf': 1.10.1
       '@livekit/av': 10.0.0
-      '@livekit/local-inference': 0.2.6
+      '@livekit/local-inference': 0.2.7
       '@livekit/mutex': 1.1.1
       '@livekit/protocol': 1.50.4
       '@livekit/rtc-node': 0.13.34
@@ -8124,16 +8156,31 @@ snapshots:
   '@livekit/local-inference-darwin-arm64@0.2.6':
     optional: true
 
+  '@livekit/local-inference-darwin-arm64@0.2.7':
+    optional: true
+
   '@livekit/local-inference-darwin-x64@0.2.6':
+    optional: true
+
+  '@livekit/local-inference-darwin-x64@0.2.7':
     optional: true
 
   '@livekit/local-inference-linux-arm64-gnu@0.2.6':
     optional: true
 
+  '@livekit/local-inference-linux-arm64-gnu@0.2.7':
+    optional: true
+
   '@livekit/local-inference-linux-x64-gnu@0.2.6':
     optional: true
 
+  '@livekit/local-inference-linux-x64-gnu@0.2.7':
+    optional: true
+
   '@livekit/local-inference-win32-x64-msvc@0.2.6':
+    optional: true
+
+  '@livekit/local-inference-win32-x64-msvc@0.2.7':
     optional: true
 
   '@livekit/local-inference@0.2.6':
@@ -8145,6 +8192,16 @@ snapshots:
       '@livekit/local-inference-linux-arm64-gnu': 0.2.6
       '@livekit/local-inference-linux-x64-gnu': 0.2.6
       '@livekit/local-inference-win32-x64-msvc': 0.2.6
+
+  '@livekit/local-inference@0.2.7':
+    dependencies:
+      node-gyp-build: 4.8.4
+    optionalDependencies:
+      '@livekit/local-inference-darwin-arm64': 0.2.7
+      '@livekit/local-inference-darwin-x64': 0.2.7
+      '@livekit/local-inference-linux-arm64-gnu': 0.2.7
+      '@livekit/local-inference-linux-x64-gnu': 0.2.7
+      '@livekit/local-inference-win32-x64-msvc': 0.2.7
 
   '@livekit/mutex@1.1.1': {}
 

@@ -53,15 +53,22 @@ never asks for one — anyone within earshot could say it. What the agent may do
 is keyed on the ACTION, not on what it hears:
 - Non-destructive kinds (`AUTO_RUNNABLE_KINDS`: restart, rollback, pause,
   resume, suspend/resumeCronJob, uncordon, scale, setImage, setEnv,
-  setResources, annotate, createNamespace, proposeRepoFix) run on the operator's
-  own instruction. They destroy nothing and can be undone. `proposeRepoFix`
+  setResources, annotate, createNamespace, command, proposeRepoFix,
+  adoptWorkload) run on the operator's own instruction. They destroy nothing and can be undone. `proposeRepoFix`
   belongs here because a pull request changes no cluster state, lands on a
   branch, and is read on GitHub before it merges; the reasoning is recorded
   beside `AUTO_RUNNABLE_KINDS`.
+  `command` is admitted for a reason worth stating: it is the escape hatch for
+  anything the typed kinds do not model, so excluding it meant every unusual
+  request needed a tap. It carries literal kubectl arguments, which is exactly
+  what `classifyTier` reads, so the command classifier is a real second gate
+  here and a `command` whose argv tiers destructive is surfaced like anything
+  else.
 - Everything else is surfaced in the desktop popover for the operator to
   approve: the delete family, drain, cordon, purge, raw patches (setEnvRef,
-  setImagePullSecrets), `command`, `applyManifest`, plus `label` (feeds
-  selectors) and `triggerCronJob` (starts arbitrary work).
+  setImagePullSecrets), `applyManifest` (arbitrary content rather than a
+  command a classifier can read), plus `label` (feeds selectors) and
+  `triggerCronJob` (starts arbitrary work).
 - A destructive hint downgrades any kind, `scale` to 0 replicas is treated as
   an outage rather than a scale, and `classifyTier` on the built command is the
   second, stricter gate: a kind that would otherwise run is surfaced when its
@@ -84,18 +91,51 @@ Additional kinds:
     "image":"…"}`, `{"op":"scale","replicas":N}`, with a null annotation or
     label value removing the key. This is the voice shape.
 
-  Both or neither is a 422, never a silent preference. The voice worker
-  corrects a small set of near-miss field names before it posts (`sourceId` for
-  `source`, `deployment` for `name`, an `edit` wrapped in a one-item array),
-  because a turn is capped at three tool calls and a model that spends two of
-  them guessing at a key never opens the PR. The route itself takes only the
-  documented names. The manifest is located
+  Both or neither is a 422, never a silent preference. Voice sends only the
+  second shape, and its tool is schema-constrained (see below), so a near-miss
+  key like `sourceId` is refused naming `source` before the call is made. The manifest is located
   by matching kind + name + namespace across the source's directory; zero
   matches, several matches, or a templated (Helm) tree refuses with the reason
   rather than editing on a guess. Nothing is applied to the cluster: the chat
   path shows a `git diff` in the confirm sheet before the operator confirms,
   and voice opens the PR itself and speaks its number and URL. The opened PR is
   labelled `rigel` + `rigel:<chat|voice|agent>`.
+
+- `adoptWorkload` — export a live workload and everything around it into the
+  repo as manifests, and open a pull request, so an app that exists only in the
+  cluster can be redeployed from Git. Fields: `source`, `name`, `namespace`,
+  `resourceKind` when it is not a Deployment, `title`, `body`. No `edit` and no
+  `content`: the server discovers the related resources (the same engine purge
+  uses, instance label then name prefix), reads each one, cleans it with
+  `cleanExportedManifest`, and writes one file per resource at
+  `<manifest path>/<kind>-<name>.yaml`. What it includes is the same closure
+  `GET /api/discover` reports, so what the assistant says belongs to a workload
+  and what a pull request would carry can never disagree: the Services whose
+  selector matches the workload's pod labels, the Ingresses whose backend names
+  those Services, and the ConfigMaps, Secrets and PVCs the pod template reads or
+  mounts. Names are never matched, because a prefix is not a relationship. A referenced Secret is committed as
+  `<kind>-<name>.yaml.example` with its values redacted, which `kubectl apply
+  -R` ignores, so a later sync can never write it over the live Secret. A Helm
+  release refuses, naming it, because rendered manifests drift from the chart.
+
+### The voice tool is schema-constrained
+
+The chat surface emits action blocks as fenced JSON and `extractActionBlocks`
+parses them permissively, because the chat model is taught this contract in
+prose and has no schema in context.
+
+The voice tool is different: `proposeMutation` declares
+`packages/k8s/src/actionSchema.ts`, a `z.discriminatedUnion("kind", ...)` over
+every kind here. `@livekit/agents` validates against it BEFORE the tool runs, so
+the model sees the field names up front, a wrong kind comes back listing every
+valid one, and a wrong field comes back naming that field alone. Nothing in the
+worker checks the shape by hand.
+
+Two rules keep the schema honest, both tested in `actionSchema.test.ts`. Every
+field the server consumes must appear in its variant, because zod strips
+unknown keys and a missing one would be dropped before execute ever saw it. And
+no `.refine()`, because refinements do not survive `toJSONSchema` and would
+advertise a schema looser than the one that runs.
 
 Examples:
 

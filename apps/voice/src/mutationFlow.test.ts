@@ -63,3 +63,45 @@ describe("decideMutationRoute", () => {
     }
   });
 });
+
+describe("command, the escape hatch", () => {
+  const command = (args: string[]): SuggestedAction => ({ kind: "command", label: "Run it", args });
+
+  // Anything the typed kinds do not model arrives as `command`. Making every
+  // one of those need a tap is what made the assistant feel unable to act: the
+  // honest answer was "I can, but you have to tap", for a patch no more
+  // dangerous than the scale it runs unaided.
+  test("a safe command runs, because the classifier already read it", () => {
+    expect(
+      decideMutationRoute(command(["patch", "deployment/web", "--type=merge", "-p", "{}"]),
+        "kubectl patch deployment/web --type=merge -p {}", true),
+    ).toEqual({ route: "run" });
+  });
+
+  test("a destructive command still goes to the desktop, classifier over kind", () => {
+    expect(
+      decideMutationRoute(command(["delete", "pod", "web-1"]), "kubectl delete pod web-1", true),
+    ).toEqual({ route: "click" });
+  });
+
+  test("a blocked command is still refused outright", () => {
+    expect(
+      decideMutationRoute(command(["port-forward", "svc/web", "8080:80"]), "kubectl port-forward svc/web 8080:80", true).route,
+    ).toBe("refuse");
+  });
+
+  test("the model's own destructive hint still downgrades it", () => {
+    expect(
+      decideMutationRoute({ ...command(["annotate", "deploy/web", "a=b"]), destructive: true },
+        "kubectl annotate deploy/web a=b", true),
+    ).toEqual({ route: "click" });
+  });
+
+  // applyManifest and purge stay click-required: an apply is arbitrary content
+  // rather than a classified command, and purge is a removal flow.
+  test("the arbitrary and removal kinds are unaffected", () => {
+    for (const kind of ["applyManifest", "purge"]) {
+      expect(decideMutationRoute({ kind, label: kind }, "kubectl get pods", true), kind).toEqual({ route: "click" });
+    }
+  });
+});

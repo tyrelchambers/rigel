@@ -37,7 +37,7 @@ const TEXT_FIELDS: { key: VoiceField; label: string; placeholder: string; docs?:
   {
     key: "model",
     label: "Model",
-    placeholder: "openai/gpt-4.1-mini",
+    placeholder: "openai/gpt-4.1",
     docs: "https://openrouter.ai/models",
   },
   {

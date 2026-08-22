@@ -368,3 +368,19 @@ describe("summarizeActionDetail", () => {
     expect(summarizeActionDetail("success", "  \n \n", "\n")).toBeUndefined();
   });
 });
+
+describe("a request the vocabulary cannot express", () => {
+  it("records what was asked, with nothing pretending to have run", () => {
+    const entry = buildAiActionEntry({
+      action: { kind: "unsupported" },
+      source: "voice",
+      command: "",
+      outcome: "unsupported",
+      trigger: "open a PR adding manifests for reddex-deploy and its related resources",
+    });
+    expect(entry.kind).toBe("Could not do");
+    expect(entry.outcome).toBe("unsupported");
+    expect(entry.command).toBe("");
+    expect(entry.trigger).toContain("adding manifests");
+  });
+});

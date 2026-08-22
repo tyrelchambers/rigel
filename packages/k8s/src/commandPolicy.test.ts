@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { classifyTier, classifyCommand } from "./commandPolicy";
+import { classifyTier, classifyCommand, printsSecretValues } from "./commandPolicy";
 
 describe("classifyTier", () => {
   test("reads are read tier", () => {
@@ -90,5 +90,41 @@ describe("classifyCommand (2-tier compat)", () => {
     const v = classifyCommand("kubectl --context active delete pod foo", "active");
     expect(v.decision).toBe("deny");
     expect(v.reason).not.toMatch(/DIFFERENT cluster/);
+  });
+});
+
+describe("printsSecretValues", () => {
+  test("recognises every form that would print a value", () => {
+    for (const command of [
+      "kubectl get secret db -n default -o yaml",
+      "kubectl get secrets -A -o json",
+      "kubectl get secret db -o=jsonpath={.data.password}",
+      "kubectl get secret db -o go-template={{.data}}",
+      "kubectl get secret/db -o yaml",
+    ]) {
+      expect(printsSecretValues(command), command).toBe(true);
+    }
+  });
+
+  test("leaves the shape readable, which is what redaction would have given anyway", () => {
+    for (const command of [
+      "kubectl describe secret db -n default",
+      "kubectl get secret -n default",
+      "kubectl get secrets -A",
+    ]) {
+      expect(printsSecretValues(command), command).toBe(false);
+    }
+  });
+
+  test("does not touch reads of anything that is not a secret", () => {
+    expect(printsSecretValues("kubectl get deployment web -o yaml")).toBe(false);
+    expect(printsSecretValues("kubectl get configmap app-config -o yaml")).toBe(false);
+  });
+
+  // It is the caller's job to apply this, because the answer depends on whether
+  // the caller can redact its own output. The voice read path redacts and so
+  // allows these; only the chat shell, which cannot, refuses them.
+  test("the shared classifier still calls a Secret read a read", () => {
+    expect(classifyCommand("kubectl get secret db -o yaml", null)).toMatchObject({ decision: "allow" });
   });
 });

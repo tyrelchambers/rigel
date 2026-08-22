@@ -27,6 +27,8 @@ export interface SuggestedAction {
   replicas?: number;
   /** setEnv */
   env?: Record<string, string>;
+  /** setEnv — variables to remove (kubectl's `KEY-` syntax). */
+  unsetEnv?: string[];
   /** setImage / setResources */
   container?: string;
   /** setImage */
@@ -55,6 +57,10 @@ export interface SuggestedAction {
   /** proposeRepoFix only — the change as an intent, so the server builds the file
    *  instead of the model retyping it. Alternative to filePath + content. */
   edit?: ManifestEdit;
+  /** setImagePullSecrets — the full desired list; an empty array clears it. */
+  imagePullSecrets?: string[];
+  /** setEnvRef — env vars sourced from a Secret or ConfigMap key. */
+  envRefs?: Array<{ name: string; source: "secret" | "configMap"; resourceName: string; key: string }>;
   /** annotate only — desired annotations; a null value removes the key. */
   annotations?: Record<string, string | null>;
   /** label only — desired labels; a null value removes the key. */
@@ -121,6 +127,7 @@ export const ACTION_KINDS = [
   "command",
   "applyManifest",
   "proposeRepoFix",
+  "adoptWorkload",
 ] as const;
 
 /**
@@ -155,10 +162,18 @@ export function isDestructiveAction(action: Pick<SuggestedAction, "kind" | "dest
  * a rollout, a scale, a metadata edit, an uncordon.
  *
  * Everything else surfaces a card the operator taps. That includes the kinds
- * the user named as destructive (delete, drain, cordon, raw patches), the
- * arbitrary ones (command, applyManifest), and two that are not destructive
- * but fail silently: `label`, because labels feed selectors, and
- * `triggerCronJob`, because the job it starts can do anything.
+ * the user named as destructive (delete, drain, cordon), `applyManifest`
+ * (arbitrary content, not a command a classifier can read), and two that are
+ * not destructive but fail silently: `label`, because labels feed selectors,
+ * and `triggerCronJob`, because the job it starts can do anything.
+ *
+ * `command` is here for a different reason than the rest. It is the escape
+ * hatch for anything the typed kinds do not model, so excluding it meant every
+ * unusual request needed a tap, and the honest answer to "just do it" became "I
+ * can, but you have to tap" for a patch no more dangerous than the scale beside
+ * it. It carries literal kubectl arguments, which is exactly what classifyTier
+ * reads, so the second gate is a real one here rather than a formality: a
+ * `command` whose built argv tiers destructive is surfaced like any other.
  *
  * `proposeRepoFix` is in the set even though a pull request is not undoable in
  * the way a rollout is (HELM-125 asked for the reasoning to be recorded here).
@@ -186,7 +201,11 @@ export const AUTO_RUNNABLE_KINDS = new Set<string>([
   "setResources",
   "annotate",
   "createNamespace",
+  "command",
   "proposeRepoFix",
+  // Same argument as proposeRepoFix: it changes no cluster state, it lands on a
+  // branch, and a human reads the diff on GitHub before anything merges.
+  "adoptWorkload",
 ]);
 
 /**

@@ -3,7 +3,8 @@
 // destructive ones are published for approval on the desktop. Nothing listens
 // for a spoken word.
 import { llm, voice } from "@livekit/agents";
-import { ACTION_KINDS, isAutoRunnable, type SuggestedAction } from "@rigel/k8s/src/actionBlocks";
+import { isAutoRunnable, type SuggestedAction } from "@rigel/k8s/src/actionBlocks";
+import { actionSchema } from "@rigel/k8s/src/actionSchema";
 import { voiceSystemPrompt } from "@rigel/server/src/systemPrompt";
 import { z } from "zod";
 import { decideMutationRoute } from "./mutationFlow.js";
@@ -24,88 +25,6 @@ export const SENT_TO_DESKTOP =
 export const NO_DESKTOP =
   "Refused: this one is destructive and needs approval in the desktop app, and no desktop session is connected. Tell the user this in one sentence.";
 
-/**
- * The refusal a wrong `kind` gets. It names the escape hatch and lists the
- * kinds, because the model that hit this in the field invented `patch` twice
- * and had nothing in the old message to correct toward.
- */
-export function unknownKindRefusal(kind: unknown): string {
-  const named = typeof kind === "string" && kind ? ` "${kind}"` : "";
-  return [
-    `Refused: unknown action kind${named}.`,
-    'Metadata edits are the kinds "annotate" and "label" (annotations/labels object; a null value removes a key).',
-    'Anything else the typed kinds do not model goes through kind "command" with the literal kubectl arguments in args, e.g. {"kind":"command","label":"...","args":["patch","deployment/web","-n","default","--type=merge","-p","{...}"]}.',
-    `Valid kinds: ${ACTION_KINDS.join(", ")}.`,
-    "Retry now with a valid kind rather than telling the user it cannot be done.",
-  ].join(" ");
-}
-
-/**
- * The refusal a proposeRepoFix missing its parts gets. Names the shape and the
- * tool that supplies the source, so the model can retry in the same turn.
- */
-/** The near-miss keys a model reaches for when it means the one on the left. */
-const ALIASES: Record<string, string[]> = {
-  source: ["sourceId", "sourceID", "source_id"],
-  name: ["deployment", "workload", "resource"],
-  title: ["prTitle", "pullRequestTitle"],
-  edit: ["edits", "change", "changes"],
-};
-
-/**
- * Straighten out the shapes a model reaches for around proposeRepoFix: the
- * near-miss key names above, and an `edit` wrapped in a one-item array.
- *
- * This is correction at the model boundary, not a loosening of the contract:
- * /api/git/propose-fix still takes exactly the documented fields, and what
- * leaves here is exactly that. It earns its place because the SDK caps a turn
- * at three tool steps, so a model that spends two of them guessing at a field
- * name has none left to open the pull request with. A live session spent all
- * three on "sourceId" and gave up.
- */
-export function normalizeRepoFix(action: SuggestedAction): SuggestedAction {
-  const sent = action as unknown as Record<string, unknown>;
-  const out: Record<string, unknown> = { ...sent };
-  for (const [field, aliases] of Object.entries(ALIASES)) {
-    if (out[field] !== undefined) continue;
-    const used = aliases.find((alias) => sent[alias] !== undefined);
-    if (used) out[field] = sent[used];
-  }
-  // One pull request carries one change, so a single-item array is the same
-  // thing wrapped; anything longer is a different request and is refused below.
-  if (Array.isArray(out.edit) && out.edit.length === 1) out.edit = out.edit[0];
-  return out as unknown as SuggestedAction;
-}
-
-/**
- * What is wrong with a proposeRepoFix, named field by field, or null when it
- * carries everything /api/git/propose-fix needs. Runs on the NORMALIZED action,
- * so it never reports a field the model did send under another name.
- *
- * The wording matters more than it looks. The first version listed all four
- * required fields whatever was actually wrong, and a model that had sent
- * "sourceId" instead of "source" could not tell which one to change: it re-sent
- * the same key five times and finally told the operator the refusal was for an
- * unclear reason. Name only what is wrong.
- */
-export function repoFixRefusal(action: SuggestedAction): string | null {
-  const problems: string[] = [];
-  if (!action.source) problems.push('"source" is missing, which is the source id checkGitLink returned.');
-  if (!action.name) problems.push('"name" is missing, which is the workload to change.');
-  if (!action.title) problems.push('"title" is missing, which is the pull request\'s title.');
-  if (action.edit === undefined || action.edit === null) {
-    problems.push(
-      '"edit" is missing, which is the change: {"op":"annotate","annotations":{...}}, {"op":"label","labels":{...}}, {"op":"setImage","container":"...","image":"..."} or {"op":"scale","replicas":N}, where a null annotation or label value removes the key.',
-    );
-  } else if (Array.isArray(action.edit)) {
-    problems.push('"edit" carries more than one change, and one pull request makes one change. Send them one at a time.');
-  } else if (typeof action.edit !== "object") {
-    problems.push('"edit" is one object describing the change, not a string.');
-  }
-  if (problems.length === 0) return null;
-  return `Refused: ${problems.join(" ")} Resend the same action with only that corrected; the rest of what you sent was right.`;
-}
-
 export function buildAgent(state: SessionState, server: ServerClient, room: PublishRoom): voice.Agent {
   return new (class extends voice.Agent {
     constructor() {
@@ -114,25 +33,73 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
         tools: {
           readCluster: llm.tool({
             description:
-              "Read live Kubernetes state from the active cluster. verb is one of get, describe, logs, top, events.",
+              "Read the active cluster with literal kubectl arguments, e.g. [\"get\",\"deployment\",\"web\",\"-n\",\"default\",\"-o\",\"yaml\"]. Anything that only reads is allowed; a mutation is refused. Batch several resources into one call rather than spending a turn on several.",
             parameters: z.object({
-              verb: z.enum(["get", "describe", "logs", "top", "events"]),
-              kind: z.string().optional(),
-              name: z.string().optional(),
-              namespace: z.string().optional(),
-              container: z.string().optional(),
-              tail: z.number().int().positive().optional(),
+              args: z
+                .array(z.string())
+                .describe("kubectl arguments, without the binary and without --context"),
             }),
-            execute: async (args) => {
+            execute: async ({ args }) => {
               try {
                 return await runRead(args, state.activeContext);
               } catch (err) {
                 // Handed back to the model as tool output rather than thrown,
                 // so nothing else ever sees it: without this line a failed read
                 // leaves no trace outside the model's own context.
-                console.error(`readCluster ${args.verb} failed:`, err);
+                console.error(`readCluster ${args.join(" ")} failed:`, err);
                 return String(err);
               }
+            },
+          }),
+          // Rigel's own answers, as one tool with a variant per question, so
+          // it grows by variants rather than by tools. The model improvising
+          // kubectl is exactly where it fails: asked for everything belonging to
+          // an app it invents a label selector, gets an empty list, and reports
+          // that nothing is there.
+          queryRigel: llm.tool({
+            description:
+              "Ask Rigel what it already knows. query \"related\" returns everything belonging to a workload: the Services that select its pods, the Ingresses routing to them, and what its pods read. Prefer this over inventing a label selector.",
+            parameters: z.object({
+              query: z.literal("related"),
+              name: z.string().describe("the app or workload name"),
+              namespace: z.string().optional(),
+              kind: z.string().optional().describe("workload kind if not a Deployment"),
+            }),
+            execute: async ({ name, namespace, kind }) => {
+              try {
+                const found = await server.relatedResources(name, namespace ?? "default", state.activeContext, kind);
+                if (found.resources.length === 0) {
+                  return `No resources found for ${name} in namespace ${found.namespace}. Check the name with a listing read before telling the user there is nothing there.`;
+                }
+                const listed = found.resources.map((r) => `${r.kind}/${r.name}`).join(", ");
+                const helm = found.helmRelease ? ` It is a Helm release (${found.helmRelease}).` : "";
+                return `${found.resources.length} resources belong to ${name} in ${found.namespace}: ${listed}.${helm} Say the count and the kinds; name individual resources only if asked.`;
+              } catch (err) {
+                console.error(`queryRigel related ${name} failed:`, err);
+                return String(err);
+              }
+            },
+          }),
+          // The escape hatch that makes giving up cheaper than smuggling. The
+          // model used to approximate an unsupported request with a valid but
+          // meaningless action, which reached the operator as a refusal about
+          // Rigel's internals rather than an answer about their cluster.
+          reportUnsupported: llm.tool({
+            description:
+              "Say that a request is something Rigel cannot do. Use it whenever no action expresses what was asked, instead of approximating with a different action.",
+            parameters: z.object({
+              request: z.string().describe("what the operator asked for, in one sentence"),
+            }),
+            execute: async ({ request }) => {
+              try {
+                await server.reportUnsupported(request, state.activeContext);
+              } catch (err) {
+                // Recording is the lesser half: the operator still needs the
+                // answer, so a ledger that refuses the write does not turn into
+                // silence on the call.
+                console.error("recording an unsupported request failed:", err);
+              }
+              return "Recorded. Tell the user in one sentence that Rigel cannot do that yet, name the nearest thing it can do, and do not attempt it another way.";
             },
           }),
           checkGitLink: llm.tool({
@@ -149,7 +116,7 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
                 if (!linked || !link) {
                   return `Not managed from Git: ${name} carries no Rigel source annotation, so there is no repository to open a pull request against. Say that in one sentence if the user asked for one, and change the cluster instead if they want it changed now.`;
                 }
-                return `Managed from Git: source ${link.source}, repository ${link.repo}, branch ${link.branch}, path ${link.path}. A change here belongs in a pull request, because the next sync overwrites anything patched on the cluster. To open one, call proposeMutation with kind proposeRepoFix and "source":"${link.source}" spelled exactly that way.`;
+                return `Managed from Git: source ${link.source}, repository ${link.repo}, branch ${link.branch}, path ${link.path}. A change here belongs in a pull request, because the next sync overwrites anything patched on the cluster. To change a manifest the repository already has, call proposeMutation with kind proposeRepoFix and "source":"${link.source}". To ADD manifests it does not have yet, so the app can be redeployed from Git, use kind adoptWorkload with the same source.`;
               } catch (err) {
                 console.error(`checkGitLink ${name} failed:`, err);
                 return String(err);
@@ -158,26 +125,42 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
           }),
           proposeMutation: llm.tool({
             description:
-              "Propose a cluster change as a Rigel action object ({label, kind, name, namespace, ...}). Never claims to run anything; follow the returned instruction verbatim.",
-            parameters: z.object({ action: z.record(z.string(), z.unknown()) }),
+              "Propose a cluster change as a Rigel action. Never claims to run anything; follow the returned instruction verbatim.",
+            // The SDK parses this before execute runs, so a wrong kind comes
+            // back naming every valid kind and a wrong field comes back naming
+            // that field. Nothing below has to check the shape.
+            //
+            // The preprocess is for one specific failure, seen four times in a
+            // row in the field: a model that sends the nested object as a JSON
+            // STRING. The refusal it gets back then says "expected object,
+            // received string", which names nothing about the fields, so it has
+            // no way to converge and eventually reports a working capability as
+            // unsupported. Parsing the string is a transport repair, not a
+            // loosening: what comes out is checked by exactly the same schema.
+            parameters: z.object({
+              action: z.preprocess((value) => {
+                if (typeof value !== "string") return value;
+                try {
+                  return JSON.parse(value);
+                } catch {
+                  return value;
+                }
+              }, actionSchema),
+            }),
             execute: async ({ action }, opts) => {
-              const a = action as unknown as SuggestedAction;
-              if (!a || typeof a.kind !== "string" || !(ACTION_KINDS as readonly string[]).includes(a.kind)) {
-                return unknownKindRefusal(a?.kind);
-              }
+              const a = action as SuggestedAction;
               const id = opts.toolCallId;
 
               // A pull request changes no cluster state, lands on a branch, and
               // is read on GitHub before it merges, so the agent opens it on the
               // operator's instruction (see AUTO_RUNNABLE_KINDS). It is not a
               // kubectl command, so it never goes near /api/action.
-              if (a.kind === "proposeRepoFix" && isAutoRunnable(a)) {
-                const fix = normalizeRepoFix(a);
-                const wrong = repoFixRefusal(fix);
-                if (wrong) return wrong;
-                await publishJson(room, "rigel.action", { id, action: fix, command: null, auto: true });
+              // Both PR kinds take the same route: they change no cluster
+              // state, land on a branch, and are read on GitHub before merging.
+              if ((a.kind === "proposeRepoFix" || a.kind === "adoptWorkload") && isAutoRunnable(a)) {
+                await publishJson(room, "rigel.action", { id, action: a, command: null, auto: true });
                 try {
-                  const res = await server.proposeFix(fix, state.activeContext);
+                  const res = await server.proposeFix(a, state.activeContext);
                   if (!res.ok) {
                     await publishJson(room, "rigel.action.result", { id, ok: false, summary: res.message ?? "failed" });
                     return `That failed: ${res.message ?? "the pull request could not be opened"}. Nothing was pushed. Tell the user in one sentence.`;
@@ -189,7 +172,11 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
                     prUrl: res.prUrl,
                     repoSlug: res.repoSlug,
                   });
-                  return `Done: pull request #${res.number ?? 0} is open at ${res.prUrl}. Tell the user the pull request is open, name the repository and the number, and say the URL; the link is in the popover and the change itself is on GitHub. Nothing was changed on the cluster.`;
+                  const carried =
+                    res.included && res.included.length > 0
+                      ? ` It carries ${res.included.length} resources: ${res.included.join(", ")}.`
+                      : "";
+                  return `Done: pull request #${res.number ?? 0} is open at ${res.prUrl}.${carried} Tell the user the pull request is open, name the repository and the number, say the URL, and say how many resources it covers; the link is in the popover and the change itself is on GitHub. Nothing was changed on the cluster.`;
                 } catch (err) {
                   await publishJson(room, "rigel.action.result", { id, ok: false, summary: String(err) });
                   return `That failed: ${String(err)}. Nothing was pushed. Tell the user in one sentence.`;

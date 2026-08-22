@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { assertRead, buildReadArgv, runRead, type ReadChild, type ReadVerb, type SpawnRead } from "./readTool.js";
+import { assertRead, namedGet, runRead, splitJoinedArgs, type ReadChild, type SpawnRead } from "./readTool.js";
 
 /** A stand-in for a kubectl child process: emits the given chunks, then closes. */
 function fakeSpawn(opts: { stdout?: string; stderr?: string; code?: number | null; error?: Error }) {
@@ -33,72 +33,75 @@ function fakeSpawn(opts: { stdout?: string; stderr?: string; code?: number | nul
   return { spawnFn, calls };
 }
 
-describe("buildReadArgv", () => {
-  test("get without namespace goes cluster-wide", () => {
-    expect(buildReadArgv({ verb: "get", kind: "pods" })).toEqual(["get", "pods", "-A", "-o", "wide"]);
-  });
-
-  test("get a named resource in a namespace", () => {
-    expect(buildReadArgv({ verb: "get", kind: "deployment", name: "web", namespace: "prod" })).toEqual([
+describe("splitJoinedArgs", () => {
+  // The exact failure: four calls in a row, each dropping a resource type
+  // instead of seeing the space, because kubectl's error names the mangled type.
+  test("splits a flag that was jammed into the resource-type argument", () => {
+    expect(splitJoinedArgs(["get", "deployment,svc,hpa -o", "yaml"])).toEqual([
       "get",
-      "deployment",
-      "web",
-      "-n",
-      "prod",
+      "deployment,svc,hpa",
       "-o",
-      "wide",
+      "yaml",
+    ]);
+    expect(splitJoinedArgs(["get", "deployment,svc -l", "app=web", "-o", "yaml"])).toEqual([
+      "get",
+      "deployment,svc",
+      "-l",
+      "app=web",
+      "-o",
+      "yaml",
     ]);
   });
 
-  test("describe requires kind and name", () => {
-    expect(() => buildReadArgv({ verb: "describe", kind: "pod" })).toThrow(/name/);
-    expect(buildReadArgv({ verb: "describe", kind: "pod", name: "web-1", namespace: "prod" })).toEqual([
-      "describe",
-      "pod",
-      "web-1",
-      "-n",
-      "prod",
-    ]);
+  test("leaves an argument that merely contains a space alone", () => {
+    for (const args of [
+      ["get", "pods", "-o", "custom-columns=NAME:.metadata.name,AGE:.metadata.creationTimestamp"],
+      ["get", "pods", "-o", "jsonpath={range .items[*]}{.metadata.name}{end}"],
+      ["get", "pods", "--field-selector", "status.phase=Running"],
+      ["describe", "pod", "web-1"],
+    ]) {
+      expect(splitJoinedArgs(args), args.join(" ")).toEqual(args);
+    }
+  });
+});
+
+describe("namedGet", () => {
+  test("recognises the shapes the NotFound recovery can help with", () => {
+    expect(namedGet(["get", "deployment", "web", "-n", "prod"])).toEqual({
+      kind: "deployment",
+      name: "web",
+      namespace: "prod",
+    });
+    expect(namedGet(["describe", "pod", "web-1"])).toEqual({ kind: "pod", name: "web-1", namespace: undefined });
   });
 
-  test("logs defaults to a 100-line tail and supports a container", () => {
-    expect(buildReadArgv({ verb: "logs", name: "deploy/web", namespace: "prod", container: "app" })).toEqual([
-      "logs",
-      "deploy/web",
-      "-c",
-      "app",
-      "--tail",
-      "100",
-      "-n",
-      "prod",
-    ]);
-  });
-
-  test("top nodes takes no namespace flags; top pods does", () => {
-    expect(buildReadArgv({ verb: "top", kind: "nodes" })).toEqual(["top", "nodes"]);
-    expect(buildReadArgv({ verb: "top" })).toEqual(["top", "pods", "-A"]);
-  });
-
-  test("events", () => {
-    expect(buildReadArgv({ verb: "events", namespace: "prod" })).toEqual(["events", "-n", "prod"]);
-    expect(buildReadArgv({ verb: "events" })).toEqual(["events", "-A"]);
-  });
-
-  test("a verb outside the read set never becomes argv", () => {
-    expect(() => buildReadArgv({ verb: "delete" as ReadVerb, kind: "pod", name: "web-1" })).toThrow(/delete/);
+  test("a listing, a slash form, or anything else has no name to have misheard", () => {
+    expect(namedGet(["get", "pods", "-A"])).toBeNull();
+    expect(namedGet(["get", "deployment/web", "-n", "prod"])).toBeNull();
+    expect(namedGet(["top", "nodes"])).toBeNull();
+    expect(namedGet(["api-resources"])).toBeNull();
   });
 });
 
 describe("assertRead (the commandPolicy invariant)", () => {
-  test("every built read passes classifyCommand", () => {
+  // The breadth the closed verb set used to forbid. Every one of these is what
+  // a human at a read-only terminal would type, and the classifier is what says
+  // yes: the shape of the request is not the guard.
+  test("arbitrary reads are allowed, including the YAML the agent could never see", () => {
     for (const argv of [
-      buildReadArgv({ verb: "get", kind: "pods" }),
-      buildReadArgv({ verb: "describe", kind: "pod", name: "x", namespace: "d" }),
-      buildReadArgv({ verb: "logs", name: "x", namespace: "d" }),
-      buildReadArgv({ verb: "top", kind: "nodes" }),
-      buildReadArgv({ verb: "events" }),
+      ["get", "deployment", "web", "-n", "prod", "-o", "yaml"],
+      ["get", "svc,ingress,configmap", "-n", "prod", "-o", "json"],
+      ["get", "pods", "--selector", "app=web", "-A"],
+      ["get", "deployment", "-o", "jsonpath={.items[*].metadata.name}"],
+      ["api-resources"],
+      ["explain", "deployment.spec"],
+      ["rollout", "status", "deployment/web"],
+      ["auth", "can-i", "create", "pods"],
+      ["logs", "web-1", "--tail", "100"],
+      ["top", "nodes"],
+      ["events", "-A"],
     ]) {
-      expect(() => assertRead(argv, "prod")).not.toThrow();
+      expect(() => assertRead(argv, "prod"), argv.join(" ")).not.toThrow();
     }
   });
 
@@ -134,9 +137,30 @@ function fakeSpawnSeq(steps: Array<{ stdout?: string; stderr?: string; code?: nu
 }
 
 describe("runRead", () => {
+  test("a joined argument is repaired before it is ever spawned", async () => {
+    const { spawnFn, calls } = fakeSpawn({ stdout: "ok" });
+    await runRead(["get", "deployment,svc -o", "yaml"], null, spawnFn);
+    expect(calls[0]?.args).toEqual(["get", "deployment,svc", "-o", "yaml"]);
+  });
+
+  // A log capped from the front is whatever the container said when it booted.
+  test("a long log keeps its tail, because the end is the part that matters", async () => {
+    const { spawnFn } = fakeSpawn({ stdout: "OLD BOOT LINE\n" + "x".repeat(20000) + "\nTHE CRASH" });
+    const out = await runRead(["logs", "web-1", "--tail", "500"], null, spawnFn);
+    expect(out).toContain("THE CRASH");
+    expect(out).not.toContain("OLD BOOT LINE");
+    expect(out).toContain("[truncated:");
+  });
+
+  test("a listing still keeps its head", async () => {
+    const { spawnFn } = fakeSpawn({ stdout: "FIRST ROW\n" + "x".repeat(20000) });
+    const out = await runRead(["get", "pods", "-A"], null, spawnFn);
+    expect(out.startsWith("FIRST ROW")).toBe(true);
+  });
+
   test("spawns kubectl with the active context in front of the built argv", async () => {
     const { spawnFn, calls } = fakeSpawn({ stdout: "NAME  READY\n" });
-    const out = await runRead({ verb: "get", kind: "pods", namespace: "prod" }, "kind-rigel", spawnFn);
+    const out = await runRead(["get", "pods", "-n", "prod", "-o", "wide"], "kind-rigel", spawnFn);
     expect(calls).toEqual([
       { command: "kubectl", args: ["--context", "kind-rigel", "get", "pods", "-n", "prod", "-o", "wide"] },
     ]);
@@ -145,35 +169,39 @@ describe("runRead", () => {
 
   test("omits --context when no context is active", async () => {
     const { spawnFn, calls } = fakeSpawn({ stdout: "ok" });
-    await runRead({ verb: "events" }, null, spawnFn);
+    await runRead(["events", "-A"], null, spawnFn);
     expect(calls[0]?.args).toEqual(["events", "-A"]);
   });
 
-  test("caps oversized output and marks it truncated", async () => {
+  test("a cut-off read says how much is missing and how to narrow it", async () => {
     const { spawnFn } = fakeSpawn({ stdout: "x".repeat(20000) });
-    const out = await runRead({ verb: "get", kind: "pods" }, null, spawnFn);
-    expect(out).toBe("x".repeat(8192) + "\n[truncated]");
+    const out = await runRead(["get", "pods", "-A"], null, spawnFn);
+    expect(out.startsWith("x".repeat(8192))).toBe(true);
+    expect(out).toContain("20000 characters");
+    expect(out).toContain("may end mid-object");
+    expect(out).toContain("custom-columns");
   });
 
   test("a non-zero exit surfaces the code and the (capped) output", async () => {
     const { spawnFn } = fakeSpawn({ stderr: "Error from server (Forbidden)", code: 1 });
-    const out = await runRead({ verb: "get", kind: "pod", name: "nope" }, null, spawnFn);
+    const out = await runRead(["get", "pod", "nope"], null, spawnFn);
     expect(out).toMatch(/^kubectl exited 1:\nError from server \(Forbidden\)$/);
   });
 
   test("empty successful output still says something the model can speak", async () => {
     const { spawnFn } = fakeSpawn({});
-    expect(await runRead({ verb: "get", kind: "pods" }, null, spawnFn)).toBe("(no output)");
+    expect(await runRead(["get", "pods", "-A"], null, spawnFn)).toBe("(no output)");
   });
 
   test("a missing kubectl resolves to a message instead of rejecting", async () => {
     const { spawnFn } = fakeSpawn({ error: new Error("spawn kubectl ENOENT") });
-    expect(await runRead({ verb: "get", kind: "pods" }, null, spawnFn)).toMatch(/ENOENT/);
+    expect(await runRead(["get", "pods", "-A"], null, spawnFn)).toMatch(/ENOENT/);
   });
 
-  test("nothing is spawned when the argv cannot be built", async () => {
+  test("nothing is spawned for an empty read or a mutation", async () => {
     const spawnFn = vi.fn<SpawnRead>();
-    await expect(runRead({ verb: "describe", kind: "pod" }, null, spawnFn)).rejects.toThrow(/name/);
+    await expect(runRead([], null, spawnFn)).rejects.toThrow(/arguments/);
+    await expect(runRead(["delete", "pod", "web-1"], null, spawnFn)).rejects.toThrow(/refused/i);
     expect(spawnFn).not.toHaveBeenCalled();
   });
 });
@@ -192,9 +220,11 @@ describe("runRead NotFound recovery", () => {
       { stderr: NOT_FOUND, code: 1 },
       { stdout: DEPLOY_LIST },
     ]);
-    const out = await runRead({ verb: "get", kind: "deployment", name: "reddex", namespace: "default" }, null, spawnFn);
+    const out = await runRead(["get", "deployment", "reddex", "-n", "default"], null, spawnFn);
     expect(calls.map((c) => c.args)).toEqual([
-      ["get", "deployment", "reddex", "-n", "default", "-o", "wide"],
+      // Passed through exactly as the model wrote it; the recovery listing is
+      // ours, so it still picks its own -o wide.
+      ["get", "deployment", "reddex", "-n", "default"],
       ["get", "deployment", "-n", "default", "-o", "wide"],
     ]);
     expect(out).toContain("No deployment named \"reddex\"");
@@ -206,7 +236,7 @@ describe("runRead NotFound recovery", () => {
 
   test("the fallback argv is built and policy-checked exactly like the primary", async () => {
     const { spawnFn, calls } = fakeSpawnSeq([{ stderr: NOT_FOUND, code: 1 }, { stdout: DEPLOY_LIST }]);
-    await runRead({ verb: "get", kind: "deployment", name: "reddex", namespace: "default" }, "prod", spawnFn);
+    await runRead(["get", "deployment", "reddex", "-n", "default"], "prod", spawnFn);
     for (const call of calls) {
       const argv = call.args.slice(2);
       expect(call.args.slice(0, 2)).toEqual(["--context", "prod"]);
@@ -219,7 +249,7 @@ describe("runRead NotFound recovery", () => {
       { stderr: 'Error from server (NotFound): deployments.apps "nginx" not found', code: 1 },
       { stdout: DEPLOY_LIST },
     ]);
-    const out = await runRead({ verb: "get", kind: "deployment", name: "nginx", namespace: "default" }, null, spawnFn);
+    const out = await runRead(["get", "deployment", "nginx", "-n", "default"], null, spawnFn);
     expect(out).toContain("3 deployment");
     expect(out).toContain("Nothing is close by name");
     expect(out).toContain("reddex-custom-website-deploy");
@@ -227,7 +257,7 @@ describe("runRead NotFound recovery", () => {
 
   test("a describe that misses recovers the same way", async () => {
     const { spawnFn, calls } = fakeSpawnSeq([{ stderr: NOT_FOUND, code: 1 }, { stdout: DEPLOY_LIST }]);
-    await runRead({ verb: "describe", kind: "deployment", name: "reddex", namespace: "default" }, null, spawnFn);
+    await runRead(["describe", "deployment", "reddex", "-n", "default"], null, spawnFn);
     expect(calls[1]?.args).toEqual(["get", "deployment", "-n", "default", "-o", "wide"]);
   });
 
@@ -236,7 +266,7 @@ describe("runRead NotFound recovery", () => {
       { stderr: 'Error from server (NotFound): deployments.apps "reddexdeploy" not found', code: 1 },
       { stdout: DEPLOY_LIST },
     ]);
-    const out = await runRead({ verb: "get", kind: "deployment", name: "reddexdeploy" }, null, spawnFn);
+    const out = await runRead(["get", "deployment", "reddexdeploy"], null, spawnFn);
     expect(out).toContain("reddex-deploy");
   });
 
@@ -245,7 +275,7 @@ describe("runRead NotFound recovery", () => {
       { stderr: NOT_FOUND, code: 1 },
       { stderr: "Error from server (Forbidden)", code: 1 },
     ]);
-    const out = await runRead({ verb: "get", kind: "deployment", name: "reddex", namespace: "default" }, null, spawnFn);
+    const out = await runRead(["get", "deployment", "reddex", "-n", "default"], null, spawnFn);
     expect(calls).toHaveLength(2);
     expect(out).toContain("No deployment named \"reddex\"");
     expect(out).toContain("Forbidden");
@@ -256,18 +286,64 @@ describe("runRead NotFound recovery", () => {
       { stderr: 'Error from server (NotFound): deployments.apps "zzz" not found', code: 1 },
       { stdout: "NAME\n" + "x".repeat(20000) },
     ]);
-    const out = await runRead({ verb: "get", kind: "deployment", name: "zzz", namespace: "default" }, null, spawnFn);
-    expect(out).toContain("[truncated]");
+    const out = await runRead(["get", "deployment", "zzz", "-n", "default"], null, spawnFn);
+    expect(out).toContain("[truncated:");
     expect(out.length).toBeLessThan(8192 + 512);
   });
 
   test("a failure that is not a miss, and a listing get, never fall back", async () => {
     const denied = fakeSpawnSeq([{ stderr: "Error from server (Forbidden): deployments.apps is forbidden", code: 1 }]);
-    await runRead({ verb: "get", kind: "deployment", name: "reddex", namespace: "default" }, null, denied.spawnFn);
+    await runRead(["get", "deployment", "reddex", "-n", "default"], null, denied.spawnFn);
     expect(denied.calls).toHaveLength(1);
 
     const listing = fakeSpawnSeq([{ stdout: "No resources found in default namespace.", code: 0 }]);
-    await runRead({ verb: "get", kind: "deployment", namespace: "default" }, null, listing.spawnFn);
+    await runRead(["get", "deployment", "-n", "default"], null, listing.spawnFn);
     expect(listing.calls).toHaveLength(1);
+  });
+});
+
+const PLAINTEXT = "hunter2-super-secret";
+const ENCODED = Buffer.from(PLAINTEXT).toString("base64");
+
+describe("runRead never hands a Secret's value to the model", () => {
+  const secretYaml = `apiVersion: v1
+kind: Secret
+metadata:
+  name: db-credentials
+  namespace: default
+type: Opaque
+data:
+  password: ${ENCODED}
+`;
+
+  test("a yaml read comes back with the shape and without the value", async () => {
+    const { spawnFn } = fakeSpawn({ stdout: secretYaml });
+    const out = await runRead(["get", "secret", "db-credentials", "-n", "default", "-o", "yaml"], null, spawnFn);
+    expect(out).not.toContain(ENCODED);
+    expect(out).not.toContain(PLAINTEXT);
+    expect(out).toContain("db-credentials");
+    expect(out).toContain("password");
+  });
+
+  test("a json read is filtered too", async () => {
+    const json = JSON.stringify({ kind: "Secret", metadata: { name: "s" }, data: { password: ENCODED } });
+    const { spawnFn } = fakeSpawn({ stdout: json });
+    const out = await runRead(["get", "secret", "s", "-o", "json"], null, spawnFn);
+    expect(out).not.toContain(ENCODED);
+  });
+
+  test("a Secret swept up by a multi-kind read is filtered as well", async () => {
+    const { spawnFn } = fakeSpawn({ stdout: `${secretYaml}---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: cm\ndata:\n  keep: visible\n` });
+    const out = await runRead(["get", "secret,configmap", "-n", "default", "-o", "yaml"], null, spawnFn);
+    expect(out).not.toContain(ENCODED);
+    expect(out).toContain("visible");
+  });
+
+  test("value extraction on a secret is refused before it runs, and names the way to read it", async () => {
+    const spawnFn = vi.fn<SpawnRead>();
+    await expect(
+      runRead(["get", "secret", "db", "-o", "jsonpath={.data.password}"], null, spawnFn),
+    ).rejects.toThrow(/-o yaml/);
+    expect(spawnFn).not.toHaveBeenCalled();
   });
 });

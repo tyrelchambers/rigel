@@ -4,6 +4,12 @@ import type { SuggestedAction } from "@rigel/k8s/src/actionBlocks";
 import type { RepoLink } from "@rigel/k8s/src/gitSources";
 import type { RepoFixResult } from "@rigel/k8s/src/repoFix";
 
+/** What the propose-fix route answers with, plus what adoption committed. */
+export interface ProposeFixResult extends RepoFixResult {
+  /** kind/name of every resource an adoption pull request carries. */
+  included?: string[];
+}
+
 export interface AgentConfig {
   url: string;
   token: string;
@@ -44,14 +50,39 @@ export interface WorkloadRef {
   namespace?: string;
 }
 
+/** One resource belonging to an app, as the discovery engine reports it. */
+export interface RelatedResource {
+  kind: string;
+  name: string;
+  namespace: string;
+}
+
+export interface RelatedResources {
+  name: string;
+  namespace: string;
+  resources: RelatedResource[];
+  helmRelease?: string;
+  blockedReason?: string;
+}
+
 export interface ServerClient {
   agentConfig(): Promise<AgentConfig>;
+  /** Every resource belonging to one app, found the way the app itself was
+   *  labelled rather than by a selector the model guessed at. */
+  relatedResources(
+    name: string,
+    namespace: string,
+    context: string | null,
+    kind?: string,
+  ): Promise<RelatedResources>;
+  /** Records a request no action kind expresses, so the gap is visible. */
+  reportUnsupported(request: string, context: string | null): Promise<void>;
   /** Whether a workload is deployed from a Git source, and which one. */
   repoLink(workload: WorkloadRef, context: string | null): Promise<{ linked: boolean; link: RepoLink | null }>;
   /** Opens a pull request for the change the action describes. Changes no
    *  cluster state, so the agent may reach this on the operator's instruction
    *  without a click; the server stamps the PR `rigel:voice`. */
-  proposeFix(action: SuggestedAction, context: string | null): Promise<RepoFixResult>;
+  proposeFix(action: SuggestedAction, context: string | null): Promise<ProposeFixResult>;
   previewAction(action: SuggestedAction, context: string | null): Promise<string[]>;
   /** Runs a change the operator asked for. Reachable ONLY for kinds
    *  isAutoRunnable admits: destructive work goes to the desktop's confirm
@@ -88,6 +119,20 @@ export function createServerClient(
       if (!res.ok) throw new Error(`agent-config failed: ${res.status}`);
       return (await res.json()) as AgentConfig;
     },
+    async relatedResources(name, namespace, context, kind) {
+      const query = new URLSearchParams({ name, namespace, kind: kind ?? "deployment" });
+      const res = await fetchFn(`${base}/api/discover?${query}`, { headers: headers(context) });
+      if (!res.ok) throw new Error(await errorMessage(res, "discover"));
+      return (await res.json()) as RelatedResources;
+    },
+    async reportUnsupported(request, context) {
+      const res = await fetchFn(`${base}/api/ai/unsupported`, {
+        method: "POST",
+        headers: headers(context),
+        body: JSON.stringify({ request }),
+      });
+      if (!res.ok) throw new Error(await errorMessage(res, "reporting the request"));
+    },
     async repoLink(workload, context) {
       const query = new URLSearchParams({
         namespace: workload.namespace ?? "default",
@@ -109,11 +154,13 @@ export function createServerClient(
           name: action.name,
           ...(action.namespace ? { namespace: action.namespace } : {}),
           ...(action.resourceKind ? { resourceKind: action.resourceKind } : {}),
-          edit: action.edit,
+          // Adoption carries no edit: the server reads the cluster and builds
+          // every file, which is the whole point of it.
+          ...(action.kind === "adoptWorkload" ? { adopt: true } : { edit: action.edit }),
         }),
       });
       if (!res.ok) throw new Error(await errorMessage(res, "propose-fix"));
-      return (await res.json()) as RepoFixResult;
+      return (await res.json()) as ProposeFixResult;
     },
     async previewAction(action, context) {
       const res = await fetchFn(`${base}/api/action?preview=1`, {

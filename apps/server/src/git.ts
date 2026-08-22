@@ -332,7 +332,9 @@ export async function resolveDeploymentLink(
 /** The change a propose-fix request carries, in one of the two RepoFixInput shapes. */
 export type ProposeFixChange =
   | { filePath: string; content: string }
-  | { target: { kind: string; name: string; namespace: string }; edit: ManifestEdit };
+  | { target: { kind: string; name: string; namespace: string }; edit: ManifestEdit }
+  /** Adoption: export the workload and everything around it into the repo. */
+  | { adopt: { kind: string; name: string; namespace: string } };
 
 export interface ParsedProposeFix {
   /** The deployment's provenance id (the rigel.dev/source-repo value). */
@@ -386,8 +388,10 @@ export function parseProposeFixRequest(raw: unknown): ParsedProposeFix | string 
 
   const hasFile = typeof raw.filePath === "string" && typeof raw.content === "string";
   const hasEdit = typeof raw.name === "string" && raw.edit !== undefined;
-  if (hasFile === hasEdit) {
-    return "a fix carries either filePath with content, or name with edit, and not both";
+  const hasAdopt = raw.adopt === true && typeof raw.name === "string";
+  const shapes = [hasFile, hasEdit, hasAdopt].filter(Boolean).length;
+  if (shapes !== 1) {
+    return "a fix carries exactly one of: filePath with content, name with edit, or adopt with name";
   }
 
   const common = {
@@ -400,19 +404,15 @@ export function parseProposeFixRequest(raw: unknown): ParsedProposeFix | string 
   if (hasFile) {
     return { ...common, change: { filePath: raw.filePath as string, content: raw.content as string } };
   }
+  const workload = {
+    kind: typeof raw.resourceKind === "string" && raw.resourceKind ? raw.resourceKind : "deployment",
+    name: raw.name as string,
+    namespace: typeof raw.namespace === "string" && raw.namespace ? raw.namespace : "default",
+  };
+  if (hasAdopt) return { ...common, change: { adopt: workload } };
   const edit = parseEdit(raw.edit);
   if (typeof edit === "string") return edit;
-  return {
-    ...common,
-    change: {
-      target: {
-        kind: typeof raw.resourceKind === "string" && raw.resourceKind ? raw.resourceKind : "deployment",
-        name: raw.name as string,
-        namespace: typeof raw.namespace === "string" && raw.namespace ? raw.namespace : "default",
-      },
-      edit,
-    },
-  };
+  return { ...common, change: { target: workload, edit } };
 }
 
 // ---------------------------------------------------------------------------

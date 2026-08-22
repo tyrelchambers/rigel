@@ -22,7 +22,8 @@ import {
   type HelmChartSource,
 } from "@rigel/k8s/src/helm";
 import { browseArtifactHub } from "./artifactHub";
-import { handlePurge, type PurgeRequest } from "./purge";
+import { discover, handlePurge, type PurgeRequest } from "./purge";
+import { planAdoption, relatedTo } from "./adopt";
 import { discoverRecent, undoBatch } from "./recentDeploys";
 import {
   loadSources, saveSources, diffSource, applySource, previewRepoFix, proposeRepoFix, parseProposeFixRequest,
@@ -540,6 +541,32 @@ async function handler(req: Request): Promise<Response> {
         }),
       );
       return Response.json(result);
+    }
+
+    // POST /api/ai/unsupported — the operator asked for something no action
+    // kind expresses. Recorded rather than dropped: a vocabulary gap nobody can
+    // see is one that gets rediscovered one frustrating session at a time, and
+    // this is the ledger the app already keeps of what its assistants did.
+    if (url.pathname === "/api/ai/unsupported" && req.method === "POST") {
+      let body: { request?: string };
+      try {
+        body = (await req.json()) as typeof body;
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      const request = (body.request ?? "").trim();
+      if (!request) return Response.json({ error: "missing request" }, { status: 422 });
+      await recordAiAction(
+        context,
+        buildAiActionEntry({
+          action: { kind: "unsupported" },
+          source: isVoiceWorkerRequest(req) ? "voice" : "chat",
+          command: "",
+          outcome: "unsupported",
+          trigger: request,
+        }),
+      );
+      return Response.json({ ok: true });
     }
 
     // GET /api/voice/status: is the voice feature flag on, and is it configured.
@@ -1131,15 +1158,27 @@ async function handler(req: Request): Promise<Response> {
       if (!found) return Response.json({ error: "unknown source" }, { status: 404 });
       const token = await loadGithubToken(context);
       const origin = isVoiceWorkerRequest(req) ? ("voice" as const) : ("chat" as const);
+      const target = resolveTarget(found.repo, found.dep);
+      // Adoption resolves to files here rather than in the repo-fix core,
+      // because it reads the CLUSTER: discovery, export and cleaning are all
+      // kubectl work, and the core's job starts once there are files to commit.
+      let change: Record<string, unknown> = parsed.change as Record<string, unknown>;
+      let included: string[] = [];
+      if ("adopt" in parsed.change) {
+        const plan = await planAdoption(context, parsed.change.adopt, normalizeManifestPath(target.path));
+        if (!plan.ok) return Response.json({ ok: false, message: plan.message }, { status: 200 });
+        change = { files: plan.files };
+        included = plan.included ?? [];
+      }
       const input = {
-        source: resolveTarget(found.repo, found.dep),
+        source: target,
         token,
         title: parsed.title,
         body: parsed.body,
         origin,
-        ...parsed.change,
+        ...change,
       };
-      if (parsed.dryRun) return Response.json(await previewRepoFix(input));
+      if (parsed.dryRun) return Response.json({ ...(await previewRepoFix(input)), included });
       const result = await proposeRepoFix(input);
       if (result.ok && result.prUrl) {
         const slug = parseRepoSlug(input.source.repoURL);
@@ -1152,17 +1191,47 @@ async function handler(req: Request): Promise<Response> {
           source: parsed.source,
           title: parsed.title,
           branch: result.branch ?? "",
-          filePath: result.filePath ?? "",
+          filePath: (result.filePaths ?? []).join(", "),
           createdAt: new Date().toISOString(),
           origin,
         });
       }
-      return Response.json(result);
+      return Response.json({ ...result, included });
     }
 
     // GET /api/git/pull-requests — chat-opened PRs (the Pending PRs card).
     if (url.pathname === "/api/git/pull-requests" && req.method === "GET") {
       return Response.json({ pullRequests: await loadPullRequests(context) });
+    }
+
+    // GET /api/discover?name=&namespace=&kind= — what belongs to one workload.
+    //
+    // Follows what the objects state about themselves: the Service whose
+    // selector matches the workload's pod labels, the Ingress whose backend
+    // names that Service, and everything the pod template reads or mounts. The
+    // same closure adoption commits, so what the assistant reports and what a
+    // pull request would carry can never disagree.
+    //
+    // Deliberately NOT purge's discovery, which adds a name-prefix pass: right
+    // for a removal flow the operator confirms, wrong here, where it answered a
+    // question about reddex-deploy with a different app that shared a prefix.
+    // Purge is still asked for the one thing it alone knows.
+    if (url.pathname === "/api/discover" && req.method === "GET") {
+      const name = url.searchParams.get("name");
+      if (!name) return Response.json({ error: "missing name" }, { status: 422 });
+      const namespace = url.searchParams.get("namespace") || "default";
+      const kind = url.searchParams.get("kind") || "deployment";
+      const [resources, purgeView] = await Promise.all([
+        relatedTo(context, { kind, name, namespace }),
+        discover(context, namespace, name),
+      ]);
+      return Response.json({
+        name,
+        namespace,
+        resources,
+        ...(purgeView.helmRelease ? { helmRelease: purgeView.helmRelease } : {}),
+        ...(purgeView.blockedReason ? { blockedReason: purgeView.blockedReason } : {}),
+      });
     }
 
     // POST /api/purge — full app-removal flow (docs/parity/purge.md).

@@ -51,6 +51,59 @@ describe("voiceSystemPrompt", () => {
     expect(p).toContain("not linked to a repository");
   });
 
+  // The tool's schema names the kinds and their fields, so the prompt saying
+  // it again is duplication that can drift. It points at the schema instead.
+  test("leaves the vocabulary to the schema rather than reciting it", () => {
+    const p = voiceSystemPrompt("prod");
+    expect(p).toContain("Its schema lists every kind");
+    expect(p).not.toContain("sourceId");
+    expect(p).not.toContain("suspendCronJob");
+    expect(p).not.toContain('{"op":"setImage"');
+  });
+
+  // The three-call ceiling is what turned a copy-these-resources request into a
+  // turn of narration: one resource per call ran the budget out before it acted.
+  // It said "three" while maxToolSteps was raised to 8, which rationed the
+  // model out of the follow-up reads the work actually needs. Pinned so the
+  // prompt and the session option cannot drift apart again.
+  test("does not tell the model it has fewer tool calls than it has", () => {
+    const p = voiceSystemPrompt("prod");
+    expect(p).not.toContain("three tool calls");
+    expect(p).toContain("several tool calls");
+    expect(p).toContain("-o yaml");
+    expect(p).toContain("Secret values are removed");
+  });
+
+  // It guessed app=reddex, then app.kubernetes.io/instance=reddex, got two
+  // empty lists and reported nothing found, in a Rancher cluster whose real
+  // selector is workload.user.cattle.io/workloadselector=...
+  test("sends the operator's opening question to the tool that answers it", () => {
+    const p = voiceSystemPrompt("prod");
+    expect(p).toContain("queryRigel");
+    expect(p).toContain('query "related"');
+    expect(p).toContain("before any manual hunt");
+  });
+
+  test("teaches following the cluster rather than guessing a selector", () => {
+    const p = voiceSystemPrompt("prod");
+    expect(p).toContain("never by guessing a label");
+    expect(p).toContain("spec.selector.matchLabels");
+    expect(p).toContain("An empty result means your filter was wrong");
+  });
+
+  test("names the kind that adds manifests a repo does not have yet", () => {
+    const p = voiceSystemPrompt("prod");
+    expect(p).toContain("adoptWorkload");
+    expect(p).toContain("redeployed");
+    expect(p).toContain("redacted examples");
+  });
+
+  test("gives an unsupported request somewhere to go other than a wrong action", () => {
+    const p = voiceSystemPrompt("prod");
+    expect(p).toContain("Never approximate a request with a different action");
+    expect(p).toContain("reportUnsupported");
+  });
+
   test("pins the turn to the question just asked", () => {
     expect(voiceSystemPrompt("prod")).toContain("Answer the question just asked");
   });
@@ -66,10 +119,14 @@ describe("voiceSystemPrompt", () => {
   });
 });
 
-test("the voice prompt routes unmodelled changes to a real kind, not an invented one", () => {
+test("the voice prompt routes unmodelled changes to a real kind", () => {
   const p = voiceSystemPrompt("prod");
   expect(p).toContain("annotate");
-  expect(p).toContain("never invent a kind of your own");
+  expect(p).toContain("the command kind");
+  // Inventing a kind is impossible now that the tool has a schema, so the
+  // prompt no longer forbids it. What it still has to say is that being unable
+  // to name a change is not a reason to tell the operator it cannot be done.
+  expect(p).toContain("Never tell the user a change is impossible");
 });
 
 test("the voice prompt never asks for a spoken confirmation", () => {

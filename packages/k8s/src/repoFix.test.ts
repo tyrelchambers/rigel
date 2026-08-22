@@ -331,7 +331,7 @@ describe("proposeRepoFix", () => {
     expect(String(vi.mocked(writeFile).mock.calls[0]![1])).toContain("replicas: 4");
     expect(callMatching((a) => a[0] === "-C" && a.includes("add") && a.includes("k8s/web.yaml"))).toBeDefined();
     // The planned file comes back, because only the planner knew which it was.
-    expect(res.filePath).toBe("k8s/web.yaml");
+    expect(res.filePaths).toEqual(["k8s/web.yaml"]);
     expect(res.repoSlug).toBe("owner/repo");
   });
 
@@ -382,6 +382,80 @@ describe("proposeRepoFix", () => {
     const add = fetchMock.mock.calls.find((c) => String(c[0]).endsWith("/issues/7/labels"));
     const sent = JSON.parse((add![1] as RequestInit).body as string) as { labels: string[] };
     expect(sent.labels).toEqual(["rigel", "rigel:voice"]);
+  });
+});
+
+describe("a fix that writes several files", () => {
+  test("writes and commits every file, and reports them all", async () => {
+    mockRun.mockImplementation(gitOk());
+    const fetchMock = vi.fn(async (_url: unknown, _init?: unknown) =>
+      new Response(JSON.stringify({ html_url: "https://github.com/owner/repo/pull/7", number: 7 }), { status: 201 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await proposeRepoFix({
+      source: target,
+      token: "TOK",
+      title: "Adopt web",
+      files: [
+        { path: "k8s/deployment-web.yaml", content: "kind: Deployment\n" },
+        { path: "k8s/service-web.yaml", content: "kind: Service\n" },
+      ],
+    });
+
+    expect(res.ok).toBe(true);
+    expect(res.filePaths).toEqual(["k8s/deployment-web.yaml", "k8s/service-web.yaml"]);
+    const written = vi.mocked(writeFile).mock.calls.map((c) => String(c[0]));
+    expect(written.some((p) => p.endsWith("k8s/deployment-web.yaml"))).toBe(true);
+    expect(written.some((p) => p.endsWith("k8s/service-web.yaml"))).toBe(true);
+    for (const rel of ["k8s/deployment-web.yaml", "k8s/service-web.yaml"]) {
+      expect(callMatching((a) => a.includes("add") && a.includes(rel)), rel).toBeDefined();
+    }
+  });
+
+  test("a traversal path anywhere in the list is refused before any clone", async () => {
+    const res = await proposeRepoFix({
+      source: target,
+      token: "TOK",
+      title: "t",
+      files: [
+        { path: "k8s/ok.yaml", content: "a" },
+        { path: "../escape.yaml", content: "b" },
+      ],
+    });
+    expect(res.ok).toBe(false);
+    expect(mockRun).not.toHaveBeenCalled();
+  });
+
+  test("files together with another shape is refused, like every other pairing", async () => {
+    const res = await proposeRepoFix({
+      source: target,
+      token: "TOK",
+      title: "t",
+      filePath: "k8s/a.yaml",
+      content: "a",
+      files: [{ path: "k8s/b.yaml", content: "b" }],
+    });
+    expect(res.ok).toBe(false);
+    expect(mockRun).not.toHaveBeenCalled();
+  });
+
+  test("a single-file fix still reports one path", async () => {
+    mockRun.mockImplementation(gitOk());
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: unknown, _init?: unknown) =>
+        new Response(JSON.stringify({ html_url: "https://github.com/owner/repo/pull/7", number: 7 }), { status: 201 }),
+      ),
+    );
+    const res = await proposeRepoFix({
+      source: target,
+      token: "TOK",
+      title: "t",
+      filePath: "k8s/app.yaml",
+      content: "new",
+    });
+    expect(res.filePaths).toEqual(["k8s/app.yaml"]);
   });
 });
 
@@ -436,7 +510,7 @@ describe("a typed edit against a source whose path is wrong", () => {
 
     expect(res.ok).toBe(true);
     // Found without a configured directory, and reported at its repo path.
-    expect(res.filePath).toBe("deploy/web.yaml");
+    expect(res.filePaths).toEqual(["deploy/web.yaml"]);
   });
 });
 

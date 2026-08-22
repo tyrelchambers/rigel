@@ -4,7 +4,7 @@
 // unattended; DESTRUCTIVE ones are denied and steered to a confirm-over-text
 // action block. Wired via --settings in chatTurn.ts (matcher: Bash). Mirrors
 // apps/server/permissionHook.ts but three-tiered.
-import { classifyTier } from "@rigel/k8s/src/commandPolicy.js";
+import { classifyTier, printsSecretValues, SECRET_VALUES_HINT } from "@rigel/k8s/src/commandPolicy.js";
 import { fileURLToPath } from "node:url";
 
 export interface HookDecision {
@@ -14,6 +14,12 @@ export interface HookDecision {
 
 /** Pure decision for one Bash command. read/reversible → allow, else deny. */
 export function decide(command: string): HookDecision {
+  // Refused for what its output carries rather than for what it changes: this
+  // turn's output is written to the audit ledger, and a Secret's values have no
+  // business there. `describe secret` gives the same shape without them.
+  if (printsSecretValues(command)) {
+    return { permissionDecision: "deny", permissionDecisionReason: SECRET_VALUES_HINT };
+  }
   const { tier, reason } = classifyTier(command);
   if (tier === "read" || tier === "reversible") {
     return { permissionDecision: "allow", permissionDecisionReason: reason };
