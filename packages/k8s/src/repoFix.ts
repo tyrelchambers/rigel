@@ -78,6 +78,10 @@ export async function ensureCheckout(
  * - `target` + `edit`: the change as an intent. The manifest defining `target`
  *   is located in the checkout and edited here, so nothing has to retype a file
  *   it cannot see. See manifestEdit.ts.
+ * - `files`: complete files to write, which is how a workload and everything
+ *   around it get committed in one pull request. writeProposedFile mkdirs, so a
+ *   manifest directory the repo does not have yet is created rather than a
+ *   failure.
  */
 export interface RepoFixInput {
   source: ResolvedTarget;
@@ -86,6 +90,7 @@ export interface RepoFixInput {
   content?: string;
   target?: Omit<ManifestTarget, "dir">;
   edit?: ManifestEdit;
+  files?: { path: string; content: string }[];
   title: string;
   body?: string;
   /** Stamps `rigel` + `rigel:<origin>` labels on the PR. Omit to skip labelling. */
@@ -104,8 +109,8 @@ export interface RepoFixResult {
   /** The opened PR's number. */
   number?: number;
   branch?: string;
-  /** The file the fix changed, which a typed edit only knows after planning. */
-  filePath?: string;
+  /** The files the fix changed, which a typed edit only knows after planning. */
+  filePaths?: string[];
   /** owner/repo, so a caller can name the repository without re-parsing the URL. */
   repoSlug?: string;
   message?: string;
@@ -118,12 +123,15 @@ export interface RepoFixResult {
 function validateChangeShape(input: RepoFixInput): string | null {
   const hasFile = typeof input.filePath === "string" && typeof input.content === "string";
   const hasEdit = input.target !== undefined && input.edit !== undefined;
-  if (hasFile === hasEdit) {
-    return "a fix carries either a file path with its new content, or a target with a typed edit, and not both";
+  const hasFiles = Array.isArray(input.files) && input.files.length > 0;
+  const shapes = [hasFile, hasEdit, hasFiles].filter(Boolean).length;
+  if (shapes !== 1) {
+    return "a fix carries exactly one of: a file path with its new content, a target with a typed edit, or a list of files";
   }
-  if (hasFile) {
+  const paths = hasFile ? [input.filePath!] : hasFiles ? input.files!.map((f) => f.path) : [];
+  for (const path of paths) {
     try {
-      safeRepoFilePath(input.filePath!);
+      safeRepoFilePath(path);
     } catch (e) {
       return e instanceof Error ? e.message : String(e);
     }
@@ -131,7 +139,13 @@ function validateChangeShape(input: RepoFixInput): string | null {
   return null;
 }
 
-type ResolvedChange = { ok: true; rel: string; content: string } | { ok: false; message: string };
+/** One file to write, relative to the repo root. */
+interface PlannedFile {
+  rel: string;
+  content: string;
+}
+
+type ResolvedChange = { ok: true; files: PlannedFile[] } | { ok: false; message: string };
 
 /**
  * Turn the request into the one file to write, relative to the repo root. The
@@ -139,8 +153,11 @@ type ResolvedChange = { ok: true; rel: string; content: string } | { ok: false; 
  * directory out of the checkout and plans the edit against it.
  */
 async function resolveChange(dir: string, input: RepoFixInput): Promise<ResolvedChange> {
+  if (input.files && input.files.length > 0) {
+    return { ok: true, files: input.files.map((f) => ({ rel: safeRepoFilePath(f.path), content: f.content })) };
+  }
   if (typeof input.filePath === "string" && typeof input.content === "string") {
-    return { ok: true, rel: safeRepoFilePath(input.filePath), content: input.content };
+    return { ok: true, files: [{ rel: safeRepoFilePath(input.filePath), content: input.content }] };
   }
   const manifestDir = normalizeManifestPath(input.source.path);
   const where =
@@ -159,7 +176,7 @@ async function resolveChange(dir: string, input: RepoFixInput): Promise<Resolved
   }
   const plan = planManifestEdit(files, { ...input.target!, dir: manifestDir }, input.edit!);
   if (!plan.ok) return plan;
-  return { ok: true, rel: safeRepoFilePath(plan.filePath), content: plan.content };
+  return { ok: true, files: [{ rel: safeRepoFilePath(plan.filePath), content: plan.content }] };
 }
 
 /** Every manifest under the source's directory, keyed by its repo-relative
@@ -191,12 +208,13 @@ export async function previewRepoFix(input: RepoFixInput): Promise<RepoFixPrevie
 
   const change = await resolveChange(co.dir, input);
   if (!change.ok) return { ok: false, message: change.message };
-  const rel = change.rel;
 
-  await writeProposedFile(co.dir, rel, change.content);
-  // --intent-to-add makes brand-new files show up in `git diff`.
-  await runGit(["-C", co.dir, "add", "--intent-to-add", rel]);
-  const diff = await runGit(["-C", co.dir, "diff", "--", rel]);
+  for (const file of change.files) {
+    await writeProposedFile(co.dir, file.rel, file.content);
+    // --intent-to-add makes brand-new files show up in `git diff`.
+    await runGit(["-C", co.dir, "add", "--intent-to-add", file.rel]);
+  }
+  const diff = await runGit(["-C", co.dir, "diff", "--", ...change.files.map((f) => f.rel)]);
   return { ok: true, diff: diff.stdout || "(new file — no prior version)" };
 }
 
@@ -215,14 +233,15 @@ export async function proposeRepoFix(input: RepoFixInput): Promise<RepoFixResult
 
   const change = await resolveChange(co.dir, input);
   if (!change.ok) return { ok: false, message: change.message };
-  const rel = change.rel;
 
   const branch = fixBranchName(input.title, randomSuffix());
   const created = await runGit(["-C", co.dir, "checkout", "-b", branch]);
   if (created.code !== 0) return { ok: false, message: created.stderr || "failed to create branch" };
 
-  await writeProposedFile(co.dir, rel, change.content);
-  await runGit(["-C", co.dir, "add", rel]);
+  for (const file of change.files) {
+    await writeProposedFile(co.dir, file.rel, file.content);
+    await runGit(["-C", co.dir, "add", file.rel]);
+  }
   const commit = await runGit([
     "-C", co.dir,
     "-c", "user.email=rigel@users.noreply.github.com",
@@ -253,7 +272,7 @@ export async function proposeRepoFix(input: RepoFixInput): Promise<RepoFixResult
   if (result.number && input.origin) {
     await labelPullRequest(slug, input.token, result.number, input.origin);
   }
-  return { ...result, filePath: rel, repoSlug: `${slug.owner}/${slug.repo}` };
+  return { ...result, filePaths: change.files.map((f) => f.rel), repoSlug: `${slug.owner}/${slug.repo}` };
 }
 
 async function writeProposedFile(dir: string, rel: string, content: string): Promise<void> {

@@ -1178,7 +1178,7 @@ async function handler(req: Request): Promise<Response> {
           source: parsed.source,
           title: parsed.title,
           branch: result.branch ?? "",
-          filePath: result.filePath ?? "",
+          filePath: (result.filePaths ?? []).join(", "),
           createdAt: new Date().toISOString(),
           origin,
         });
