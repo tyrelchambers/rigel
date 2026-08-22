@@ -33,23 +33,20 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
         tools: {
           readCluster: llm.tool({
             description:
-              "Read live Kubernetes state from the active cluster. verb is one of get, describe, logs, top, events.",
+              "Read the active cluster with literal kubectl arguments, e.g. [\"get\",\"deployment\",\"web\",\"-n\",\"default\",\"-o\",\"yaml\"]. Anything that only reads is allowed; a mutation is refused. Batch several resources into one call rather than spending a turn on several.",
             parameters: z.object({
-              verb: z.enum(["get", "describe", "logs", "top", "events"]),
-              kind: z.string().optional(),
-              name: z.string().optional(),
-              namespace: z.string().optional(),
-              container: z.string().optional(),
-              tail: z.number().int().positive().optional(),
+              args: z
+                .array(z.string())
+                .describe("kubectl arguments, without the binary and without --context"),
             }),
-            execute: async (args) => {
+            execute: async ({ args }) => {
               try {
                 return await runRead(args, state.activeContext);
               } catch (err) {
                 // Handed back to the model as tool output rather than thrown,
                 // so nothing else ever sees it: without this line a failed read
                 // leaves no trace outside the model's own context.
-                console.error(`readCluster ${args.verb} failed:`, err);
+                console.error(`readCluster ${args.join(" ")} failed:`, err);
                 return String(err);
               }
             },

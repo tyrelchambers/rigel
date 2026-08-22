@@ -144,10 +144,12 @@ afterEach(() => {
 describe("buildAgent", () => {
   const agentOf = (state = emptySessionState()) => buildAgent(state, fakeServer(), fakeRoom().room);
 
-  test("exposes readCluster with a closed verb set", () => {
+  // The guard is what a command does, not the shape the request may take. A
+  // closed verb set here is what left the agent unable to read YAML at all.
+  test("readCluster takes literal kubectl arguments, not a closed verb set", () => {
     const tool = agentOf().toolCtx.getFunctionTool("readCluster");
-    const shape = (tool?.parameters as { shape: { verb: { options: string[] } } }).shape;
-    expect(shape.verb.options).toEqual(["get", "describe", "logs", "top", "events"]);
+    const shape = (tool?.parameters as { shape: Record<string, unknown> }).shape;
+    expect(Object.keys(shape)).toEqual(["args"]);
   });
 
   test("the instructions name the active context the session was built with", () => {
@@ -176,11 +178,9 @@ describe("buildAgent", () => {
     expect(agent.instructions).toContain("No kubectl context is selected");
   });
 
-  test("a read the builder rejects comes back as text, not a thrown tool call", async () => {
+  test("a read the policy refuses comes back as text, not a thrown tool call", async () => {
     const tool = agentOf().toolCtx.getFunctionTool("readCluster");
-    await expect(tool!.execute({ verb: "describe", kind: "pod" }, {} as never)).resolves.toMatch(
-      /describe needs kind and name/,
-    );
+    await expect(tool!.execute({ args: ["delete", "pod", "web-1"] }, {} as never)).resolves.toMatch(/refused/i);
   });
 
   test("a completed user turn absorbs the buffered context lines exactly once", async () => {

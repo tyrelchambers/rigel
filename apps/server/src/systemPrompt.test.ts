@@ -61,6 +61,15 @@ describe("voiceSystemPrompt", () => {
     expect(p).not.toContain('{"op":"setImage"');
   });
 
+  // The three-call ceiling is what turned a copy-these-resources request into a
+  // turn of narration: one resource per call ran the budget out before it acted.
+  test("tells it to batch reads, because a turn only gets three tool calls", () => {
+    const p = voiceSystemPrompt("prod");
+    expect(p).toContain("three tool calls");
+    expect(p).toContain("-o yaml");
+    expect(p).toContain("Secret values are removed");
+  });
+
   test("pins the turn to the question just asked", () => {
     expect(voiceSystemPrompt("prod")).toContain("Answer the question just asked");
   });
