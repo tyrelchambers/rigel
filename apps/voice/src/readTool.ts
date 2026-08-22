@@ -135,6 +135,19 @@ async function recoverMiss(
   return `${miss} ${count} Nothing is close by name. Full listing:\n${listing.text}`;
 }
 
+/**
+ * Split arguments a model jammed together. Field-tested: it repeatedly sent
+ * ["get", "deployment,svc,hpa -o", "yaml"], with the flag INSIDE the
+ * resource-type argument, then "fixed" it by dropping a resource type and
+ * failing again, four calls in a row, because the error names the mangled type
+ * and not the space. A kubectl argument never legitimately contains a space
+ * followed by a flag, so this splits exactly that and leaves everything else
+ * (jsonpath expressions, selectors, custom-columns) untouched.
+ */
+export function splitJoinedArgs(args: string[]): string[] {
+  return args.flatMap((arg) => (/\S\s+-{1,2}\S/.test(arg) ? arg.split(/\s+/).filter(Boolean) : [arg]));
+}
+
 /** Policy-check, spawn, redact and cap the output of one kubectl read. */
 export async function runRead(
   args: string[],
@@ -142,6 +155,7 @@ export async function runRead(
   spawnFn: SpawnRead = spawnKubectl,
 ): Promise<string> {
   if (args.length === 0) throw new Error("refused: a read needs kubectl arguments");
+  args = splitJoinedArgs(args);
   assertRead(args, context);
   // The one case redaction cannot cover: the output would be the bare value
   // with no structure left to filter, so it is refused before it runs.

@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { assertRead, namedGet, runRead, type ReadChild, type SpawnRead } from "./readTool.js";
+import { assertRead, namedGet, runRead, splitJoinedArgs, type ReadChild, type SpawnRead } from "./readTool.js";
 
 /** A stand-in for a kubectl child process: emits the given chunks, then closes. */
 function fakeSpawn(opts: { stdout?: string; stderr?: string; code?: number | null; error?: Error }) {
@@ -32,6 +32,38 @@ function fakeSpawn(opts: { stdout?: string; stderr?: string; code?: number | nul
   };
   return { spawnFn, calls };
 }
+
+describe("splitJoinedArgs", () => {
+  // The exact failure: four calls in a row, each dropping a resource type
+  // instead of seeing the space, because kubectl's error names the mangled type.
+  test("splits a flag that was jammed into the resource-type argument", () => {
+    expect(splitJoinedArgs(["get", "deployment,svc,hpa -o", "yaml"])).toEqual([
+      "get",
+      "deployment,svc,hpa",
+      "-o",
+      "yaml",
+    ]);
+    expect(splitJoinedArgs(["get", "deployment,svc -l", "app=web", "-o", "yaml"])).toEqual([
+      "get",
+      "deployment,svc",
+      "-l",
+      "app=web",
+      "-o",
+      "yaml",
+    ]);
+  });
+
+  test("leaves an argument that merely contains a space alone", () => {
+    for (const args of [
+      ["get", "pods", "-o", "custom-columns=NAME:.metadata.name,AGE:.metadata.creationTimestamp"],
+      ["get", "pods", "-o", "jsonpath={range .items[*]}{.metadata.name}{end}"],
+      ["get", "pods", "--field-selector", "status.phase=Running"],
+      ["describe", "pod", "web-1"],
+    ]) {
+      expect(splitJoinedArgs(args), args.join(" ")).toEqual(args);
+    }
+  });
+});
 
 describe("namedGet", () => {
   test("recognises the shapes the NotFound recovery can help with", () => {
@@ -105,6 +137,12 @@ function fakeSpawnSeq(steps: Array<{ stdout?: string; stderr?: string; code?: nu
 }
 
 describe("runRead", () => {
+  test("a joined argument is repaired before it is ever spawned", async () => {
+    const { spawnFn, calls } = fakeSpawn({ stdout: "ok" });
+    await runRead(["get", "deployment,svc -o", "yaml"], null, spawnFn);
+    expect(calls[0]?.args).toEqual(["get", "deployment,svc", "-o", "yaml"]);
+  });
+
   test("spawns kubectl with the active context in front of the built argv", async () => {
     const { spawnFn, calls } = fakeSpawn({ stdout: "NAME  READY\n" });
     const out = await runRead(["get", "pods", "-n", "prod", "-o", "wide"], "kind-rigel", spawnFn);

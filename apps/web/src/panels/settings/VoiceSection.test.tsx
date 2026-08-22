@@ -81,7 +81,7 @@ describe("VoiceSection", () => {
 
   it("offers the default id as each model field's placeholder", () => {
     render(<VoiceSection />);
-    expect(field(/^model$/i).placeholder).toBe("openai/gpt-4.1-mini");
+    expect(field(/^model$/i).placeholder).toBe("openai/gpt-4.1");
     expect(field(/speech to text model/i).placeholder).toBe("deepgram/nova-3");
     expect(field(/text to speech model/i).placeholder).toBe("cartesia/sonic-2");
   });

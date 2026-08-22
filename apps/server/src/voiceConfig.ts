@@ -9,7 +9,17 @@ import {
 } from "./clusterConfigStore";
 import { VOICE_CONFIG_KEY } from "@rigel/k8s/src/userConfig";
 
-export const DEFAULT_VOICE_MODEL = "openai/gpt-4.1-mini";
+/**
+ * The model driving the voice turn. Any OpenRouter slug works, and Settings
+ * exposes it, because this is the single biggest lever on whether the assistant
+ * understands what was asked.
+ *
+ * It was gpt-4.1-mini, and the mini tier could not drive the tools: given
+ * literal kubectl arguments it put a flag inside a resource-type string, then
+ * "corrected" itself four calls running by deleting a resource type instead of
+ * the space, and asked which resources to gather after being told "everything".
+ */
+export const DEFAULT_VOICE_MODEL = "openai/gpt-4.1";
 // LiveKit Inference model strings (provider/model). nova-3 is Deepgram's
 // low-latency streaming STT; sonic-2 is Cartesia's balanced low-latency TTS.
 // Both run through the same LiveKit API key/secret as the turn detector.

@@ -129,6 +129,12 @@ async function main(): Promise<void> {
       // generation absorbs most of what the floor costs time to first token.
       endpointing: { mode: "dynamic", minDelay: 900, maxDelay: 4000 },
     },
+    // The SDK default is 3, which is not a budget for work: a model that makes
+    // one recoverable mistake, or that reads three resources before acting, has
+    // nothing left and the turn ends in narration. Field-tested at 3 and it
+    // ended in narration every time. Each step is one tool call, and the tools
+    // are policy-gated, so the ceiling is about patience rather than safety.
+    maxToolSteps: 8,
     keytermsOptions: { keyterms: state.keyterms },
   });
 
