@@ -542,6 +542,32 @@ async function handler(req: Request): Promise<Response> {
       return Response.json(result);
     }
 
+    // POST /api/ai/unsupported — the operator asked for something no action
+    // kind expresses. Recorded rather than dropped: a vocabulary gap nobody can
+    // see is one that gets rediscovered one frustrating session at a time, and
+    // this is the ledger the app already keeps of what its assistants did.
+    if (url.pathname === "/api/ai/unsupported" && req.method === "POST") {
+      let body: { request?: string };
+      try {
+        body = (await req.json()) as typeof body;
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      const request = (body.request ?? "").trim();
+      if (!request) return Response.json({ error: "missing request" }, { status: 422 });
+      await recordAiAction(
+        context,
+        buildAiActionEntry({
+          action: { kind: "unsupported" },
+          source: isVoiceWorkerRequest(req) ? "voice" : "chat",
+          command: "",
+          outcome: "unsupported",
+          trigger: request,
+        }),
+      );
+      return Response.json({ ok: true });
+    }
+
     // GET /api/voice/status: is the voice feature flag on, and is it configured.
     if (url.pathname === "/api/voice/status" && req.method === "GET") {
       return Response.json(await voiceStatus(context));

@@ -124,6 +124,17 @@ describe("createServerClient", () => {
     await expect(c.relatedResources("", "default", null)).rejects.toThrow("missing name");
   });
 
+  test("reportUnsupported records what was asked", async () => {
+    const f = fakeFetch(200, { ok: true });
+    const c = createServerClient(BASE, "sess", "wt", f);
+    await c.reportUnsupported("add manifests for reddex-deploy to the repo", "prod");
+    const [urlArg, init] = (f as unknown as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(urlArg).toBe(`${BASE}/api/ai/unsupported`);
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      request: "add manifests for reddex-deploy to the repo",
+    });
+  });
+
   test("runAction posts the action and returns the kubectl result", async () => {
     const ok = createServerClient(BASE, "sess", "wt", fakeFetch(200, { code: 0, stdout: "restarted", stderr: "" }));
     expect((await ok.runAction({ kind: "restart", label: "x", name: "web" }, null)).code).toBe(0);

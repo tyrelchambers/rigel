@@ -42,7 +42,13 @@ export function truncateForLedger(value: string, max: number): string {
 /** Which AI surface ran the action. Both execute through the same server seams. */
 export type AiActionSource = "chat" | "voice";
 
-export type AiActionOutcome = "success" | "failure";
+/**
+ * "unsupported" is neither of the other two: nothing ran and nothing failed.
+ * The operator asked for something the vocabulary cannot express, and that is
+ * worth recording, because a gap nobody can see is one that gets rediscovered
+ * one frustrating session at a time.
+ */
+export type AiActionOutcome = "success" | "failure" | "unsupported";
 
 export interface AiActionTarget {
   /** Resource kind as addressed, e.g. "Deployment", "Pod", "secret". */
@@ -94,6 +100,7 @@ export interface AiActionInput {
 
 /** Past-tense label per action kind (docs/parity/contracts.md § 1 kinds). */
 const KIND_LABELS: Record<string, string> = {
+  unsupported: "Could not do",
   restart: "Restarted",
   rollback: "Rolled back",
   pause: "Paused",

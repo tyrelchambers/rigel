@@ -64,6 +64,8 @@ export interface ServerClient {
   /** Every resource belonging to one app, found the way the app itself was
    *  labelled rather than by a selector the model guessed at. */
   relatedResources(name: string, namespace: string, context: string | null): Promise<RelatedResources>;
+  /** Records a request no action kind expresses, so the gap is visible. */
+  reportUnsupported(request: string, context: string | null): Promise<void>;
   /** Whether a workload is deployed from a Git source, and which one. */
   repoLink(workload: WorkloadRef, context: string | null): Promise<{ linked: boolean; link: RepoLink | null }>;
   /** Opens a pull request for the change the action describes. Changes no
@@ -111,6 +113,14 @@ export function createServerClient(
       const res = await fetchFn(`${base}/api/discover?${query}`, { headers: headers(context) });
       if (!res.ok) throw new Error(await errorMessage(res, "discover"));
       return (await res.json()) as RelatedResources;
+    },
+    async reportUnsupported(request, context) {
+      const res = await fetchFn(`${base}/api/ai/unsupported`, {
+        method: "POST",
+        headers: headers(context),
+        body: JSON.stringify({ request }),
+      });
+      if (!res.ok) throw new Error(await errorMessage(res, "reporting the request"));
     },
     async repoLink(workload, context) {
       const query = new URLSearchParams({

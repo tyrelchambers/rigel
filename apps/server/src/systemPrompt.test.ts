@@ -91,6 +91,12 @@ describe("voiceSystemPrompt", () => {
     expect(p).toContain("An empty result means your filter was wrong");
   });
 
+  test("gives an unsupported request somewhere to go other than a wrong action", () => {
+    const p = voiceSystemPrompt("prod");
+    expect(p).toContain("Never approximate a request with a different action");
+    expect(p).toContain("reportUnsupported");
+  });
+
   test("pins the turn to the question just asked", () => {
     expect(voiceSystemPrompt("prod")).toContain("Answer the question just asked");
   });

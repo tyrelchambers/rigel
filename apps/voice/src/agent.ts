@@ -79,6 +79,28 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
               }
             },
           }),
+          // The escape hatch that makes giving up cheaper than smuggling. The
+          // model used to approximate an unsupported request with a valid but
+          // meaningless action, which reached the operator as a refusal about
+          // Rigel's internals rather than an answer about their cluster.
+          reportUnsupported: llm.tool({
+            description:
+              "Say that a request is something Rigel cannot do. Use it whenever no action expresses what was asked, instead of approximating with a different action.",
+            parameters: z.object({
+              request: z.string().describe("what the operator asked for, in one sentence"),
+            }),
+            execute: async ({ request }) => {
+              try {
+                await server.reportUnsupported(request, state.activeContext);
+              } catch (err) {
+                // Recording is the lesser half: the operator still needs the
+                // answer, so a ledger that refuses the write does not turn into
+                // silence on the call.
+                console.error("recording an unsupported request failed:", err);
+              }
+              return "Recorded. Tell the user in one sentence that Rigel cannot do that yet, name the nearest thing it can do, and do not attempt it another way.";
+            },
+          }),
           checkGitLink: llm.tool({
             description:
               "Whether a workload is deployed from a Git repository, and which one. Ask before proposing a change to a workload, and always before offering a pull request.",

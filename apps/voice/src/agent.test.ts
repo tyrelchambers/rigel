@@ -33,6 +33,7 @@ interface FakeServer extends ServerClient {
   previews: SuggestedAction[];
   runs: SuggestedAction[];
   proposals: SuggestedAction[];
+  unsupported: string[];
 }
 
 const LINK = {
@@ -48,11 +49,16 @@ function fakeServer(overrides: Partial<ServerClient> = {}): FakeServer {
   const previews: SuggestedAction[] = [];
   const runs: SuggestedAction[] = [];
   const proposals: SuggestedAction[] = [];
+  const unsupported: string[] = [];
   return {
     previews,
     runs,
     proposals,
+    unsupported,
     repoLink: async () => ({ linked: true, link: LINK }),
+    reportUnsupported: async (request) => {
+      unsupported.push(request);
+    },
     relatedResources: async (name, namespace) => ({
       name,
       namespace,
@@ -663,5 +669,37 @@ describe("queryRigel", () => {
     await expect(
       ask(buildAgent(emptySessionState(), server, fakeRoom().room), { query: "related", name: "web" }),
     ).resolves.toContain("socket hang up");
+  });
+});
+
+describe("reportUnsupported", () => {
+  const report = (agent: voice.Agent, server: FakeServer, request: string) =>
+    agent.toolCtx.getFunctionTool("reportUnsupported")!.execute({ request } as never, {} as never) as Promise<string>;
+
+  // Three sessions were lost to the model approximating an unsupported request
+  // with a valid-but-meaningless action: an annotation named
+  // "added-related-manifests" standing in for "commit these manifests".
+  test("records the request and tells the agent to say so plainly", async () => {
+    const server = fakeServer();
+    const out = await report(
+      buildAgent(emptySessionState(), server, fakeRoom().room),
+      server,
+      "commit manifests for reddex-deploy and its related resources to the repo",
+    );
+    expect(server.unsupported).toEqual([
+      "commit manifests for reddex-deploy and its related resources to the repo",
+    ]);
+    expect(out).toMatch(/one sentence/i);
+    expect(out).toMatch(/cannot/i);
+  });
+
+  test("a ledger that will not take it still leaves the agent something to say", async () => {
+    const server = fakeServer({
+      reportUnsupported: async () => {
+        throw new Error("configmap write forbidden");
+      },
+    });
+    const out = await report(buildAgent(emptySessionState(), server, fakeRoom().room), server, "do a thing");
+    expect(out).toMatch(/cannot/i);
   });
 });
