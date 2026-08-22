@@ -58,15 +58,16 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
           // that nothing is there.
           queryRigel: llm.tool({
             description:
-              "Ask Rigel what it already knows. query \"related\" returns every resource belonging to an app, found the way that app is actually labelled. Prefer this over inventing a label selector.",
+              "Ask Rigel what it already knows. query \"related\" returns everything belonging to a workload: the Services that select its pods, the Ingresses routing to them, and what its pods read. Prefer this over inventing a label selector.",
             parameters: z.object({
               query: z.literal("related"),
               name: z.string().describe("the app or workload name"),
               namespace: z.string().optional(),
+              kind: z.string().optional().describe("workload kind if not a Deployment"),
             }),
-            execute: async ({ name, namespace }) => {
+            execute: async ({ name, namespace, kind }) => {
               try {
-                const found = await server.relatedResources(name, namespace ?? "default", state.activeContext);
+                const found = await server.relatedResources(name, namespace ?? "default", state.activeContext, kind);
                 if (found.resources.length === 0) {
                   return `No resources found for ${name} in namespace ${found.namespace}. Check the name with a listing read before telling the user there is nothing there.`;
                 }

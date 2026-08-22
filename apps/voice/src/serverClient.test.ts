@@ -101,7 +101,7 @@ describe("createServerClient", () => {
     ).rejects.toThrow("unknown source");
   });
 
-  test("relatedResources asks the server, which knows how the cluster labels things", async () => {
+  test("relatedResources asks the server, which follows what the objects state", async () => {
     const f = fakeFetch(200, {
       name: "reddex-deploy",
       namespace: "default",
@@ -115,7 +115,7 @@ describe("createServerClient", () => {
     const res = await c.relatedResources("reddex-deploy", "default", "prod");
     expect(res.resources).toHaveLength(3);
     const [urlArg, init] = (f as unknown as ReturnType<typeof vi.fn>).mock.calls[0]!;
-    expect(String(urlArg)).toBe(`${BASE}/api/discover?name=reddex-deploy&namespace=default`);
+    expect(String(urlArg)).toBe(`${BASE}/api/discover?name=reddex-deploy&namespace=default&kind=deployment`);
     expect((init as RequestInit).headers).toMatchObject({ "X-Rigel-Context": "prod" });
   });
 

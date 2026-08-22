@@ -108,7 +108,12 @@ Additional kinds:
   `content`: the server discovers the related resources (the same engine purge
   uses, instance label then name prefix), reads each one, cleans it with
   `cleanExportedManifest`, and writes one file per resource at
-  `<manifest path>/<kind>-<name>.yaml`. A referenced Secret is committed as
+  `<manifest path>/<kind>-<name>.yaml`. What it includes is the same closure
+  `GET /api/discover` reports, so what the assistant says belongs to a workload
+  and what a pull request would carry can never disagree: the Services whose
+  selector matches the workload's pod labels, the Ingresses whose backend names
+  those Services, and the ConfigMaps, Secrets and PVCs the pod template reads or
+  mounts. Names are never matched, because a prefix is not a relationship. A referenced Secret is committed as
   `<kind>-<name>.yaml.example` with its values redacted, which `kubectl apply
   -R` ignores, so a later sync can never write it over the live Secret. A Helm
   release refuses, naming it, because rendered manifests drift from the chart.

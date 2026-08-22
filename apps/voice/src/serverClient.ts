@@ -69,7 +69,12 @@ export interface ServerClient {
   agentConfig(): Promise<AgentConfig>;
   /** Every resource belonging to one app, found the way the app itself was
    *  labelled rather than by a selector the model guessed at. */
-  relatedResources(name: string, namespace: string, context: string | null): Promise<RelatedResources>;
+  relatedResources(
+    name: string,
+    namespace: string,
+    context: string | null,
+    kind?: string,
+  ): Promise<RelatedResources>;
   /** Records a request no action kind expresses, so the gap is visible. */
   reportUnsupported(request: string, context: string | null): Promise<void>;
   /** Whether a workload is deployed from a Git source, and which one. */
@@ -114,8 +119,8 @@ export function createServerClient(
       if (!res.ok) throw new Error(`agent-config failed: ${res.status}`);
       return (await res.json()) as AgentConfig;
     },
-    async relatedResources(name, namespace, context) {
-      const query = new URLSearchParams({ name, namespace });
+    async relatedResources(name, namespace, context, kind) {
+      const query = new URLSearchParams({ name, namespace, kind: kind ?? "deployment" });
       const res = await fetchFn(`${base}/api/discover?${query}`, { headers: headers(context) });
       if (!res.ok) throw new Error(await errorMessage(res, "discover"));
       return (await res.json()) as RelatedResources;

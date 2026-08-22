@@ -23,7 +23,7 @@ import {
 } from "@rigel/k8s/src/helm";
 import { browseArtifactHub } from "./artifactHub";
 import { discover, handlePurge, type PurgeRequest } from "./purge";
-import { planAdoption } from "./adopt";
+import { planAdoption, relatedTo } from "./adopt";
 import { discoverRecent, undoBatch } from "./recentDeploys";
 import {
   loadSources, saveSources, diffSource, applySource, previewRepoFix, proposeRepoFix, parseProposeFixRequest,
@@ -1204,25 +1204,33 @@ async function handler(req: Request): Promise<Response> {
       return Response.json({ pullRequests: await loadPullRequests(context) });
     }
 
-    // GET /api/discover?name=&namespace= — every resource belonging to one app.
+    // GET /api/discover?name=&namespace=&kind= — what belongs to one workload.
     //
-    // The same engine purge runs on: the instance label first, then a
-    // name-prefix pass, which is what finds an app in a cluster that labels
-    // things its own way (a Rancher-provisioned workload carries
-    // workload.user.cattle.io/workloadselector, which nothing would guess).
-    // Read-only and unframed by removal, so the assistant can answer "show me
-    // everything for X" without going anywhere near the purge flow.
+    // Follows what the objects state about themselves: the Service whose
+    // selector matches the workload's pod labels, the Ingress whose backend
+    // names that Service, and everything the pod template reads or mounts. The
+    // same closure adoption commits, so what the assistant reports and what a
+    // pull request would carry can never disagree.
+    //
+    // Deliberately NOT purge's discovery, which adds a name-prefix pass: right
+    // for a removal flow the operator confirms, wrong here, where it answered a
+    // question about reddex-deploy with a different app that shared a prefix.
+    // Purge is still asked for the one thing it alone knows.
     if (url.pathname === "/api/discover" && req.method === "GET") {
       const name = url.searchParams.get("name");
       if (!name) return Response.json({ error: "missing name" }, { status: 422 });
       const namespace = url.searchParams.get("namespace") || "default";
-      const res = await discover(context, namespace, name);
+      const kind = url.searchParams.get("kind") || "deployment";
+      const [resources, purgeView] = await Promise.all([
+        relatedTo(context, { kind, name, namespace }),
+        discover(context, namespace, name),
+      ]);
       return Response.json({
         name,
         namespace,
-        resources: res.discovered,
-        ...(res.helmRelease ? { helmRelease: res.helmRelease } : {}),
-        ...(res.blockedReason ? { blockedReason: res.blockedReason } : {}),
+        resources,
+        ...(purgeView.helmRelease ? { helmRelease: purgeView.helmRelease } : {}),
+        ...(purgeView.blockedReason ? { blockedReason: purgeView.blockedReason } : {}),
       });
     }
 

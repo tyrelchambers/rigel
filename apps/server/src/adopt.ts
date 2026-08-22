@@ -112,7 +112,7 @@ async function readObject(
  * Service that selects this workload's pod labels, and the Ingress that routes
  * to that Service, are facts the objects state about themselves.
  */
-async function relatedTo(
+export async function relatedTo(
   context: string | null,
   workload: { kind: string; name: string; namespace: string },
 ): Promise<{ kind: string; name: string; namespace: string }[]> {
