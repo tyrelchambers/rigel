@@ -27,6 +27,7 @@ import { planAdoption, relatedTo } from "./adopt";
 import { discoverRecent, undoBatch } from "./recentDeploys";
 import {
   loadSources, saveSources, diffSource, applySource, previewRepoFix, proposeRepoFix, parseProposeFixRequest,
+  mergePullRequest,
   loadGithubToken, githubAccountStatus, connectGithub, disconnectGithub, listGithubRepos, listRepoTree, readRepoFile,
   linkRepo, resolveDeploymentLink, ClusterWriteError, githubPrStatus,
   loadPullRequests, recordChatPullRequest,
@@ -1197,6 +1198,22 @@ async function handler(req: Request): Promise<Response> {
         });
       }
       return Response.json({ ...result, included });
+    }
+
+    // POST /api/git/merge — merge one pull request Rigel opened. Click-only:
+    // the action kind is excluded from AUTO_RUNNABLE_KINDS, because the review a
+    // pull request forces is exactly what makes opening one safe unattended.
+    if (url.pathname === "/api/git/merge" && req.method === "POST") {
+      let body: { prUrl?: string };
+      try {
+        body = (await req.json()) as typeof body;
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      if (!body.prUrl) return Response.json({ error: "missing prUrl" }, { status: 422 });
+      const token = await loadGithubToken(context);
+      if (!token) return Response.json({ error: "GitHub is not connected in Rigel" }, { status: 409 });
+      return Response.json(await mergePullRequest(token, body.prUrl));
     }
 
     // GET /api/git/pull-requests — chat-opened PRs (the Pending PRs card).

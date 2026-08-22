@@ -56,6 +56,17 @@ function fakeServer(overrides: Partial<ServerClient> = {}): FakeServer {
     proposals,
     unsupported,
     repoLink: async () => ({ linked: true, link: LINK }),
+    pullRequests: async () => ({
+      pullRequests: [
+        {
+          prUrl: "https://github.com/tyrelchambers/reddex-v3/pull/12",
+          number: 12,
+          repoSlug: "tyrelchambers/reddex-v3",
+          title: "Add manifests for reddex-deploy",
+          createdAt: "2026-08-22T10:00:00.000Z",
+        },
+      ],
+    }),
     reportUnsupported: async (request) => {
       unsupported.push(request);
     },
@@ -793,5 +804,46 @@ describe("adoptWorkload", () => {
     const out = await propose(buildAgent(emptySessionState(), server, fakeRoom().room), ADOPT, toolOpts().opts);
     expect(out).toContain("Helm release");
     expect(out).not.toMatch(/^Done:/);
+  });
+});
+
+describe("merging a pull request", () => {
+  const merge: SuggestedAction = {
+    kind: "mergePullRequest",
+    label: "Merge #12",
+    prUrl: "https://github.com/tyrelchambers/reddex-v3/pull/12",
+  };
+
+  // Opening one runs unaided because a human reads it first. Merging is that
+  // human, so it is a card rather than a sentence.
+  test("is surfaced for a tap, never run by the agent", async () => {
+    const state = emptySessionState();
+    const server = fakeServer();
+    const { room, frames } = fakeRoom();
+
+    const out = await propose(buildAgent(state, server, room), merge, toolOpts("call-5").opts);
+
+    expect(out).toBe(SENT_TO_DESKTOP);
+    expect(server.runs).toEqual([]);
+    expect(state.awaitingClick.get("call-5")).toBe("Merge #12");
+    expect(frames[0]!.payload).toMatchObject({ action: merge });
+  });
+
+  test("with no desktop connected it is refused rather than run", async () => {
+    const out = await propose(
+      buildAgent(emptySessionState(), fakeServer(), fakeRoom(["phone-1"]).room),
+      merge,
+      toolOpts().opts,
+    );
+    expect(out).toMatch(/^Refused:/);
+  });
+
+  test("the agent can find which pull request to merge", async () => {
+    const out = (await buildAgent(emptySessionState(), fakeServer(), fakeRoom().room)
+      .toolCtx.getFunctionTool("queryRigel")!
+      .execute({ query: "pullRequests" } as never, {} as never)) as string;
+    expect(out).toContain("#12");
+    expect(out).toContain("tyrelchambers/reddex-v3");
+    expect(out).toContain("mergePullRequest");
   });
 });

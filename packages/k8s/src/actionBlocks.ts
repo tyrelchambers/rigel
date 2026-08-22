@@ -128,6 +128,7 @@ export const ACTION_KINDS = [
   "applyManifest",
   "proposeRepoFix",
   "adoptWorkload",
+  "mergePullRequest",
 ] as const;
 
 /**
@@ -174,6 +175,12 @@ export function isDestructiveAction(action: Pick<SuggestedAction, "kind" | "dest
  * it. It carries literal kubectl arguments, which is exactly what classifyTier
  * reads, so the second gate is a real one here rather than a formality: a
  * `command` whose built argv tiers destructive is surfaced like any other.
+ *
+ * `mergePullRequest` is deliberately NOT here. Opening a pull request is
+ * auto-runnable precisely because a human reads the diff before anything
+ * merges; merging is that human step, so a spoken sentence must not be what
+ * performs it. It surfaces a card instead, which is one tap on a decision worth
+ * one tap.
  *
  * `proposeRepoFix` is in the set even though a pull request is not undoable in
  * the way a rollout is (HELM-125 asked for the reasoning to be recorded here).
