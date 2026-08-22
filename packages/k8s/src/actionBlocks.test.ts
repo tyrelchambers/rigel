@@ -288,10 +288,17 @@ describe("what the voice agent may run itself", () => {
     }
   });
 
-  test("raw patches, arbitrary commands and manifests are surfaced", () => {
-    for (const kind of ["command", "applyManifest", "setEnvRef", "setImagePullSecrets"]) {
+  test("arbitrary manifests and raw patches are surfaced", () => {
+    for (const kind of ["applyManifest", "setEnvRef", "setImagePullSecrets"]) {
       expect(isAutoRunnable({ kind })).toBe(false);
     }
+  });
+
+  // The escape hatch carries literal kubectl args, which is what classifyTier
+  // reads, so the command classifier is the gate rather than the kind table.
+  test("command is admitted here and judged on what it actually does", () => {
+    expect(isAutoRunnable({ kind: "command" })).toBe(true);
+    expect(isAutoRunnable({ kind: "command", destructive: true })).toBe(false);
   });
 
   test("opening a pull request is auto-runnable, and a destructive hint still downgrades it", () => {

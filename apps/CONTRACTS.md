@@ -53,15 +53,22 @@ never asks for one — anyone within earshot could say it. What the agent may do
 is keyed on the ACTION, not on what it hears:
 - Non-destructive kinds (`AUTO_RUNNABLE_KINDS`: restart, rollback, pause,
   resume, suspend/resumeCronJob, uncordon, scale, setImage, setEnv,
-  setResources, annotate, createNamespace, proposeRepoFix) run on the operator's
-  own instruction. They destroy nothing and can be undone. `proposeRepoFix`
+  setResources, annotate, createNamespace, command, proposeRepoFix,
+  adoptWorkload) run on the operator's own instruction. They destroy nothing and can be undone. `proposeRepoFix`
   belongs here because a pull request changes no cluster state, lands on a
   branch, and is read on GitHub before it merges; the reasoning is recorded
   beside `AUTO_RUNNABLE_KINDS`.
+  `command` is admitted for a reason worth stating: it is the escape hatch for
+  anything the typed kinds do not model, so excluding it meant every unusual
+  request needed a tap. It carries literal kubectl arguments, which is exactly
+  what `classifyTier` reads, so the command classifier is a real second gate
+  here and a `command` whose argv tiers destructive is surfaced like anything
+  else.
 - Everything else is surfaced in the desktop popover for the operator to
   approve: the delete family, drain, cordon, purge, raw patches (setEnvRef,
-  setImagePullSecrets), `command`, `applyManifest`, plus `label` (feeds
-  selectors) and `triggerCronJob` (starts arbitrary work).
+  setImagePullSecrets), `applyManifest` (arbitrary content rather than a
+  command a classifier can read), plus `label` (feeds selectors) and
+  `triggerCronJob` (starts arbitrary work).
 - A destructive hint downgrades any kind, `scale` to 0 replicas is treated as
   an outage rather than a scale, and `classifyTier` on the built command is the
   second, stricter gate: a kind that would otherwise run is surfaced when its
