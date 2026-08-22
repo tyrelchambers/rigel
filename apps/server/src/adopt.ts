@@ -11,6 +11,7 @@
 import { cleanExportedManifest } from "@rigel/k8s/src/manifestClean";
 import { redactSecretValues } from "@rigel/k8s/src/secretRedaction";
 import { kubectl } from "@rigel/k8s/src/run";
+import { referencedResources, routingFor, type ClusterObject } from "@rigel/k8s/src/workloadClosure";
 import { discover } from "./purge";
 
 /** One file bound for the repo. */
@@ -72,10 +73,71 @@ async function exportOne(
   return cleanExportedManifest(res.stdout);
 }
 
+/** Read one kind in a namespace as objects, or an empty list. */
+async function listObjects(context: string | null, kind: string, namespace: string): Promise<ClusterObject[]> {
+  const res = await kubectl(context, ["get", kind, "-n", namespace, "-o", "json"]);
+  if (res.code !== 0) return [];
+  try {
+    return (JSON.parse(res.stdout) as { items?: ClusterObject[] }).items ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Read one object, or null. */
+async function readObject(
+  context: string | null,
+  kind: string,
+  name: string,
+  namespace: string,
+): Promise<ClusterObject | null> {
+  const res = await kubectl(context, ["get", kind, name, "-n", namespace, "-o", "json"]);
+  if (res.code !== 0) return null;
+  try {
+    return JSON.parse(res.stdout) as ClusterObject;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Everything belonging to `name`, as files. The discovery engine is the purge
- * one: instance label first, name prefix second, which is what finds an app in
- * a cluster that labels things its own way.
+ * What belongs to this workload, by following what the cluster states rather
+ * than by matching names.
+ *
+ * The purge engine's name-prefix pass is right for a removal flow, where the
+ * operator reads and confirms the list. Here it was wrong and dangerously so:
+ * asked about reddex-deploy it also returned reddex-custom-website-deploy and
+ * its service and ingress, a different app sharing a prefix, and committing
+ * those would have put a second app's manifests in the first one's repo. The
+ * Service that selects this workload's pod labels, and the Ingress that routes
+ * to that Service, are facts the objects state about themselves.
+ */
+async function relatedTo(
+  context: string | null,
+  workload: { kind: string; name: string; namespace: string },
+): Promise<{ kind: string; name: string; namespace: string }[]> {
+  const ns = workload.namespace;
+  const object = await readObject(context, workload.kind, workload.name, ns);
+  if (!object) return [];
+
+  const [services, ingresses] = await Promise.all([
+    listObjects(context, "service", ns),
+    listObjects(context, "ingress", ns),
+  ]);
+  const routing = routingFor(object, services, ingresses);
+
+  return [
+    { kind: workload.kind, name: workload.name, namespace: ns },
+    ...routing.services.map((name) => ({ kind: "service", name, namespace: ns })),
+    ...routing.ingresses.map((name) => ({ kind: "ingress", name, namespace: ns })),
+    ...referencedResources(object).map((r) => ({ kind: r.kind, name: r.name, namespace: ns })),
+  ];
+}
+
+/**
+ * Everything belonging to `name`, as files. Discovery follows the workload's
+ * own declarations; the purge engine is consulted only for the two things it
+ * alone knows, a protected namespace and a Helm release.
  */
 export async function planAdoption(
   context: string | null,
@@ -91,7 +153,10 @@ export async function planAdoption(
     };
   }
 
-  const resources = found.discovered.length > 0 ? found.discovered : [{ ...workload }];
+  const resources = await relatedTo(context, workload);
+  if (resources.length === 0) {
+    return { ok: false, message: `Could not read ${workload.kind} ${workload.name} in ${workload.namespace}.` };
+  }
   const files: ExportedFile[] = [];
   const included: string[] = [];
   const unreadable: string[] = [];

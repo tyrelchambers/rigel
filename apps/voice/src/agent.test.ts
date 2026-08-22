@@ -704,6 +704,44 @@ describe("reportUnsupported", () => {
   });
 });
 
+describe("an action sent as a JSON string", () => {
+  // Field-tested: four calls running, each sending the nested object encoded as
+  // a string, each refused with "expected object, received string", which names
+  // nothing it could fix. It then reported a capability that works as one Rigel
+  // does not have.
+  test("is parsed and runs, rather than dying on the encoding", async () => {
+    const state = emptySessionState();
+    state.activeContext = "prod";
+    const server = fakeServer();
+    const out = await propose(
+      buildAgent(state, server, fakeRoom().room),
+      JSON.stringify(restart) as unknown as SuggestedAction,
+      toolOpts().opts,
+    );
+    expect(out).toMatch(/^Done:/);
+    expect(server.runs).toEqual([restart]);
+  });
+
+  test("a string that is not JSON at all is still refused by the schema", async () => {
+    const out = await propose(
+      buildAgent(emptySessionState(), fakeServer(), fakeRoom().room),
+      "restart the web deployment" as unknown as SuggestedAction,
+      toolOpts().opts,
+    );
+    expect(out).toMatch(/^Invalid arguments for proposeMutation/);
+  });
+
+  test("the parsed object is held to the same schema", async () => {
+    const out = await propose(
+      buildAgent(emptySessionState(), fakeServer(), fakeRoom().room),
+      JSON.stringify({ kind: "patch", label: "x" }) as unknown as SuggestedAction,
+      toolOpts().opts,
+    );
+    expect(out).toMatch(/^Invalid arguments for proposeMutation/);
+    expect(out).toContain("restart");
+  });
+});
+
 describe("adoptWorkload", () => {
   const ADOPT = {
     kind: "adoptWorkload",

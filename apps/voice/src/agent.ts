@@ -128,7 +128,24 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
             // The SDK parses this before execute runs, so a wrong kind comes
             // back naming every valid kind and a wrong field comes back naming
             // that field. Nothing below has to check the shape.
-            parameters: z.object({ action: actionSchema }),
+            //
+            // The preprocess is for one specific failure, seen four times in a
+            // row in the field: a model that sends the nested object as a JSON
+            // STRING. The refusal it gets back then says "expected object,
+            // received string", which names nothing about the fields, so it has
+            // no way to converge and eventually reports a working capability as
+            // unsupported. Parsing the string is a transport repair, not a
+            // loosening: what comes out is checked by exactly the same schema.
+            parameters: z.object({
+              action: z.preprocess((value) => {
+                if (typeof value !== "string") return value;
+                try {
+                  return JSON.parse(value);
+                } catch {
+                  return value;
+                }
+              }, actionSchema),
+            }),
             execute: async ({ action }, opts) => {
               const a = action as SuggestedAction;
               const id = opts.toolCallId;
