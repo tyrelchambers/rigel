@@ -84,6 +84,7 @@ export interface OrderNode {
   issuer: string;
   state: string;
   reason: string;
+  dnsNames: string[];
   challenges: ChallengeNode[];
   createdAt?: string;
 }

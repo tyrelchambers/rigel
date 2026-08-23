@@ -38,6 +38,7 @@ export function orderNode(order: Order, challenges: Challenge[]): OrderNode {
     issuer: issuerRefLabel(order.spec?.issuerRef),
     state: order.status?.state ?? "—",
     reason: order.status?.reason ?? "",
+    dnsNames: order.spec?.dnsNames ?? [],
     challenges: challenges
       .filter((ch) => byUid(ch.metadata.ownerReferences, order.metadata.uid))
       .map(challengeNode),
