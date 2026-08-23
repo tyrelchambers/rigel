@@ -29,6 +29,7 @@ import {
 
 const ORDER_KINDS = [
   "orders.acme.cert-manager.io",
+  "challenges.acme.cert-manager.io",
   "certificaterequests.cert-manager.io",
   "certificates.cert-manager.io",
 ] as const;
@@ -177,7 +178,7 @@ export default function OrdersPanel() {
                   {row.name}
                 </button>
 
-                <span className="shrink-0 whitespace-nowrap rounded border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-[5px] py-px font-mono text-3xs text-[var(--fg-tertiary)]">
+                <span className="shrink-0 whitespace-nowrap rounded border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-1.5 py-px font-mono text-3xs text-[var(--fg-tertiary)]">
                   {row.namespace ?? "—"}
                 </span>
 
