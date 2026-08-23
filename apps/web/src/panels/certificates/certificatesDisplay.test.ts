@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   isReady,
   isIssuing,
-  issuerLabel,
   buildCertViews,
   matchesSearch,
   sortCertViews,
@@ -53,13 +52,6 @@ describe("expiryLabel", () => {
   it("formats past expiry as 'expired <largest unit> ago'", () => {
     expect(expiryLabel(iso(-5 * 60), now)).toBe("expired 5m ago");
     expect(expiryLabel(iso(-2 * 86400), now)).toBe("expired 2d ago");
-  });
-});
-
-describe("issuerLabel", () => {
-  it("formats kind/name, falling back to dash", () => {
-    expect(issuerLabel(cert({ name: "a" }, undefined, { issuerRef: { kind: "ClusterIssuer", name: "le" } }))).toBe("ClusterIssuer/le");
-    expect(issuerLabel(cert({ name: "a" }))).toBe("—");
   });
 });
 

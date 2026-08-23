@@ -53,12 +53,13 @@ export interface CertificateRequest {
 
 export interface Order {
   metadata: ObjectMeta;
+  spec?: { issuerRef?: IssuerRef; dnsNames?: string[] };
   status?: { state?: string; reason?: string };
 }
 
 export interface Challenge {
   metadata: ObjectMeta;
-  spec?: { type?: string; dnsName?: string }; // type: "HTTP-01" | "DNS-01"
+  spec?: { type?: string; dnsName?: string; token?: string; wildcard?: boolean }; // type: "HTTP-01" | "DNS-01"
   status?: { state?: string; reason?: string; processing?: boolean; presented?: boolean };
 }
 
@@ -66,19 +67,25 @@ export interface Challenge {
 export interface ChallengeNode {
   name: string;
   namespace?: string;
+  uid: string;
   type: string;    // "HTTP-01" / "DNS-01" / "—"
   dnsName: string;
+  token: string;
   state: string;   // status.state or "—"
   reason: string;
+  createdAt?: string;
 }
 
 /** An order node, with its challenges. */
 export interface OrderNode {
   name: string;
   namespace?: string;
+  uid: string;
+  issuer: string;
   state: string;
   reason: string;
   challenges: ChallengeNode[];
+  createdAt?: string;
 }
 
 /** A certificate request node, with its order (if any). */
