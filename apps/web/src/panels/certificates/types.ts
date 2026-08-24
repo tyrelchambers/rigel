@@ -73,6 +73,9 @@ export interface ChallengeNode {
   token: string;
   state: string;   // status.state or "—"
   reason: string;
+  wildcard: boolean;
+  presented: boolean;
+  processing: boolean;
   createdAt?: string;
 }
 

@@ -26,6 +26,9 @@ export function challengeNode(ch: Challenge): ChallengeNode {
     token: ch.spec?.token ?? "—",
     state: ch.status?.state ?? "—",
     reason: ch.status?.reason ?? "",
+    wildcard: ch.spec?.wildcard ?? false,
+    presented: ch.status?.presented ?? false,
+    processing: ch.status?.processing ?? false,
     createdAt: ch.metadata.creationTimestamp,
   };
 }

@@ -59,6 +59,21 @@ describe("challengeNode", () => {
     expect(node.token).toBe("—");
     expect(node.state).toBe("—");
     expect(node.reason).toBe("");
+    expect(node.wildcard).toBe(false);
+    expect(node.presented).toBe(false);
+    expect(node.processing).toBe(false);
+  });
+
+  it("populates wildcard from spec.wildcard", () => {
+    const ch = challenge({ name: "ch1" }, undefined, { wildcard: true });
+    expect(challengeNode(ch).wildcard).toBe(true);
+  });
+
+  it("populates presented and processing from status", () => {
+    const ch = challenge({ name: "ch1" }, { presented: true, processing: true });
+    const node = challengeNode(ch);
+    expect(node.presented).toBe(true);
+    expect(node.processing).toBe(true);
   });
 
   it("populates uid from metadata", () => {
