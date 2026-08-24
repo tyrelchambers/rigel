@@ -103,10 +103,11 @@ export default function CertificatesPanel() {
   }, [resources, namespaceFilter]);
 
   const filtered = useMemo(() => views.filter((v) => matchesSearch(v, search)), [views, search]);
+  const certs = useMemo(() => views.map((v) => v.cert), [views]);
 
   useFocusRow(
     "certificate",
-    views.map((v) => v.cert),
+    certs,
     (c) => c.metadata.uid,
     (k) => setExpanded((prev) => new Set(prev).add(k)),
   );
