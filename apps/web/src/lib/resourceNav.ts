@@ -15,6 +15,7 @@ const NAV_META: Record<string, NavTarget> = {
   secrets: { route: "/secrets", focusKind: "secret" },
   persistentvolumeclaims: { route: "/storage", focusKind: "persistentvolumeclaim" },
   nodes: { route: "/nodes", focusKind: "node" },
+  "certificates.cert-manager.io": { route: "/certificates", focusKind: "certificate" },
 };
 
 type NavigateFn = (to: string) => void;

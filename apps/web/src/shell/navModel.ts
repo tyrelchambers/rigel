@@ -5,6 +5,7 @@ import {
   faCodeBranch, faSignsPost, faNetworkWired, faDatabase, faKey, faFileLines,
   faHardDrive, faShieldCheck, faCircleCheck, faBell, faScroll, faSquareDashed,
   faUserLock, faGear, faWindowMaximize, faFilePlus, faFileImport, faBox, faPuzzlePiece,
+  faReceipt, faListCheck,
 } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { RigelMark } from "@/components/RigelMark";
 
@@ -44,6 +45,8 @@ export const PANEL_META: Record<string, PanelMeta> = {
   connectivity: { route: "/connectivity", title: "Connectivity", subtitle: "Traffic & reachability",icon: faCodeBranch },
   rbac:         { route: "/rbac",         title: "RBAC",         subtitle: "Access control",        icon: faShieldCheck },
   certificates: { route: "/certificates", title: "Certificates", subtitle: "TLS & cert-manager",    icon: faCircleCheck },
+  orders:       { route: "/orders",       title: "Orders",       subtitle: "ACME orders",           icon: faReceipt },
+  challenges:   { route: "/challenges",   title: "Challenges",   subtitle: "ACME validation",       icon: faListCheck },
   events:       { route: "/events",       title: "Events",       subtitle: "Recent activity",       icon: faBell },
   logs:         { route: "/logs",         title: "Logs",         subtitle: "Container output",      icon: faScroll },
   catalog:      { route: "/catalog",      title: "Apps",         subtitle: "Install apps",          icon: faWindowMaximize },
@@ -67,7 +70,7 @@ export const NAV_GROUPS: NavGroup[] = [
   { title: "Networking", panels: ["services", "ingresses"] },
   { title: "Config & Storage", panels: ["configmaps", "secrets", "storage", "databases", "backups"] },
   { title: "Cluster", panels: ["namespaces", "nodes", "connectivity", "rbac"] },
-  { title: "Security & Certs", panels: ["certificates"] },
+  { title: "Security & Certs", panels: ["certificates", "orders", "challenges"] },
   { title: "Observability", panels: ["events", "logs"] },
   { title: "Self-host", panels: ["catalog", "helm", "plugins"] },
   { title: "Tools", panels: ["apply", "compose", "gitops"] },

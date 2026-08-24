@@ -1,8 +1,9 @@
 import { formatInTimeZone } from "date-fns-tz";
 import { compactFromSeconds, spelledSeconds } from "../../lib/time";
+import { byUid, orderNode, issuerRefLabel, CERT_NAME_ANNOTATION } from "@/panels/acme/acmeChain";
 import type {
   Certificate, CertificateRequest, Order, Challenge,
-  CertView, RequestNode, OrderNode, ChallengeNode, Condition,
+  CertView, RequestNode, Condition,
 } from "./types";
 
 // Re-export the shared relativeAge so the panel imports one age formatter.
@@ -26,8 +27,6 @@ export function expiryLabel(iso: string | undefined, now: number = Date.now()): 
   return `expired ${compactFromSeconds(-dt)} ago`;
 }
 
-const CERT_NAME_ANNOTATION = "cert-manager.io/certificate-name";
-
 function condition(conds: Condition[] | undefined, type: string): Condition | undefined {
   return (conds ?? []).find((c) => c.type === type);
 }
@@ -42,17 +41,6 @@ export function isIssuing(cert: Certificate): boolean {
   return condition(cert.status?.conditions, "Issuing")?.status === "True";
 }
 
-/** "kind/name" or "—" when unset. */
-export function issuerLabel(cert: Certificate): string {
-  const ref = cert.spec?.issuerRef;
-  if (!ref?.name) return "—";
-  return ref.kind ? `${ref.kind}/${ref.name}` : ref.name;
-}
-
-function byUid(refs: { uid: string }[] | undefined, uid: string): boolean {
-  return (refs ?? []).some((r) => r.uid === uid);
-}
-
 function newestFirst<T extends { metadata: { creationTimestamp?: string; name: string } }>(items: T[]): T[] {
   return [...items].sort((a, b) => {
     const ta = a.metadata.creationTimestamp ?? "";
@@ -60,29 +48,6 @@ function newestFirst<T extends { metadata: { creationTimestamp?: string; name: s
     if (ta !== tb) return tb.localeCompare(ta);
     return a.metadata.name.localeCompare(b.metadata.name);
   });
-}
-
-function challengeNode(ch: Challenge): ChallengeNode {
-  return {
-    name: ch.metadata.name,
-    namespace: ch.metadata.namespace,
-    type: ch.spec?.type ?? "—",
-    dnsName: ch.spec?.dnsName ?? "—",
-    state: ch.status?.state ?? "—",
-    reason: ch.status?.reason ?? "",
-  };
-}
-
-function orderNode(order: Order, challenges: Challenge[]): OrderNode {
-  return {
-    name: order.metadata.name,
-    namespace: order.metadata.namespace,
-    state: order.status?.state ?? "—",
-    reason: order.status?.reason ?? "",
-    challenges: challenges
-      .filter((ch) => byUid(ch.metadata.ownerReferences, order.metadata.uid))
-      .map(challengeNode),
-  };
 }
 
 function requestNode(cr: CertificateRequest, orders: Order[], challenges: Challenge[]): RequestNode {
@@ -120,7 +85,7 @@ export function buildCertViews(
       ready: isReady(cert),
       issuing: isIssuing(cert) || myReqs.some((r) => condition(r.status?.conditions, "Ready")?.status !== "True"),
       dnsNames: cert.spec?.dnsNames ?? [],
-      issuer: issuerLabel(cert),
+      issuer: issuerRefLabel(cert.spec?.issuerRef),
       secretName: cert.spec?.secretName ?? "",
       notAfter: cert.status?.notAfter,
       requests: myReqs.map((cr) => requestNode(cr, orders, challenges)),
