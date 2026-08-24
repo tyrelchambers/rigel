@@ -14,6 +14,7 @@ import { PanelSearch } from "@/panels/components/PanelSearch";
 import { PanelSelect } from "@/panels/components/PanelSelect";
 import { PanelSort, applySort } from "@/panels/components/PanelSort";
 import { StatusBadge } from "@/panels/components/StatusBadge";
+import { ResourceRefLink } from "@/panels/components/ResourceRefLink";
 import { MetaCard, SectionLabel } from "@/panels/components/MetaCard";
 import type { ActionBlock } from "@/lib/api";
 import type { Order, Challenge, CertificateRequest, Certificate } from "@/panels/certificates/types";
@@ -195,30 +196,11 @@ export default function OrdersPanel() {
 
                 <span className="flex-1" />
 
-                {row.certificate ? (
-                  row.certificate.uid ? (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        goToCertificate(row);
-                      }}
-                      className="shrink-0 truncate font-mono text-3xs text-[var(--accent-primary)] hover:underline"
-                      title={row.certificate.name}
-                    >
-                      {row.certificate.name}
-                    </button>
-                  ) : (
-                    <span
-                      className="shrink-0 truncate font-mono text-3xs text-[var(--fg-secondary)]"
-                      title={row.certificate.name}
-                    >
-                      {row.certificate.name}
-                    </span>
-                  )
-                ) : (
-                  <span className="shrink-0 font-mono text-3xs text-[var(--fg-tertiary)]">—</span>
-                )}
+                <ResourceRefLink
+                  resource={row.certificate}
+                  onGoTo={() => goToCertificate(row)}
+                  className="shrink-0 text-3xs"
+                />
 
                 <span className="shrink-0 whitespace-nowrap font-mono text-3xs text-[var(--fg-tertiary)]">
                   {row.issuer}
@@ -274,24 +256,7 @@ function OrderDetail({
         </MetaCard>
 
         <MetaCard label="CERTIFICATE">
-          {row.certificate ? (
-            row.certificate.uid ? (
-              <button
-                type="button"
-                onClick={() => onGoToCertificate(row)}
-                className="truncate font-mono text-xs text-[var(--accent-primary)] hover:underline"
-                title={row.certificate.name}
-              >
-                {row.certificate.name}
-              </button>
-            ) : (
-              <span className="truncate font-mono text-xs text-[var(--fg-secondary)]" title={row.certificate.name}>
-                {row.certificate.name}
-              </span>
-            )
-          ) : (
-            <span className="font-mono text-xs text-[var(--fg-tertiary)]">—</span>
-          )}
+          <ResourceRefLink resource={row.certificate} onGoTo={() => onGoToCertificate(row)} className="text-xs" />
         </MetaCard>
 
         <MetaCard label="AGE">
