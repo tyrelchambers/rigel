@@ -145,12 +145,16 @@ export function NavLauncher({ open, onClose }: NavLauncherProps) {
   };
 
   const gridStyle = { display: "grid", gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))`, gap: 10 } as const;
-  const sectionLabel = (label: string) => (
-    <div
-      className="text-3xs font-semibold uppercase"
-      style={{ color: "var(--fg-tertiary)", letterSpacing: "0.06em", padding: "0 2px" }}
-    >
-      {label}
+  const sectionLabel = (label: string, trailing?: React.ReactNode) => (
+    <div className="flex items-center gap-2" style={{ padding: "0 2px" }}>
+      <span
+        className="text-3xs font-semibold uppercase shrink-0"
+        style={{ color: "var(--fg-primary)", letterSpacing: "0.06em" }}
+      >
+        {label}
+      </span>
+      {trailing}
+      <span className="flex-1" style={{ height: 1, background: "var(--border-strong)" }} />
     </div>
   );
 
@@ -210,10 +214,10 @@ export function NavLauncher({ open, onClose }: NavLauncherProps) {
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "14px 14px 20px", display: "flex", flexDirection: "column", gap: 18 }}>
           {favVisible.length > 0 && (
             <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <span className="flex items-center gap-1.5">
-                {sectionLabel("Favorites")}
-                <FontAwesomeIcon icon={faStar} className="size-[11px]" style={{ color: "var(--accent-primary)" }} />
-              </span>
+              {sectionLabel(
+                "Favorites",
+                <FontAwesomeIcon icon={faStar} className="size-[11px] shrink-0" style={{ color: "var(--accent-primary)" }} />,
+              )}
               <div style={gridStyle} role="listbox" aria-label="Favorites">
                 {favVisible.map((c, i) => renderCell(c, i))}
               </div>
