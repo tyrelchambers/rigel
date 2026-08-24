@@ -18,6 +18,8 @@ import BackupsPanel from "./panels/backups/BackupsPanel";
 import RightSizingPanel from "./panels/rightsizing/RightSizingPanel";
 import RbacPanel from "./panels/rbac/RbacPanel";
 import CertificatesPanel from "./panels/certificates/CertificatesPanel";
+import OrdersPanel from "./panels/acme/OrdersPanel";
+import ChallengesPanel from "./panels/acme/ChallengesPanel";
 import CatalogPanel from "./panels/catalog/CatalogPanel";
 import EventsPanel from "./panels/events/EventsPanel";
 import LogsPanel from "./panels/logs/LogsPanel";
@@ -288,6 +290,8 @@ function AppContent({ account }: { account: UseAccountResult }) {
               <Route path="/storage" element={<StoragePanel />} />
               <Route path="/rbac" element={<RbacPanel />} />
               <Route path="/certificates" element={<CertificatesPanel />} />
+              <Route path="/orders" element={<OrdersPanel />} />
+              <Route path="/challenges" element={<ChallengesPanel />} />
               <Route path="/catalog" element={<PaddedX><CatalogPanel /></PaddedX>} />
               <Route path="/helm" element={<HelmPanel />} />
               <Route path="/plugins" element={<PluginsPanel />} />

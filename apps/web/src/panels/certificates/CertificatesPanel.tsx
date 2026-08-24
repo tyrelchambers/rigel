@@ -6,6 +6,7 @@ import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-m
 import { ListRow } from "@/panels/components/ListRow";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { PanelSearch } from "@/panels/components/PanelSearch";
+import { useFocusRow } from "@/panels/components/useFocusRow";
 import { viewYaml } from "@/store/yamlViewer";
 import type { ActionBlock } from "@/lib/api";
 import { fetchCertManagerPlugin } from "@/lib/api";
@@ -102,6 +103,13 @@ export default function CertificatesPanel() {
   }, [resources, namespaceFilter]);
 
   const filtered = useMemo(() => views.filter((v) => matchesSearch(v, search)), [views, search]);
+
+  useFocusRow(
+    "certificate",
+    views.map((v) => v.cert),
+    (c) => c.metadata.uid,
+    (k) => setExpanded((prev) => new Set(prev).add(k)),
+  );
 
   function toggleExpand(uid: string) {
     setExpanded((prev) => {
