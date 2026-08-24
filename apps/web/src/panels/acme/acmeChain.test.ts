@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   byUid, challengeNode, orderNode, issuerRefLabel,
   certificateForOrder, buildOrderRows, matchesOrderSearch, matchesChallengeSearch,
-  matchesAcmeState, acmeStateVariant, orderSortOptions, challengeSortOptions,
+  matchesAcmeState, matchesAcmeType, acmeStateVariant, orderSortOptions, challengeSortOptions,
   CERT_NAME_ANNOTATION,
 } from "./acmeChain";
 import type { Order, Challenge, CertificateRequest, Certificate } from "@/panels/certificates/types";
@@ -279,9 +279,10 @@ describe("matchesAcmeState", () => {
     }
   });
 
-  it("'active' matches pending/processing only", () => {
+  it("'active' matches pending/processing/ready", () => {
     expect(matchesAcmeState("pending", "active")).toBe(true);
     expect(matchesAcmeState("processing", "active")).toBe(true);
+    expect(matchesAcmeState("ready", "active")).toBe(true);
     expect(matchesAcmeState("valid", "active")).toBe(false);
   });
 
@@ -292,9 +293,9 @@ describe("matchesAcmeState", () => {
     expect(matchesAcmeState("valid", "failed")).toBe(false);
   });
 
-  it("'valid' matches valid/ready only", () => {
+  it("'valid' matches valid only — 'ready' is not terminal for an Order and belongs in 'active'", () => {
     expect(matchesAcmeState("valid", "valid")).toBe(true);
-    expect(matchesAcmeState("ready", "valid")).toBe(true);
+    expect(matchesAcmeState("ready", "valid")).toBe(false);
     expect(matchesAcmeState("pending", "valid")).toBe(false);
   });
 
@@ -314,6 +315,22 @@ describe("matchesAcmeState", () => {
     expect(matchesAcmeState("—", "failed")).toBe(false);
     expect(matchesAcmeState("—", "valid")).toBe(false);
     expect(matchesAcmeState("—", "all")).toBe(true);
+  });
+});
+
+describe("matchesAcmeType", () => {
+  it("'all' matches every type", () => {
+    expect(matchesAcmeType("HTTP-01", "all")).toBe(true);
+    expect(matchesAcmeType("DNS-01", "all")).toBe(true);
+  });
+
+  it("matches type case-insensitively", () => {
+    expect(matchesAcmeType("http-01", "HTTP-01")).toBe(true);
+    expect(matchesAcmeType("HTTP-01", "http-01")).toBe(true);
+  });
+
+  it("does not match a different type", () => {
+    expect(matchesAcmeType("HTTP-01", "DNS-01")).toBe(false);
   });
 });
 

@@ -5,6 +5,8 @@ import type {
 import type { SortOption } from "@/panels/components/PanelSort";
 import type { StatusBadgeVariant } from "@/panels/components/StatusBadge";
 
+export { relativeAge } from "../pods/podDisplay";
+
 export const CERT_NAME_ANNOTATION = "cert-manager.io/certificate-name";
 
 export function issuerRefLabel(ref: IssuerRef | undefined): string {
@@ -104,9 +106,9 @@ export function matchesChallengeSearch(node: ChallengeNode, q: string): boolean 
 }
 
 const ACME_STATE_BUCKETS: Record<string, string[]> = {
-  active: ["pending", "processing"],
+  active: ["pending", "processing", "ready"],
   failed: ["invalid", "errored", "expired"],
-  valid: ["valid", "ready"],
+  valid: ["valid"],
 };
 
 export function matchesAcmeState(state: string, filter: string): boolean {
@@ -114,6 +116,11 @@ export function matchesAcmeState(state: string, filter: string): boolean {
   const bucket = ACME_STATE_BUCKETS[filter];
   if (!bucket) return false;
   return bucket.includes(state.toLowerCase());
+}
+
+export function matchesAcmeType(type: string, filter: string): boolean {
+  if (filter === "all") return true;
+  return type.toLowerCase() === filter.toLowerCase();
 }
 
 export function acmeStateVariant(state: string): StatusBadgeVariant {

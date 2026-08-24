@@ -15,13 +15,14 @@ import { StatusBadge } from "@/panels/components/StatusBadge";
 import { MetaCard } from "@/panels/components/MetaCard";
 import type { ActionBlock } from "@/lib/api";
 import type { Challenge, ChallengeNode } from "@/panels/certificates/types";
-import { relativeAge } from "@/panels/pods/podDisplay";
 import {
   challengeNode,
   matchesChallengeSearch,
   matchesAcmeState,
+  matchesAcmeType,
   acmeStateVariant,
   challengeSortOptions,
+  relativeAge,
 } from "./acmeChain";
 
 const CHALLENGES_KIND = "challenges.acme.cert-manager.io";
@@ -59,7 +60,7 @@ export default function ChallengesPanel() {
     const matched = allRows.filter(
       (n) =>
         matchesChallengeSearch(n, search) &&
-        (typeFilter === "all" || n.type === typeFilter) &&
+        matchesAcmeType(n.type, typeFilter) &&
         matchesAcmeState(n.state, stateFilter),
     );
     return applySort(matched, sortOptions.find((o) => o.value === sortValue), sortDir);

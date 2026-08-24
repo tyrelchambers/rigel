@@ -18,13 +18,13 @@ import { ResourceRefLink } from "@/panels/components/ResourceRefLink";
 import { MetaCard, SectionLabel } from "@/panels/components/MetaCard";
 import type { ActionBlock } from "@/lib/api";
 import type { Order, Challenge, CertificateRequest, Certificate } from "@/panels/certificates/types";
-import { relativeAge } from "@/panels/pods/podDisplay";
 import {
   buildOrderRows,
   matchesOrderSearch,
   matchesAcmeState,
   acmeStateVariant,
   orderSortOptions,
+  relativeAge,
   type OrderRow,
 } from "./acmeChain";
 
