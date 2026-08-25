@@ -36,3 +36,22 @@ export function formatShortcut(spec: ShortcutSpec): string {
   parts.push(key);
   return parts.join("+");
 }
+
+function sameKey(e: KeyboardEvent, key: string): boolean {
+  const want = key.toLowerCase();
+  if (e.key && e.key.toLowerCase() === want) return true;
+  if (want.length === 1 && want >= "a" && want <= "z") {
+    return e.code === `Key${want.toUpperCase()}`;
+  }
+  return false;
+}
+
+export function matchShortcut(e: KeyboardEvent, spec: ShortcutSpec): boolean {
+  const wantMeta = isMac && Boolean(spec.mod);
+  const wantCtrl = Boolean(spec.ctrl) || (!isMac && Boolean(spec.mod));
+  if (e.metaKey !== wantMeta) return false;
+  if (e.ctrlKey !== wantCtrl) return false;
+  if (e.altKey !== Boolean(spec.alt)) return false;
+  if (e.shiftKey !== Boolean(spec.shift)) return false;
+  return sameKey(e, spec.key);
+}
