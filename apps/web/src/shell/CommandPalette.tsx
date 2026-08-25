@@ -16,7 +16,7 @@ import {
   type PaletteEntry,
 } from "./commandPaletteLogic";
 import { useCluster } from "@/store/cluster";
-import { formatShortcut } from "@/lib/platform";
+import { useShortcutLabel } from "@/lib/shortcuts/useCommand";
 
 // Build the flat, ordered entry list from the nav groups — same order as sidebar.
 function buildEntries(): PaletteEntry[] {
@@ -56,6 +56,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const setFocusRequest = useCluster((s) => s.setFocusRequest);
+  const paletteKey = useShortcutLabel("palette.open");
   const [entries, setEntries] = useState<PaletteEntry[]>(PANEL_ENTRIES);
 
   const filtered = filterEntries(entries, query);
@@ -188,19 +189,21 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
               fontFamily: "var(--font-geist, system-ui, sans-serif)",
             }}
           />
-          <span
-            className="text-3xs"
-            style={{
-              fontFamily: "monospace",
-              color: "var(--fg-tertiary)",
-              background: "var(--surface-sunken)",
-              padding: "2px 5px",
-              borderRadius: 4,
-              letterSpacing: "0.04em",
-            }}
-          >
-            {formatShortcut({ mod: true, key: "K" })}
-          </span>
+          {paletteKey && (
+            <span
+              className="text-3xs"
+              style={{
+                fontFamily: "monospace",
+                color: "var(--fg-tertiary)",
+                background: "var(--surface-sunken)",
+                padding: "2px 5px",
+                borderRadius: 4,
+                letterSpacing: "0.04em",
+              }}
+            >
+              {paletteKey}
+            </span>
+          )}
         </div>
 
         {/* Results list */}

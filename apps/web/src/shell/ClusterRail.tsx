@@ -6,7 +6,7 @@ import { useContexts, useDeleteCluster, useDisconnectCluster, useClusterHealth }
 import { useEntitlement } from "./useEntitlement";
 import { useUpgrade } from "./UpgradeContext";
 import { initContext, switchCluster } from "@/lib/ws";
-import { formatShortcut } from "@/lib/platform";
+import { useShortcutLabel } from "@/lib/shortcuts/useCommand";
 import { classifyProvider, isCloudProvider, providerLabel } from "./clusterTile";
 import { ClusterIcon, type IconId } from "./clusterIcons";
 import { loadIconOverrides, saveIconOverrides, resolveIconId } from "./clusterIconStore";
@@ -36,6 +36,7 @@ export function ClusterRail({
 } = {}) {
   const { data: contexts } = useContexts();
   const activeContext = useCluster((s) => s.activeContext);
+  const launcherKey = useShortcutLabel("nav.launcher");
   const { payload } = useEntitlement();
   const cloudUnlocked = !!payload?.cloudConnect;
   const { openUpgrade } = useUpgrade();
@@ -226,7 +227,7 @@ export function ClusterRail({
           type="button"
           aria-label="Open navigation"
           aria-expanded={launcherOpen}
-          title={`Navigation (${formatShortcut({ mod: true, key: "/" })})`}
+          title={launcherKey ? `Navigation (${launcherKey})` : "Navigation"}
           onClick={() => onToggleLauncher?.()}
           style={{
             width: 38, height: 38, borderRadius: 999,

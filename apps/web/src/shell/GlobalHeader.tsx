@@ -16,7 +16,7 @@ import { VoiceControl } from "./voice/VoiceControl";
 import { useNavHistory } from "./useNavHistory";
 import { isMacDesktop, isWindowsDesktop } from "@/lib/desktop";
 import { WINDOWS_CONTROLS_WIDTH } from "./WindowControls";
-import { formatShortcut } from "@/lib/platform";
+import { useShortcutLabel } from "@/lib/shortcuts/useCommand";
 
 interface GlobalHeaderProps {
   /** Opens the existing CommandPalette (reuses App's setPaletteOpen). */
@@ -77,6 +77,7 @@ export function GlobalHeader({
   onOpenAccount,
 }: GlobalHeaderProps) {
   const { canGoBack, canGoForward, goBack, goForward } = useNavHistory();
+  const paletteKey = useShortcutLabel("palette.open");
   return (
     <header
       style={{
@@ -117,7 +118,7 @@ export function GlobalHeader({
       {/* Global search — opens the existing ⌘K CommandPalette */}
       <button
         onClick={onOpenSearch}
-        title={`Search (${formatShortcut({ mod: true, key: "K" })})`}
+        title={paletteKey ? `Search (${paletteKey})` : "Search"}
         aria-label="Search"
         style={{
           ...NO_DRAG,
@@ -145,20 +146,22 @@ export function GlobalHeader({
         >
           Search…
         </span>
-        <span
-          className="text-3xs"
-          style={{
-            fontWeight: 600,
-            color: "var(--fg-tertiary)",
-            background: "var(--surface-elevated)",
-            border: "1px solid #34353A",
-            borderRadius: 4,
-            padding: "1px 5px",
-            lineHeight: "14px",
-          }}
-        >
-          {formatShortcut({ mod: true, key: "K" })}
-        </span>
+        {paletteKey && (
+          <span
+            className="text-3xs"
+            style={{
+              fontWeight: 600,
+              color: "var(--fg-tertiary)",
+              background: "var(--surface-elevated)",
+              border: "1px solid #34353A",
+              borderRadius: 4,
+              padding: "1px 5px",
+              lineHeight: "14px",
+            }}
+          >
+            {paletteKey}
+          </span>
+        )}
       </button>
 
       {SHOW_ACCOUNT_BUTTON && (
