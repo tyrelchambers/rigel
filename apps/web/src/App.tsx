@@ -49,6 +49,7 @@ import { AccountModal } from "@/shell/AccountModal";
 import { UpgradeProvider } from "@/shell/UpgradeContext";
 import { useAccount, type UseAccountResult } from "@/shell/useAccount";
 import { registerChatReveal } from "@/lib/chatHandoff";
+import { useCommand, useShortcutDispatch } from "@/lib/shortcuts/useCommand";
 
 function readTerminalOpen(): boolean {
   try { return localStorage.getItem("rigel.terminal.open") === "1"; } catch { return false; }
@@ -96,6 +97,7 @@ function AppContent({ account }: { account: UseAccountResult }) {
   useEffect(() => {
     connectCluster();
   }, []);
+  useShortcutDispatch();
   const [paletteOpen, setPaletteOpen] = useCommandPalette();
 
   const [launcherOpen, setLauncherOpen] = useNavLauncher();
@@ -155,7 +157,7 @@ function AppContent({ account }: { account: UseAccountResult }) {
     );
   }
 
-  // Chat-pane visibility — toggle with ⌘J / Ctrl+J, persisted across reloads.
+  // Chat-pane visibility — persisted across reloads.
   // The pane is kept mounted (hidden via display:none) so the conversation and
   // its live watches survive hiding/showing.
   const [chatHidden, setChatHidden] = useState<boolean>(() => {
@@ -187,39 +189,18 @@ function AppContent({ account }: { account: UseAccountResult }) {
       }
     });
   }, []);
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      // ⌘J (mac) / Ctrl+J — toggle the chat pane. preventDefault covers the
-      // Windows/Linux "open downloads" default.
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "j") {
-        e.preventDefault();
-        toggleChat();
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [toggleChat]);
+  useCommand("chat.toggle", toggleChat);
 
-  // Terminal drawer — bottom-mounted persistent shell. Toggled with ⌃` and from
-  // the StatusBar chip / nav item / command palette via the shared event. Kept
+  // Terminal drawer — bottom-mounted persistent shell. Toggled from the
+  // StatusBar chip / nav item / command palette via the shared event. Kept
   // mounted so the PTY + scrollback survive hide/show.
   const [terminalOpen, setTerminalOpen] = useState<boolean>(readTerminalOpen);
   const toggleTerminal = useCallback(() => setTerminalOpen((o) => { persistTerminalOpen(!o); return !o; }), []);
   const closeTerminal = useCallback(() => { persistTerminalOpen(false); setTerminalOpen(false); }, []);
+  useCommand("terminal.toggle", toggleTerminal);
   useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      // ⌃` — the terminal-toggle muscle memory. Plain Ctrl only (no ⌘/Alt).
-      if (e.ctrlKey && !e.metaKey && !e.altKey && e.key === "`") {
-        e.preventDefault();
-        toggleTerminal();
-      }
-    }
-    window.addEventListener("keydown", onKey);
     window.addEventListener(TOGGLE_TERMINAL_EVENT, toggleTerminal);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener(TOGGLE_TERMINAL_EVENT, toggleTerminal);
-    };
+    return () => window.removeEventListener(TOGGLE_TERMINAL_EVENT, toggleTerminal);
   }, [toggleTerminal]);
 
   return (

@@ -32,6 +32,7 @@ import {
 import { handoffToChat } from "@/lib/chatHandoff";
 import { cn } from "@/lib/utils";
 import { formatShortcut } from "@/lib/platform";
+import { useCommand } from "@/lib/shortcuts/useCommand";
 import { Button } from "@/components/ui/button";
 import { TabBar, Tab } from "@/components/ui/Tabs";
 import { PanelSearch } from "@/panels/components/PanelSearch";
@@ -388,17 +389,7 @@ export default function LogsPanel() {
     [selectedItem],
   );
 
-  // ⌥⌘W toggles wrap lines (only meaningful while a stream is open).
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.altKey && (e.metaKey || e.ctrlKey) && (e.key === "w" || e.key === "W" || e.code === "KeyW")) {
-        e.preventDefault();
-        setWrapLines((w) => !w);
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  useCommand("logs.toggleWrap", () => setWrapLines((w) => !w));
 
   const following = !isPaused && !previous;
   const podCount = pods.length;

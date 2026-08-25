@@ -59,6 +59,7 @@ import {
   handoffToChat,
   type ChatHandoffOpts,
 } from "@/lib/chatHandoff";
+import { useCommand } from "@/lib/shortcuts/useCommand";
 import { useCluster } from "@/store/cluster";
 import { MessageBubble } from "@/panels/chat/MessageBubble";
 import { ThinkingPane } from "@/panels/chat/ThinkingPane";
@@ -499,17 +500,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   // live edge while streaming, and each user turn is a `scrollAnchor` so a new
   // question scrolls to the top with its reply growing beneath it.
 
-  // ── ⌘L / Ctrl+L focuses the composer ─────────────────────────────────────
-  useEffect(() => {
-    function handler(e: KeyboardEvent) {
-      if (e.key === "l" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        composerRef.current?.focus();
-      }
-    }
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
+  useCommand("chat.focusComposer", () => composerRef.current?.focus());
 
   // ── Auto-focus ────────────────────────────────────────────────────────────
   useEffect(() => {

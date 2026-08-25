@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faMagnifyingGlass } from "@awesome.me/kit-6050953220/icons/classic/solid";
+import { useCommand } from "@/lib/shortcuts/useCommand";
 import { PANEL_META, NAV_GROUPS } from "./navModel";
 import {
   filterEntries,
@@ -314,25 +315,8 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   );
 }
 
-// ─── Hook: mount global ⌘K / Ctrl+K listener ─────────────────────────────────
-
-/**
- * Mount a single global keydown listener for ⌘K / Ctrl+K. Returns
- * `[open, setOpen]` — mount ONCE at the app-shell level.
- */
 export function useCommandPalette(): [boolean, (v: boolean) => void] {
   const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    function handler(e: KeyboardEvent) {
-      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        setOpen((prev) => !prev);
-      }
-    }
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
-
+  useCommand("palette.open", () => setOpen((prev) => !prev));
   return [open, setOpen];
 }
