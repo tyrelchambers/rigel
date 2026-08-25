@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, test, vi } from "vitest";
 import { act, cleanup, render, renderHook, screen, waitFor } from "@testing-library/react";
 import type { Room } from "livekit-client";
 import userEvent from "@testing-library/user-event";
@@ -114,7 +114,7 @@ vi.mock("@/components/ConfirmSheet", () => ({
 }));
 
 import { useCluster } from "@/store/cluster";
-import { notReadyMessage, resultSummary, voiceButtonLabel, VoiceControl } from "./VoiceControl";
+import { notReadyMessage, resultSummary, voiceButtonLabel, VoiceControl, voiceTogglePress } from "./VoiceControl";
 import { VoicePopoverBody } from "./VoicePopoverBody";
 import { AGENT_REPORT_TIMEOUT_MS, isMicDenied, useAgentReport, useVoiceRoom } from "./useVoiceRoom";
 import { AGENT_STATE_TOPIC } from "./VoiceSessionEffects";
@@ -879,4 +879,30 @@ test("a timed-out report reaches the popover's failure label, which the hook cou
     />,
   );
   expect(screen.getByText("Agent unavailable")).toBeTruthy();
+});
+
+describe("voiceTogglePress", () => {
+  it("opens a session when the popover is closed", () => {
+    const open = vi.fn();
+    const close = vi.fn();
+    voiceTogglePress({ open: false, confirming: false, openSession: open, closeSession: close });
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it("ends the session when the popover is open", () => {
+    const open = vi.fn();
+    const close = vi.fn();
+    voiceTogglePress({ open: true, confirming: false, openSession: open, closeSession: close });
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it("does nothing while a confirmation sheet is up", () => {
+    const open = vi.fn();
+    const close = vi.fn();
+    voiceTogglePress({ open: false, confirming: true, openSession: open, closeSession: close });
+    expect(open).not.toHaveBeenCalled();
+    expect(close).not.toHaveBeenCalled();
+  });
 });

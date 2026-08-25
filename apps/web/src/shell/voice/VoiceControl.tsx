@@ -12,6 +12,7 @@ import { RoomAudioRenderer, RoomContext, useTrackVolume } from "@livekit/compone
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useVoiceStatus, type ActionResult } from "@/lib/api";
+import { useCommand } from "@/lib/shortcuts/useCommand";
 import { VoiceMark, visualStateFor, type AgentReport } from "./VoiceMark";
 import { VoicePopoverBody } from "./VoicePopoverBody";
 import {
@@ -72,6 +73,17 @@ export function voiceButtonLabel(open: boolean, status: VoiceConnection): string
   return open && (status === "connecting" || status === "connected") ? "End voice session" : "Voice assistant";
 }
 
+export function voiceTogglePress(args: {
+  open: boolean;
+  confirming: boolean;
+  openSession: () => void;
+  closeSession: () => void;
+}): void {
+  if (args.confirming) return;
+  if (args.open) args.closeSession();
+  else args.openSession();
+}
+
 export function VoiceControl({ style }: { style?: React.CSSProperties }) {
   const { data } = useVoiceStatus();
   const { room, status, failure, connect, disconnect } = useVoiceRoom();
@@ -124,6 +136,12 @@ export function VoiceControl({ style }: { style?: React.CSSProperties }) {
       }
     },
     [room, onAction],
+  );
+
+  useCommand(
+    "voice.toggle",
+    () => voiceTogglePress({ open, confirming: confirmAction != null, openSession, closeSession }),
+    Boolean(data?.enabled),
   );
 
   if (!data?.enabled) return null;
