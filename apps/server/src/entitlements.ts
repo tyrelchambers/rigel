@@ -25,14 +25,26 @@ export interface EntitlementPayload {
 let current: EntitlementPayload | null = null;
 export function setEntitlement(e: EntitlementPayload | null): void { current = e; }
 
+const BETA: EntitlementPayload = {
+  plan: "pro",
+  audits: ["reliability", "security", "performance", "ha"],
+  cloudConnect: true,
+  agentAutonomy: true,
+  fetchedAt: new Date(0).toISOString(),
+};
+
+function live(): EntitlementPayload | null {
+  return /^(1|true|yes|on)$/i.test(process.env.RIGEL_PAID_ENTITLEMENTS ?? "") ? current : BETA;
+}
+
 export function canConnect(target: ConnectTarget): Entitlement {
   if (target === "import") return { allowed: true }; // kubeconfig import is always free
-  if (current?.cloudConnect) return { allowed: true };
+  if (live()?.cloudConnect) return { allowed: true };
   return { allowed: false, reason: "Connecting a cloud provider requires Rigel Pro." };
 }
 
-export function canBeAutonomous(): boolean { return !!current?.agentAutonomy; }
+export function canBeAutonomous(): boolean { return !!live()?.agentAutonomy; }
 
-export function cloudEnabled(): boolean { return !!current?.cloudConnect; }
+export function cloudEnabled(): boolean { return !!live()?.cloudConnect; }
 
-export function unlockedAuditsEnv(): string { return (current?.audits ?? []).join(","); }
+export function unlockedAuditsEnv(): string { return (live()?.audits ?? []).join(","); }

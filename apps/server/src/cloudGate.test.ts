@@ -1,4 +1,7 @@
-import { test, expect, beforeEach } from "vitest";
+import { test, expect, beforeEach, afterAll } from "vitest";
+
+process.env.RIGEL_PAID_ENTITLEMENTS = "1";
+afterAll(() => { delete process.env.RIGEL_PAID_ENTITLEMENTS; });
 import { cloudGateResponse, isCloudContext, isCloudExempt, gated402, resetCloudContextCache } from "./cloudGate";
 import { setEntitlement } from "./entitlements";
 import type { ClusterContext } from "./contexts";

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faMagnifyingGlass, faStar } from "@awesome.me/kit-6050953220/icons/classic/solid";
+import { useCommand } from "@/lib/shortcuts/useCommand";
 import { PANEL_META, NAV_GROUPS } from "./navModel";
 import {
   buildLauncherGroups,
@@ -251,15 +252,6 @@ export function NavLauncher({ open, onClose }: NavLauncherProps) {
 
 export function useNavLauncher(): [boolean, (v: boolean) => void] {
   const [open, setOpen] = useState(false);
-  useEffect(() => {
-    function handler(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key === "/") {
-        e.preventDefault();
-        setOpen((prev) => !prev);
-      }
-    }
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
+  useCommand("nav.launcher", () => setOpen((prev) => !prev));
   return [open, setOpen];
 }

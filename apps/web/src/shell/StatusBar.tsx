@@ -10,7 +10,7 @@ import { useCluster, filterByNamespace } from "@/store/cluster";
 import { TOGGLE_TERMINAL_EVENT } from "@/shell/TerminalDrawer";
 import { connectionStatus, type ConnectionTone } from "@/shell/connectionStatus";
 import { apiFetch } from "@/lib/api";
-import { formatShortcut } from "@/lib/platform";
+import { useShortcutLabel } from "@/lib/shortcuts/useCommand";
 
 const TONE_COLOR: Record<ConnectionTone, string> = {
   ok: "var(--status-running)",
@@ -34,6 +34,10 @@ export default function StatusBar({ chatHidden, onToggleChat }: StatusBarProps =
   const error = useCluster((s) => s.error);
   const namespaceFilter = useCluster((s) => s.namespaceFilter);
   const activeContext = useCluster((s) => s.activeContext);
+  const paletteKey = useShortcutLabel("palette.open");
+  const chatFocusKey = useShortcutLabel("chat.focusComposer");
+  const terminalKey = useShortcutLabel("terminal.toggle");
+  const chatToggleKey = useShortcutLabel("chat.toggle");
 
   const [health, setHealth] = useState<HealthData>({});
 
@@ -113,14 +117,16 @@ export default function StatusBar({ chatHidden, onToggleChat }: StatusBarProps =
         <Sep />
 
         {/* Hint chips */}
-        <HintChip kbd={formatShortcut({ mod: true, key: "K" })}>Commands</HintChip>
+        {paletteKey && <HintChip kbd={paletteKey}>Commands</HintChip>}
         <HintChip kbd="/">Search</HintChip>
-        <HintChip kbd={formatShortcut({ mod: true, key: "L" })}>Chat</HintChip>
-        <HintChip kbd={formatShortcut({ ctrl: true, key: "`" })} onClick={() => window.dispatchEvent(new Event(TOGGLE_TERMINAL_EVENT))}>
-          Terminal
-        </HintChip>
-        {onToggleChat && (
-          <HintChip kbd={formatShortcut({ mod: true, key: "J" })} onClick={onToggleChat}>
+        {chatFocusKey && <HintChip kbd={chatFocusKey}>Chat</HintChip>}
+        {terminalKey && (
+          <HintChip kbd={terminalKey} onClick={() => window.dispatchEvent(new Event(TOGGLE_TERMINAL_EVENT))}>
+            Terminal
+          </HintChip>
+        )}
+        {onToggleChat && chatToggleKey && (
+          <HintChip kbd={chatToggleKey} onClick={onToggleChat}>
             {chatHidden ? "Show chat" : "Hide chat"}
           </HintChip>
         )}

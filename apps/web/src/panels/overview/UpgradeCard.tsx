@@ -3,6 +3,7 @@ import { UpgradeBanner } from "@/shell/billing/UpgradeBanner";
 import { useEntitlement } from "@/shell/useEntitlement";
 import { useUpgrade } from "@/shell/UpgradeContext";
 import { useAccount } from "@/shell/useAccount";
+import { FREE_PUBLIC_BETA } from "@/lib/beta";
 
 const DISMISS_KEY = "rigel.overview.upgradeDismissed";
 
@@ -16,7 +17,7 @@ export function UpgradeCard() {
     try { return localStorage.getItem(DISMISS_KEY) === "1"; } catch { return false; }
   });
 
-  if (dismissed || payload == null || payload.plan === "pro") return null;
+  if (FREE_PUBLIC_BETA || dismissed || payload == null || payload.plan === "pro") return null;
 
   const personalOrgId = orgs.find((o) => o.kind === "personal")?.id;
   return (

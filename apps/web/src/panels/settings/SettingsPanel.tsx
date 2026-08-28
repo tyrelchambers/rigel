@@ -1,8 +1,9 @@
-// Settings page — tabbed shell. Four tabs:
+// Settings page — tabbed shell. Five tabs:
 //   1. Overview — app/version info + software updates.
 //   2. AI agents — connect/configure the AI backend + assistant roles/limits.
 //   3. Channels — Signal bridge + Matrix channel.
 //   4. App defaults — per-cluster self-host install defaults.
+//   5. Keyboard — rebind the command shortcuts.
 
 import { useSearchParams } from "react-router";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -12,6 +13,7 @@ import {
   faRadio,
   faSliders,
   faSparkles,
+  faKeyboard,
 } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Button } from "@/components/ui/button";
 import { TabBar, Tab } from "@/components/ui/Tabs";
@@ -19,17 +21,25 @@ import { OverviewTab } from "./tabs/OverviewTab";
 import { AiAgentsTab } from "./tabs/AiAgentsTab";
 import { ChannelsTab } from "./tabs/ChannelsTab";
 import { AppDefaultsTab } from "./tabs/AppDefaultsTab";
+import { KeyboardTab } from "./tabs/KeyboardTab";
 
-type SettingsTab = "overview" | "agents" | "channels" | "defaults";
+type SettingsTab = "overview" | "agents" | "channels" | "defaults" | "keyboard";
 const TABS = [
   { id: "overview", label: "Overview", icon: faTableColumns },
   { id: "agents", label: "AI agents", icon: faRobot },
   { id: "channels", label: "Channels", icon: faRadio },
   { id: "defaults", label: "App defaults", icon: faSliders },
+  { id: "keyboard", label: "Keyboard", icon: faKeyboard },
 ];
 
 function isSettingsTab(value: string | null): value is SettingsTab {
-  return value === "overview" || value === "agents" || value === "channels" || value === "defaults";
+  return (
+    value === "overview" ||
+    value === "agents" ||
+    value === "channels" ||
+    value === "defaults" ||
+    value === "keyboard"
+  );
 }
 
 export default function SettingsPanel() {
@@ -73,6 +83,7 @@ export default function SettingsPanel() {
       {tab === "agents" && <AiAgentsTab />}
       {tab === "channels" && <ChannelsTab />}
       {tab === "defaults" && <AppDefaultsTab />}
+      {tab === "keyboard" && <KeyboardTab />}
     </div>
   );
 }

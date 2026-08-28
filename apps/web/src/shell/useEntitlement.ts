@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { rigel, type EntitlementPayload } from "@/lib/desktop";
+import { BETA_ENTITLEMENT, FREE_PUBLIC_BETA } from "@/lib/beta";
 
 /**
  * Subscribes to the desktop entitlement provider: reads the current (grace-applied)
@@ -19,5 +20,5 @@ export function useEntitlement(): { payload: EntitlementPayload | null; upgrade(
     return () => { cancelled = true; off(); };
   }, []);
   const upgrade = useCallback((orgId: string) => void rigel?.billing?.checkout(orgId), []);
-  return { payload, upgrade };
+  return { payload: FREE_PUBLIC_BETA ? BETA_ENTITLEMENT : payload, upgrade };
 }

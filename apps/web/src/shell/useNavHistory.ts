@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { useCluster } from "@/store/cluster";
 import { switchCluster } from "@/lib/ws";
+import { useCommand } from "@/lib/shortcuts/useCommand";
 import { useNavHistoryStore, type NavEntry } from "@/store/navHistory";
 
 /**
@@ -51,24 +52,8 @@ export function useNavHistory() {
     if (entry) applyEntry(entry);
   }
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (!(e.metaKey || e.ctrlKey)) return;
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-      if (e.key === "[" || e.key === "ArrowLeft") {
-        e.preventDefault();
-        goBack();
-      } else if (e.key === "]" || e.key === "ArrowRight") {
-        e.preventDefault();
-        goForward();
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-    // goBack/goForward only read live state via getState(); navigate is stable.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useCommand("nav.back", goBack);
+  useCommand("nav.forward", goForward);
 
   return { canGoBack, canGoForward, goBack, goForward };
 }
