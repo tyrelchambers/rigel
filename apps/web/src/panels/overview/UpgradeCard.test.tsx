@@ -5,6 +5,7 @@ import type { EntitlementPayload } from "@/lib/desktop";
 
 const entitlement = vi.hoisted(() => ({ payload: null as EntitlementPayload | null }));
 const upgrade = vi.hoisted(() => ({ openUpgrade: vi.fn() }));
+const beta = vi.hoisted(() => ({ on: false }));
 const account = vi.hoisted(() => ({
   orgs: [{ id: "o1", kind: "personal", name: "Jane", role: "owner" }] as {
     id: string;
@@ -16,6 +17,7 @@ const account = vi.hoisted(() => ({
 vi.mock("@/shell/useEntitlement", () => ({ useEntitlement: () => ({ payload: entitlement.payload, upgrade: vi.fn() }) }));
 vi.mock("@/shell/UpgradeContext", () => ({ useUpgrade: () => upgrade }));
 vi.mock("@/shell/useAccount", () => ({ useAccount: () => account }));
+vi.mock("@/lib/beta", () => ({ get FREE_PUBLIC_BETA() { return beta.on; } }));
 
 import { UpgradeCard } from "./UpgradeCard";
 
@@ -29,6 +31,14 @@ describe("UpgradeCard", () => {
     entitlement.payload = free;
     upgrade.openUpgrade = vi.fn();
     account.orgs = [{ id: "o1", kind: "personal", name: "Jane", role: "owner" }];
+    beta.on = false;
+  });
+
+  it("renders nothing during the free public beta", () => {
+    beta.on = true;
+    const { container } = render(<UpgradeCard />);
+    expect(container).toBeEmptyDOMElement();
+    expect(container.querySelector(".ov-row")).toBeNull();
   });
 
   it("renders for a free plan", () => {
