@@ -19,10 +19,13 @@ COPY packages/audit-cli/package.json packages/audit-cli/tsconfig.json packages/a
 COPY packages/audit-cli/src ./packages/audit-cli/src
 WORKDIR /app/agent
 RUN npm ci
+# Before the bundle: @rigel/k8s sources live at /app/packages/k8s, so resolving a
+# third-party import from there walks up to /app/node_modules, never into the
+# agent's own /app/agent/node_modules.
+RUN ln -s /app/agent/node_modules /app/node_modules
 # Bundles dist/index.js + dist/fixRunner.js + dist/guardedKubectl.js, each a
 # self-contained ESM file with @rigel/k8s inlined (Node builtins external).
 RUN npm run build
-RUN ln -s /app/agent/node_modules /app/node_modules
 # Same shared build script the standalone/desktop builds use, so the ESM
 # createRequire banner fix (see build.mjs) is applied here too.
 RUN node /app/packages/audit-cli/build.mjs
