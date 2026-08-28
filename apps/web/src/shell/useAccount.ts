@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { rigel, type Account, type EntitlementPayload, type MePayload, type Org, type PendingSignIn } from "@/lib/desktop";
+import { BETA_ENTITLEMENT, FREE_PUBLIC_BETA } from "@/lib/beta";
 
 export type AccountStatus = "loading" | "signed-out" | "signed-in";
 
@@ -69,5 +70,5 @@ export function useAccount(): UseAccountResult {
   // Manual entitlement refetch (the provider re-emits rigel:billing:changed → this hook refetches).
   const refreshBilling = useCallback(() => rigel?.billing?.refresh() ?? Promise.resolve(null), []);
 
-  return { status, account: me?.account ?? null, me, orgs, entitlement, pendingSignIn, startSignIn, signOut, refresh, upgrade, manageBilling, refreshBilling };
+  return { status, account: me?.account ?? null, me, orgs, entitlement: FREE_PUBLIC_BETA ? BETA_ENTITLEMENT : entitlement, pendingSignIn, startSignIn, signOut, refresh, upgrade, manageBilling, refreshBilling };
 }

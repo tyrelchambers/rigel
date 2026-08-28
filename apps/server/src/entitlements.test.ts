@@ -1,5 +1,23 @@
-import { test, expect } from "vitest";
-import { setEntitlement, canConnect, canBeAutonomous, unlockedAuditsEnv } from "./entitlements";
+import { test, expect, beforeEach, afterEach } from "vitest";
+import { setEntitlement, canConnect, canBeAutonomous, cloudEnabled, unlockedAuditsEnv } from "./entitlements";
+
+beforeEach(() => {
+  process.env.RIGEL_PAID_ENTITLEMENTS = "1";
+});
+
+afterEach(() => {
+  delete process.env.RIGEL_PAID_ENTITLEMENTS;
+});
+
+test("free public beta (the default) unlocks everything regardless of the pushed payload", () => {
+  delete process.env.RIGEL_PAID_ENTITLEMENTS;
+  setEntitlement(null);
+  expect(canConnect("aws").allowed).toBe(true);
+  expect(canConnect("import").allowed).toBe(true);
+  expect(canBeAutonomous()).toBe(true);
+  expect(cloudEnabled()).toBe(true);
+  expect(unlockedAuditsEnv().split(",").sort()).toEqual(["ha", "performance", "reliability", "security"]);
+});
 
 test("default (no entitlement) → import free, cloud providers gated", () => {
   setEntitlement(null);

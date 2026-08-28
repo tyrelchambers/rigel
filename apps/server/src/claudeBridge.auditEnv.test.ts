@@ -1,4 +1,7 @@
-import { test, expect, vi, beforeEach } from "vitest";
+import { test, expect, vi, beforeEach, afterAll } from "vitest";
+
+process.env.RIGEL_PAID_ENTITLEMENTS = "1";
+afterAll(() => { delete process.env.RIGEL_PAID_ENTITLEMENTS; });
 
 // Capture the env that runClaude hands to the spawn layer.
 const calls: { env: Record<string, string> }[] = [];
