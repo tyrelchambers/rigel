@@ -14,6 +14,8 @@ const OOM_KILLED_REASON = "OOMKilled";
 
 const INIT_FAILURE_REASONS = new Set([CRASH_LOOP_REASON, ...IMAGE_PULL_REASONS]);
 
+const SIDECAR_RESTART_POLICY = "Always";
+
 const APP_CONTAINER_NOUN = "Container";
 
 const INIT_CONTAINER_NOUN = "Init container";
@@ -78,6 +80,13 @@ function containerLabel(entry: ContainerEntry, subject: IssueSubject): string {
 
 function podStartTime(pod: RawObject): string | undefined {
   return textOf(pod.status?.startTime);
+}
+
+function isNativeSidecar(pod: RawObject, name: unknown): boolean {
+  const specs = pod.spec?.initContainers;
+  if (!Array.isArray(specs)) return false;
+  const spec = (specs as RawObject[]).find((c) => c?.name === name);
+  return spec?.restartPolicy === SIDECAR_RESTART_POLICY;
 }
 
 function restartRolloutFix(kind: string, name: string, namespace: string): IssueFix {
@@ -199,33 +208,35 @@ function oomKilled(pod: RawObject): Issue | undefined {
 function initContainerStuck(pod: RawObject, _input: IssueInput, now: Date): Issue | undefined {
   if (pod.status?.phase !== "Pending") return undefined;
   const startTime = podStartTime(pod);
-  if (!startTime) return undefined;
-  const status = initContainerStatuses(pod).find((cs) => {
+  const stalled = initContainerStatuses(pod).filter((cs) => {
     if (cs.ready !== false) return false;
+    if (isNativeSidecar(pod, cs.name)) return false;
     if (cs.state?.running) return true;
     const waiting = textOf(cs.state?.waiting?.reason);
     return waiting !== undefined && !INIT_FAILURE_REASONS.has(waiting);
   });
-  if (!status) return undefined;
-  const initializingMinutes = differenceInMinutes(now, parseISO(startTime));
-  if (Number.isNaN(initializingMinutes) || initializingMinutes <= INIT_STUCK_MINUTES) {
-    return undefined;
+  for (const status of stalled) {
+    const onsetAt = textOf(status.state?.running?.startedAt) ?? startTime;
+    if (!onsetAt) continue;
+    const initializingMinutes = differenceInMinutes(now, parseISO(onsetAt));
+    if (Number.isNaN(initializingMinutes) || initializingMinutes <= INIT_STUCK_MINUTES) continue;
+    const subject = subjectOf("Pod", pod);
+    return {
+      fingerprint: "",
+      rule: "initContainerStuck",
+      title: "Init container not finishing",
+      category: "runtime",
+      severity: "warning",
+      subject,
+      cause: "Init container has not finished",
+      whatsWrong: `${containerLabel({ status, init: true }, subject)} has not finished after more than ${INIT_STUCK_MINUTES} minutes, so none of the pod's own containers have started yet.`,
+      nextStep: "Find what this init container waits for and bring that dependency back, since the pod stays Pending until it answers.",
+      onsetAt,
+      related: [],
+      source: "cluster",
+    };
   }
-  const subject = subjectOf("Pod", pod);
-  return {
-    fingerprint: "",
-    rule: "initContainerStuck",
-    title: "Init container not finishing",
-    category: "runtime",
-    severity: "warning",
-    subject,
-    cause: "Init container has not finished",
-    whatsWrong: `${containerLabel({ status, init: true }, subject)} has not finished after more than ${INIT_STUCK_MINUTES} minutes, so none of the pod's own containers have started yet.`,
-    nextStep: "Find what this init container waits for and bring that dependency back, since the pod stays Pending until it answers.",
-    onsetAt: startTime,
-    related: [],
-    source: "cluster",
-  };
+  return undefined;
 }
 
 function podUnschedulable(pod: RawObject): Issue | undefined {

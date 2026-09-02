@@ -1165,4 +1165,170 @@ describe("initContainerStuck", () => {
     );
     expect(out).toEqual([]);
   });
+
+  function sidecarPod(over: Record<string, any> = {}): Record<string, any> {
+    return pod({
+      spec: {
+        initContainers: [
+          { name: "plugin-barman-cloud", restartPolicy: "Always" },
+          { name: "wait-for-db" },
+        ],
+      },
+      ...over,
+    });
+  }
+
+  it("does not fire when the only unready init container is a native sidecar", () => {
+    const out = runtimeRules(
+      {
+        pods: [
+          sidecarPod({
+            status: {
+              phase: "Pending",
+              startTime: "2026-01-01T00:00:00Z",
+              containerStatuses: [
+                {
+                  name: "postgres",
+                  ready: false,
+                  state: { waiting: { reason: "PodInitializing" } },
+                },
+              ],
+              initContainerStatuses: [
+                {
+                  name: "plugin-barman-cloud",
+                  ready: false,
+                  restartCount: 0,
+                  state: { running: { startedAt: "2026-01-01T00:00:00Z" } },
+                },
+              ],
+            },
+          }),
+        ],
+      },
+      now,
+    );
+    expect(out).toEqual([]);
+  });
+
+  it("still fires crashLoopBackOff for a native sidecar", () => {
+    const out = runtimeRules(
+      {
+        pods: [
+          sidecarPod({
+            status: {
+              phase: "Pending",
+              startTime: "2026-01-01T00:00:00Z",
+              containerStatuses: [],
+              initContainerStatuses: [
+                {
+                  name: "plugin-barman-cloud",
+                  ready: false,
+                  restartCount: 9,
+                  state: { waiting: { reason: "CrashLoopBackOff" } },
+                },
+              ],
+            },
+          }),
+        ],
+      },
+      now,
+    );
+    expect(out.map((i) => i.rule)).toEqual(["crashLoopBackOff"]);
+    expect(out[0].whatsWrong).toContain("plugin-barman-cloud");
+  });
+
+  it("fires for an ordinary stuck init container alongside a native sidecar", () => {
+    const out = runtimeRules(
+      {
+        pods: [
+          sidecarPod({
+            status: {
+              phase: "Pending",
+              startTime: "2026-01-01T00:00:00Z",
+              containerStatuses: [],
+              initContainerStatuses: [
+                {
+                  name: "plugin-barman-cloud",
+                  ready: false,
+                  restartCount: 0,
+                  state: { running: { startedAt: "2026-01-01T00:00:00Z" } },
+                },
+                {
+                  name: "wait-for-db",
+                  ready: false,
+                  restartCount: 0,
+                  state: { running: { startedAt: "2026-01-01T00:00:00Z" } },
+                },
+              ],
+            },
+          }),
+        ],
+      },
+      now,
+    );
+    expect(out.map((i) => i.rule)).toEqual(["initContainerStuck"]);
+    expect(out[0].whatsWrong).toContain("wait-for-db");
+    expect(out[0].whatsWrong).not.toContain("plugin-barman-cloud");
+  });
+
+  it("does not skip an init container that has no matching spec entry", () => {
+    const out = runtimeRules(
+      {
+        pods: [
+          pod({
+            spec: { initContainers: [{ name: "some-other-name", restartPolicy: "Always" }] },
+            status: {
+              phase: "Pending",
+              startTime: "2026-01-01T00:00:00Z",
+              containerStatuses: [],
+              initContainerStatuses: [
+                {
+                  name: "wait-for-db",
+                  ready: false,
+                  restartCount: 0,
+                  state: { running: { startedAt: "2026-01-01T00:00:00Z" } },
+                },
+              ],
+            },
+          }),
+        ],
+      },
+      now,
+    );
+    expect(out.map((i) => i.rule)).toEqual(["initContainerStuck"]);
+  });
+
+  it("measures from the init container start, not the pod start", () => {
+    const out = runtimeRules(
+      { pods: [pendingInit("2026-01-01T00:00:00Z", { running: { startedAt: "2026-01-01T00:58:00Z" } })] },
+      now,
+    );
+    expect(out).toEqual([]);
+  });
+
+  it("fires when the init container itself has been running past the threshold", () => {
+    const out = runtimeRules(
+      { pods: [pendingInit("2026-01-01T00:00:00Z", { running: { startedAt: "2026-01-01T00:40:00Z" } })] },
+      now,
+    );
+    expect(out.map((i) => i.rule)).toEqual(["initContainerStuck"]);
+    expect(out[0].onsetAt).toBe("2026-01-01T00:40:00Z");
+  });
+
+  it("falls back to the pod start time for a waiting init container", () => {
+    const out = runtimeRules(
+      { pods: [pendingInit("2026-01-01T00:00:00Z", { waiting: { reason: "PodInitializing" } })] },
+      now,
+    );
+    expect(out.map((i) => i.rule)).toEqual(["initContainerStuck"]);
+    expect(out[0].onsetAt).toBe("2026-01-01T00:00:00Z");
+  });
+
+  it("does not fire for a waiting init container in a freshly started pod", () => {
+    const out = runtimeRules(
+      { pods: [pendingInit("2026-01-01T00:55:00Z", { waiting: { reason: "PodInitializing" } })] },
+      now,
+    );
+    expect(out).toEqual([]);
+  });
 });
