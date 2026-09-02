@@ -1055,3 +1055,114 @@ describe("init container failures", () => {
     expect(out).toEqual([]);
   });
 });
+
+describe("initContainerStuck", () => {
+  const now = new Date("2026-01-01T01:00:00Z");
+
+  function pendingInit(startTime: string, state: Record<string, any>): Record<string, any> {
+    return pod({
+      status: {
+        phase: "Pending",
+        startTime,
+        containerStatuses: [
+          { name: "api", ready: false, state: { waiting: { reason: "PodInitializing" } } },
+        ],
+        initContainerStatuses: [{ name: "wait-for-db", ready: false, restartCount: 0, state }],
+      },
+    });
+  }
+
+  it("does not fire while the init container is younger than the threshold", () => {
+    const out = runtimeRules(
+      { pods: [pendingInit("2026-01-01T00:50:00Z", { running: { startedAt: "2026-01-01T00:50:00Z" } })] },
+      now,
+    );
+    expect(out).toEqual([]);
+  });
+
+  it("fires once the init container has been running past the threshold", () => {
+    const out = runtimeRules(
+      { pods: [pendingInit("2026-01-01T00:00:00Z", { running: { startedAt: "2026-01-01T00:00:00Z" } })] },
+      now,
+    );
+    expect(out.map((i) => i.rule)).toEqual(["initContainerStuck"]);
+    expect(out[0].severity).toBe("warning");
+    expect(out[0].category).toBe("runtime");
+    expect(out[0].evidence).toBeUndefined();
+    expect(out[0].onsetAt).toBe("2026-01-01T00:00:00Z");
+    expect(out[0].whatsWrong).toContain("wait-for-db");
+    expect(out[0].subject).toEqual({ kind: "Pod", namespace: "default", name: "api-0" });
+  });
+
+  it("fires on an init container waiting on a reason that is not a covered failure", () => {
+    const out = runtimeRules(
+      { pods: [pendingInit("2026-01-01T00:00:00Z", { waiting: { reason: "PodInitializing" } })] },
+      now,
+    );
+    expect(out.map((i) => i.rule)).toEqual(["initContainerStuck"]);
+  });
+
+  it("yields to the crash loop rule when the init container is crash looping", () => {
+    const out = runtimeRules(
+      { pods: [pendingInit("2026-01-01T00:00:00Z", { waiting: { reason: "CrashLoopBackOff" } })] },
+      now,
+    );
+    expect(out.map((i) => i.rule)).toEqual(["crashLoopBackOff"]);
+  });
+
+  it("yields to the image pull rule when the init container cannot pull", () => {
+    const out = runtimeRules(
+      { pods: [pendingInit("2026-01-01T00:00:00Z", { waiting: { reason: "ImagePullBackOff" } })] },
+      now,
+    );
+    expect(out.map((i) => i.rule)).toEqual(["imagePullBackOff"]);
+  });
+
+  it("does not fire on a running pod whose init containers finished", () => {
+    const out = runtimeRules(
+      {
+        pods: [
+          pod({
+            status: {
+              phase: "Running",
+              startTime: "2026-01-01T00:00:00Z",
+              containerStatuses: [
+                { name: "api", ready: true, restartCount: 0, state: { running: {} } },
+              ],
+              initContainerStatuses: [
+                {
+                  name: "wait-for-db",
+                  ready: true,
+                  restartCount: 0,
+                  state: { terminated: { reason: "Completed", exitCode: 0 } },
+                },
+              ],
+            },
+          }),
+        ],
+      },
+      now,
+    );
+    expect(out).toEqual([]);
+  });
+
+  it("does not fire when the pod has no start time", () => {
+    const out = runtimeRules(
+      {
+        pods: [
+          pod({
+            status: {
+              phase: "Pending",
+              containerStatuses: [],
+              initContainerStatuses: [
+                { name: "wait-for-db", ready: false, restartCount: 0, state: { running: {} } },
+              ],
+            },
+          }),
+        ],
+      },
+      now,
+    );
+    expect(out).toEqual([]);
+  });
+});

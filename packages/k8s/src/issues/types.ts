@@ -17,6 +17,7 @@ export type IssueRuleId =
   | "oomKilled"
   | "podFailed"
   | "restartStorm"
+  | "initContainerStuck"
   | "degradedDeployment"
   | "degradedStatefulSet"
   | "degradedDaemonSet"

@@ -1,13 +1,18 @@
+import { differenceInMinutes, parseISO } from "date-fns";
 import type { Issue, IssueFix, IssueInput, IssueSubject, RawObject } from "../types";
 import { subjectKey } from "../types";
 
 const RESTART_STORM_THRESHOLD = 10;
+
+const INIT_STUCK_MINUTES = 15;
 
 const CRASH_LOOP_REASON = "CrashLoopBackOff";
 
 const IMAGE_PULL_REASONS = new Set(["ImagePullBackOff", "ErrImagePull"]);
 
 const OOM_KILLED_REASON = "OOMKilled";
+
+const INIT_FAILURE_REASONS = new Set([CRASH_LOOP_REASON, ...IMAGE_PULL_REASONS]);
 
 const APP_CONTAINER_NOUN = "Container";
 
@@ -21,7 +26,7 @@ const PRESSURE_CAUSES: Record<string, string> = {
   PIDPressure: "Node under process ID pressure",
 };
 
-type PodRule = (pod: RawObject, input: IssueInput) => Issue | undefined;
+type PodRule = (pod: RawObject, input: IssueInput, now: Date) => Issue | undefined;
 
 interface ContainerEntry {
   status: RawObject;
@@ -191,6 +196,38 @@ function oomKilled(pod: RawObject): Issue | undefined {
   };
 }
 
+function initContainerStuck(pod: RawObject, _input: IssueInput, now: Date): Issue | undefined {
+  if (pod.status?.phase !== "Pending") return undefined;
+  const startTime = podStartTime(pod);
+  if (!startTime) return undefined;
+  const status = initContainerStatuses(pod).find((cs) => {
+    if (cs.ready !== false) return false;
+    if (cs.state?.running) return true;
+    const waiting = textOf(cs.state?.waiting?.reason);
+    return waiting !== undefined && !INIT_FAILURE_REASONS.has(waiting);
+  });
+  if (!status) return undefined;
+  const initializingMinutes = differenceInMinutes(now, parseISO(startTime));
+  if (Number.isNaN(initializingMinutes) || initializingMinutes <= INIT_STUCK_MINUTES) {
+    return undefined;
+  }
+  const subject = subjectOf("Pod", pod);
+  return {
+    fingerprint: "",
+    rule: "initContainerStuck",
+    title: "Init container not finishing",
+    category: "runtime",
+    severity: "warning",
+    subject,
+    cause: "Init container has not finished",
+    whatsWrong: `${containerLabel({ status, init: true }, subject)} has not finished after more than ${INIT_STUCK_MINUTES} minutes, so none of the pod's own containers have started yet.`,
+    nextStep: "Find what this init container waits for and bring that dependency back, since the pod stays Pending until it answers.",
+    onsetAt: startTime,
+    related: [],
+    source: "cluster",
+  };
+}
+
 function podUnschedulable(pod: RawObject): Issue | undefined {
   const condition = conditionOf(pod, "PodScheduled");
   if (condition?.status !== "False" || condition?.reason !== "Unschedulable") return undefined;
@@ -283,19 +320,20 @@ const POD_RULES: PodRule[] = [
   imagePullBackOff,
   oomKilled,
   podUnschedulable,
+  initContainerStuck,
   podEvicted,
   podFailed,
   restartStorm,
 ];
 
-function podIssues(input: IssueInput): Issue[] {
+function podIssues(input: IssueInput, now: Date): Issue[] {
   const issues: Issue[] = [];
   const alreadyFlagged = new Set<string>();
   for (const rule of POD_RULES) {
     for (const pod of input.pods ?? []) {
       const key = subjectKey(subjectOf("Pod", pod));
       if (alreadyFlagged.has(key)) continue;
-      const issue = rule(pod, input);
+      const issue = rule(pod, input, now);
       if (!issue) continue;
       alreadyFlagged.add(key);
       issues.push(issue);
@@ -467,9 +505,9 @@ function collect<T>(items: RawObject[] | undefined, rule: (o: RawObject) => T | 
 }
 
 /** Runtime and scheduling issues over raw kubectl JSON. Pure: no client, no IO. */
-export function runtimeRules(input: IssueInput): Issue[] {
+export function runtimeRules(input: IssueInput, now: Date = new Date()): Issue[] {
   return [
-    ...podIssues(input),
+    ...podIssues(input, now),
     ...collect(input.deployments, (d) => degradedReplicaSetIssue(d, "Deployment")),
     ...collect(input.deployments, zeroReplicas),
     ...collect(input.statefulsets, (s) => degradedReplicaSetIssue(s, "StatefulSet")),
