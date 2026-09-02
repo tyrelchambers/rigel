@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { rollUpIssues } from "../engine";
+import { issueFingerprint } from "../types";
 import { runtimeRules } from "./runtime";
 
 function pod(over: Record<string, any> = {}): Record<string, any> {
@@ -861,5 +863,195 @@ describe("copy discipline", () => {
         expect(text.length).toBeGreaterThan(0);
       }
     }
+  });
+});
+
+describe("init container failures", () => {
+  it("fires crashLoopBackOff for an init container and names it", () => {
+    const out = runtimeRules({
+      pods: [
+        pod({
+          status: {
+            phase: "Pending",
+            startTime: "2026-01-01T00:00:00Z",
+            containerStatuses: [
+              { name: "api", ready: false, state: { waiting: { reason: "PodInitializing" } } },
+            ],
+            initContainerStatuses: [
+              {
+                name: "wait-for-db",
+                ready: false,
+                restartCount: 6,
+                state: {
+                  waiting: {
+                    reason: "CrashLoopBackOff",
+                    message: "back-off 5m0s restarting failed container",
+                  },
+                },
+              },
+            ],
+          },
+        }),
+      ],
+    });
+    expect(out.map((i) => i.rule)).toEqual(["crashLoopBackOff"]);
+    expect(out[0].severity).toBe("critical");
+    expect(out[0].whatsWrong).toContain("Init container");
+    expect(out[0].whatsWrong).toContain("wait-for-db");
+    expect(out[0].cause).toBe("Init container is restarting in a crash loop");
+    expect(out[0].evidence).toBe("back-off 5m0s restarting failed container");
+    expect(out[0].onsetAt).toBe("2026-01-01T00:00:00Z");
+  });
+
+  it("fires imagePullBackOff for an init container and names it", () => {
+    const out = runtimeRules({
+      pods: [
+        pod({
+          status: {
+            phase: "Pending",
+            startTime: "2026-01-01T00:00:00Z",
+            containerStatuses: [],
+            initContainerStatuses: [
+              {
+                name: "bootstrap-controller",
+                ready: false,
+                restartCount: 0,
+                state: {
+                  waiting: {
+                    reason: "ImagePullBackOff",
+                    message: 'Back-off pulling image "ghcr.io/acme/boot:v9"',
+                  },
+                },
+              },
+            ],
+          },
+        }),
+      ],
+    });
+    expect(out.map((i) => i.rule)).toEqual(["imagePullBackOff"]);
+    expect(out[0].whatsWrong).toContain("Init container");
+    expect(out[0].whatsWrong).toContain("bootstrap-controller");
+    expect(out[0].cause).toBe("Init container image cannot be pulled");
+    expect(out[0].evidence).toBe('Back-off pulling image "ghcr.io/acme/boot:v9"');
+  });
+
+  it("fires oomKilled for an init container and names it", () => {
+    const out = runtimeRules({
+      pods: [
+        pod({
+          status: {
+            phase: "Pending",
+            startTime: "2026-01-01T00:00:00Z",
+            containerStatuses: [],
+            initContainerStatuses: [
+              {
+                name: "plugin-barman-cloud",
+                ready: false,
+                restartCount: 2,
+                state: { running: {} },
+                lastState: { terminated: { reason: "OOMKilled", exitCode: 137 } },
+              },
+            ],
+          },
+        }),
+      ],
+    });
+    expect(out.map((i) => i.rule)).toEqual(["oomKilled"]);
+    expect(out[0].whatsWrong).toContain("Init container");
+    expect(out[0].whatsWrong).toContain("plugin-barman-cloud");
+    expect(out[0].cause).toBe("Init container killed for exceeding its memory limit");
+    expect(out[0].evidence).toBe("OOMKilled");
+  });
+
+  it("does not roll an init failure up with an app failure", () => {
+    const out = runtimeRules({
+      pods: [
+        pod({
+          metadata: { name: "api-0", namespace: "default" },
+          status: {
+            phase: "Running",
+            startTime: "2026-01-01T00:00:00Z",
+            containerStatuses: [
+              { name: "api", ready: false, state: { waiting: { reason: "CrashLoopBackOff" } } },
+            ],
+          },
+        }),
+        pod({
+          metadata: { name: "worker-0", namespace: "default" },
+          status: {
+            phase: "Pending",
+            startTime: "2026-01-01T00:00:00Z",
+            containerStatuses: [],
+            initContainerStatuses: [
+              {
+                name: "wait-for-db",
+                ready: false,
+                state: { waiting: { reason: "CrashLoopBackOff" } },
+              },
+            ],
+          },
+        }),
+      ],
+    });
+    expect(out.map((i) => i.rule)).toEqual(["crashLoopBackOff", "crashLoopBackOff"]);
+    const groups = rollUpIssues(out);
+    expect(groups).toHaveLength(2);
+    expect(new Set(groups.map((g) => g.lead.cause)).size).toBe(2);
+  });
+
+  it("does not roll an init failure up with an app failure across fingerprints", () => {
+    const appIssue = runtimeRules({
+      pods: [
+        pod({
+          status: {
+            phase: "Running",
+            containerStatuses: [
+              { name: "api", ready: false, state: { waiting: { reason: "CrashLoopBackOff" } } },
+            ],
+          },
+        }),
+      ],
+    })[0];
+    const initIssue = runtimeRules({
+      pods: [
+        pod({
+          status: {
+            phase: "Pending",
+            containerStatuses: [],
+            initContainerStatuses: [
+              {
+                name: "wait-for-db",
+                ready: false,
+                state: { waiting: { reason: "CrashLoopBackOff" } },
+              },
+            ],
+          },
+        }),
+      ],
+    })[0];
+    expect(issueFingerprint(appIssue)).not.toBe(issueFingerprint(initIssue));
+  });
+
+  it("does not fire on a pod whose init containers all completed", () => {
+    const out = runtimeRules({
+      pods: [
+        pod({
+          status: {
+            phase: "Running",
+            startTime: "2026-01-01T00:00:00Z",
+            containerStatuses: [{ name: "api", ready: true, restartCount: 0, state: { running: {} } }],
+            initContainerStatuses: [
+              {
+                name: "wait-for-db",
+                ready: true,
+                restartCount: 0,
+                state: { terminated: { reason: "Completed", exitCode: 0 } },
+              },
+            ],
+          },
+        }),
+      ],
+    });
+    expect(out).toEqual([]);
   });
 });

@@ -3,7 +3,15 @@ import { subjectKey } from "../types";
 
 const RESTART_STORM_THRESHOLD = 10;
 
+const CRASH_LOOP_REASON = "CrashLoopBackOff";
+
 const IMAGE_PULL_REASONS = new Set(["ImagePullBackOff", "ErrImagePull"]);
+
+const OOM_KILLED_REASON = "OOMKilled";
+
+const APP_CONTAINER_NOUN = "Container";
+
+const INIT_CONTAINER_NOUN = "Init container";
 
 const ROLLOUT_IN_FLIGHT_REASON = "ReplicaSetUpdated";
 
@@ -14,6 +22,11 @@ const PRESSURE_CAUSES: Record<string, string> = {
 };
 
 type PodRule = (pod: RawObject, input: IssueInput) => Issue | undefined;
+
+interface ContainerEntry {
+  status: RawObject;
+  init: boolean;
+}
 
 function subjectOf(kind: string, o: RawObject): IssueSubject {
   return {
@@ -36,6 +49,26 @@ function textOf(value: unknown): string | undefined {
 function containerStatuses(pod: RawObject): RawObject[] {
   const statuses = pod.status?.containerStatuses;
   return Array.isArray(statuses) ? (statuses as RawObject[]) : [];
+}
+
+function initContainerStatuses(pod: RawObject): RawObject[] {
+  const statuses = pod.status?.initContainerStatuses;
+  return Array.isArray(statuses) ? (statuses as RawObject[]) : [];
+}
+
+function allContainers(pod: RawObject): ContainerEntry[] {
+  return [
+    ...containerStatuses(pod).map((status) => ({ status, init: false })),
+    ...initContainerStatuses(pod).map((status) => ({ status, init: true })),
+  ];
+}
+
+function containerNoun(init: boolean): string {
+  return init ? INIT_CONTAINER_NOUN : APP_CONTAINER_NOUN;
+}
+
+function containerLabel(entry: ContainerEntry, subject: IssueSubject): string {
+  return `${containerNoun(entry.init)} "${entry.status.name}" in pod ${subject.namespace}/${subject.name}`;
 }
 
 function podStartTime(pod: RawObject): string | undefined {
@@ -80,10 +113,10 @@ function deploymentOwner(pod: RawObject, input: IssueInput): string | undefined 
 }
 
 function crashLoopBackOff(pod: RawObject, input: IssueInput): Issue | undefined {
-  const container = containerStatuses(pod).find(
-    (cs) => cs.state?.waiting?.reason === "CrashLoopBackOff",
+  const entry = allContainers(pod).find(
+    (c) => c.status.state?.waiting?.reason === CRASH_LOOP_REASON,
   );
-  if (!container) return undefined;
+  if (!entry) return undefined;
   const subject = subjectOf("Pod", pod);
   const deployment = deploymentOwner(pod, input);
   return {
@@ -93,10 +126,12 @@ function crashLoopBackOff(pod: RawObject, input: IssueInput): Issue | undefined 
     category: "runtime",
     severity: "critical",
     subject,
-    cause: "Container is restarting in a crash loop",
-    whatsWrong: `Container "${container.name}" in pod ${subject.namespace}/${subject.name} keeps exiting, so Kubernetes is backing off before each restart.`,
-    nextStep: "Read the container logs for the exit reason and fix the crash before restarting the workload.",
-    evidence: textOf(container.state?.waiting?.message),
+    cause: `${containerNoun(entry.init)} is restarting in a crash loop`,
+    whatsWrong: `${containerLabel(entry, subject)} keeps exiting, so Kubernetes is backing off before each restart.`,
+    nextStep: entry.init
+      ? "Read the init container logs for the exit reason and fix the dependency or command it runs before the pod can start."
+      : "Read the container logs for the exit reason and fix the crash before restarting the workload.",
+    evidence: textOf(entry.status.state?.waiting?.message),
     onsetAt: podStartTime(pod),
     related: [],
     fix: deployment ? restartRolloutFix("deployment", deployment, subject.namespace) : undefined,
@@ -105,10 +140,10 @@ function crashLoopBackOff(pod: RawObject, input: IssueInput): Issue | undefined 
 }
 
 function imagePullBackOff(pod: RawObject): Issue | undefined {
-  const container = containerStatuses(pod).find((cs) =>
-    IMAGE_PULL_REASONS.has(cs.state?.waiting?.reason),
+  const entry = allContainers(pod).find((c) =>
+    IMAGE_PULL_REASONS.has(c.status.state?.waiting?.reason),
   );
-  if (!container) return undefined;
+  if (!entry) return undefined;
   const subject = subjectOf("Pod", pod);
   return {
     fingerprint: "",
@@ -117,10 +152,12 @@ function imagePullBackOff(pod: RawObject): Issue | undefined {
     category: "runtime",
     severity: "critical",
     subject,
-    cause: "Container image cannot be pulled",
-    whatsWrong: `Container "${container.name}" in pod ${subject.namespace}/${subject.name} cannot pull its image, so the pod never starts.`,
-    nextStep: "Confirm the image name and tag exist and that the pull secret grants access to the registry.",
-    evidence: textOf(container.state?.waiting?.message),
+    cause: `${containerNoun(entry.init)} image cannot be pulled`,
+    whatsWrong: `${containerLabel(entry, subject)} cannot pull its image, so the pod never starts.`,
+    nextStep: entry.init
+      ? "Confirm the init container image name and tag exist and that the pull secret grants access to the registry."
+      : "Confirm the image name and tag exist and that the pull secret grants access to the registry.",
+    evidence: textOf(entry.status.state?.waiting?.message),
     onsetAt: podStartTime(pod),
     related: [],
     source: "cluster",
@@ -128,12 +165,12 @@ function imagePullBackOff(pod: RawObject): Issue | undefined {
 }
 
 function oomKilled(pod: RawObject): Issue | undefined {
-  const container = containerStatuses(pod).find(
-    (cs) =>
-      cs.lastState?.terminated?.reason === "OOMKilled" ||
-      cs.state?.terminated?.reason === "OOMKilled",
+  const entry = allContainers(pod).find(
+    (c) =>
+      c.status.lastState?.terminated?.reason === OOM_KILLED_REASON ||
+      c.status.state?.terminated?.reason === OOM_KILLED_REASON,
   );
-  if (!container) return undefined;
+  if (!entry) return undefined;
   const subject = subjectOf("Pod", pod);
   return {
     fingerprint: "",
@@ -142,10 +179,12 @@ function oomKilled(pod: RawObject): Issue | undefined {
     category: "runtime",
     severity: "critical",
     subject,
-    cause: "Container killed for exceeding its memory limit",
-    whatsWrong: `Container "${container.name}" in pod ${subject.namespace}/${subject.name} was killed for using more memory than its limit allows.`,
-    nextStep: "Raise the container memory limit or reduce how much memory the workload holds.",
-    evidence: "OOMKilled",
+    cause: `${containerNoun(entry.init)} killed for exceeding its memory limit`,
+    whatsWrong: `${containerLabel(entry, subject)} was killed for using more memory than its limit allows.`,
+    nextStep: entry.init
+      ? "Raise the init container memory limit or reduce how much memory its startup work holds."
+      : "Raise the container memory limit or reduce how much memory the workload holds.",
+    evidence: OOM_KILLED_REASON,
     onsetAt: podStartTime(pod),
     related: [],
     source: "cluster",
