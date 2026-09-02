@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Routes, Route } from "react-router";
 import OverviewPanel from "./panels/overview/OverviewPanel";
 import HealthPanel from "./panels/health/HealthPanel";
+import IssuesPanel from "./panels/issues/IssuesPanel";
 import PodsPanel from "./panels/pods/PodsPanel";
 import DeploymentsPanel from "./panels/deployments/DeploymentsPanel";
 import NamespacesPanel from "./panels/namespaces/NamespacesPanel";
@@ -255,6 +256,7 @@ function AppContent({ account }: { account: UseAccountResult }) {
 
               {/* Panels using the shared PanelHeader own their full-height
                   scroll layout, so they are rendered without <Padded>. */}
+              <Route path="/issues" element={<IssuesPanel />} />
               <Route path="/pods" element={<PodsPanel />} />
               <Route path="/deployments" element={<DeploymentsPanel />} />
               <Route path="/workloads" element={<WorkloadsPanel />} />
