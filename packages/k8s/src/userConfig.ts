@@ -16,16 +16,19 @@ export const USER_CONFIG_SECRET = "rigel-user-config";
 export const VOICE_CONFIG_KEY = "voice.json";
 export const AGENTS_CONFIG_KEY = "agents.json";
 export const CLAUDE_TOKEN_KEY = "claude-oauth-token";
+export const FAILOVER_CONFIG_KEY = "failover.json";
 
 export type UserConfigKey =
   | typeof VOICE_CONFIG_KEY
   | typeof AGENTS_CONFIG_KEY
-  | typeof CLAUDE_TOKEN_KEY;
+  | typeof CLAUDE_TOKEN_KEY
+  | typeof FAILOVER_CONFIG_KEY;
 
 export const USER_CONFIG_KEYS: readonly UserConfigKey[] = [
   VOICE_CONFIG_KEY,
   AGENTS_CONFIG_KEY,
   CLAUDE_TOKEN_KEY,
+  FAILOVER_CONFIG_KEY,
 ];
 
 export type UserConfigData = Record<UserConfigKey, string>;
@@ -34,7 +37,12 @@ const MANAGED_BY = { "app.kubernetes.io/managed-by": "rigel" };
 
 /** A config with every key present and empty: connected, nothing configured. */
 export function emptyUserConfigData(): UserConfigData {
-  return { [VOICE_CONFIG_KEY]: "", [AGENTS_CONFIG_KEY]: "", [CLAUDE_TOKEN_KEY]: "" };
+  return {
+    [VOICE_CONFIG_KEY]: "",
+    [AGENTS_CONFIG_KEY]: "",
+    [CLAUDE_TOKEN_KEY]: "",
+    [FAILOVER_CONFIG_KEY]: "",
+  };
 }
 
 /** True when every key is blank, i.e. nothing has ever been saved. */

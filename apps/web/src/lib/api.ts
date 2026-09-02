@@ -1650,6 +1650,62 @@ export function useSaveVoiceConfig() {
   });
 }
 
+export interface FailoverConfigView {
+  configured: boolean;
+  provider: "digitalocean";
+  tokenSet: boolean;
+  spacesKeySet: boolean;
+  spacesSecretSet: boolean;
+  region: string;
+  nodeSize: string;
+  nodeCount: number;
+  cluster: ClusterConfigStatus;
+}
+
+export interface FailoverConfigPatch {
+  token?: string;
+  spacesKey?: string;
+  spacesSecret?: string;
+  region?: string;
+  nodeSize?: string;
+  nodeCount?: number;
+}
+
+export function useFailoverConfig() {
+  const context = useCluster((s) => s.activeContext);
+  return useQuery({
+    queryKey: ["failover-config", context] as const,
+    queryFn: async (): Promise<FailoverConfigView> => {
+      const res = await apiFetch("/api/failover/config");
+      if (!res.ok) throw new Error(`failover config failed: ${res.status}`);
+      return (await res.json()) as FailoverConfigView;
+    },
+    staleTime: 30_000,
+  });
+}
+
+export function useSaveFailoverConfig() {
+  const qc = useQueryClient();
+  const context = useCluster((s) => s.activeContext);
+  return useMutation<FailoverConfigView, Error, FailoverConfigPatch>({
+    mutationFn: async (patch) => {
+      const res = await apiFetch("/api/failover/config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(err.error ?? "failed to save failover destination");
+      }
+      return (await res.json()) as FailoverConfigView;
+    },
+    onSuccess: (data) => {
+      qc.setQueryData(["failover-config", context], data);
+    },
+  });
+}
+
 export async function fetchVoiceToken(): Promise<{ url: string; token: string }> {
   const res = await apiFetch("/api/voice/token", {
     method: "POST",

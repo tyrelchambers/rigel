@@ -59,6 +59,7 @@ import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusM
 import { handleUpdates, type UpdatesRequest } from "./updates";
 import { chatConfig, setClaudeToken } from "./chatConfig";
 import { voiceStatus, voiceEnabled, setVoiceConfig, voiceConfig, missingVoiceFields } from "./voiceConfig";
+import { failoverConfigView, failoverPatchFromBody, writeFailoverPatch } from "./failoverConfig";
 import { mintVoiceToken, agentConfigResponse, checkWorkerToken, isVoiceWorkerRequest, maskedVoiceConfig, voiceConfigPatch, VOICE_WORKER_HEADER, type VoiceRole } from "./voiceRoutes";
 import { recordAiAction } from "./aiActionLedger";
 import { buildAiActionEntry, summarizeActionDetail } from "@rigel/k8s/src/aiActionLedger";
@@ -596,6 +597,27 @@ async function handler(req: Request): Promise<Response> {
         return Response.json({ error: errorText(err) }, { status: 503 });
       }
       return Response.json(await maskedVoiceConfig(context));
+    }
+
+    // GET /api/failover/config: destination with secrets as set/unset booleans.
+    // PUT /api/failover/config: patch. Omitted secrets keep the stored value.
+    if (url.pathname === "/api/failover/config" && req.method === "GET") {
+      return Response.json(await failoverConfigView(context));
+    }
+    if (url.pathname === "/api/failover/config" && req.method === "PUT") {
+      let body: unknown;
+      try {
+        body = await req.json();
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      try {
+        return Response.json(await writeFailoverPatch(context, failoverPatchFromBody(body)));
+      } catch (err) {
+        const message = errorText(err);
+        const status = /required/.test(message) ? 422 : 503;
+        return Response.json({ error: message }, { status });
+      }
     }
 
     // POST /api/voice/token: mint a room JWT for the renderer (or a phone, for

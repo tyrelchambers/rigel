@@ -51,6 +51,7 @@ describe("SettingsPanel", () => {
     expect(screen.getByRole("tab", { name: /ai agents/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /channels/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /app defaults/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /failover/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /keyboard/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: /app defaults/i }));
     expect(screen.getByText(/self-hosted app defaults/i)).toBeInTheDocument();
