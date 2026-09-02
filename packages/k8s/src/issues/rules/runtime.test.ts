@@ -513,6 +513,97 @@ describe("degradedStatefulSet", () => {
     });
   });
 
+  it("does not fire while an update is in flight", () => {
+    const out = runtimeRules({
+      statefulsets: [
+        {
+          metadata: { name: "pg", namespace: "data" },
+          spec: { replicas: 3 },
+          status: {
+            readyReplicas: 2,
+            currentRevision: "pg-5c8b9d",
+            updateRevision: "pg-7f2a41",
+          },
+        },
+      ],
+    });
+    expect(out).toEqual([]);
+  });
+
+  it("fires once the update has settled on a single revision", () => {
+    const out = runtimeRules({
+      statefulsets: [
+        {
+          metadata: { name: "pg", namespace: "data" },
+          spec: { replicas: 3 },
+          status: {
+            readyReplicas: 2,
+            currentRevision: "pg-7f2a41",
+            updateRevision: "pg-7f2a41",
+          },
+        },
+      ],
+    });
+    expect(out.map((i) => i.rule)).toEqual(["degradedStatefulSet"]);
+    expect(out[0].severity).toBe("critical");
+  });
+
+  it("fires when neither revision is reported", () => {
+    const out = runtimeRules({
+      statefulsets: [
+        {
+          metadata: { name: "pg", namespace: "data" },
+          spec: { replicas: 3 },
+          status: { readyReplicas: 2 },
+        },
+      ],
+    });
+    expect(out.map((i) => i.rule)).toEqual(["degradedStatefulSet"]);
+    expect(out[0].severity).toBe("critical");
+  });
+
+  it("fires when only the update revision is reported", () => {
+    const out = runtimeRules({
+      statefulsets: [
+        {
+          metadata: { name: "pg", namespace: "data" },
+          spec: { replicas: 3 },
+          status: { readyReplicas: 2, updateRevision: "pg-7f2a41" },
+        },
+      ],
+    });
+    expect(out.map((i) => i.rule)).toEqual(["degradedStatefulSet"]);
+    expect(out[0].severity).toBe("critical");
+  });
+
+  it("fires when only the current revision is reported", () => {
+    const out = runtimeRules({
+      statefulsets: [
+        {
+          metadata: { name: "pg", namespace: "data" },
+          spec: { replicas: 3 },
+          status: { readyReplicas: 2, currentRevision: "pg-5c8b9d" },
+        },
+      ],
+    });
+    expect(out.map((i) => i.rule)).toEqual(["degradedStatefulSet"]);
+    expect(out[0].severity).toBe("critical");
+  });
+
+  it("fires when both revisions are reported empty", () => {
+    const out = runtimeRules({
+      statefulsets: [
+        {
+          metadata: { name: "pg", namespace: "data" },
+          spec: { replicas: 3 },
+          status: { readyReplicas: 2, currentRevision: "", updateRevision: "" },
+        },
+      ],
+    });
+    expect(out.map((i) => i.rule)).toEqual(["degradedStatefulSet"]);
+    expect(out[0].severity).toBe("critical");
+  });
+
   it("does not fire on a fully ready statefulset", () => {
     const out = runtimeRules({
       statefulsets: [

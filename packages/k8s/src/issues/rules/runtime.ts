@@ -278,6 +278,12 @@ function degradedReplicaSetIssue(
     if (progressing?.status === "True" && progressing.reason === ROLLOUT_IN_FLIGHT_REASON) {
       return undefined;
     }
+  } else {
+    const currentRevision = textOf(o.status?.currentRevision);
+    const updateRevision = textOf(o.status?.updateRevision);
+    if (currentRevision && updateRevision && currentRevision !== updateRevision) {
+      return undefined;
+    }
   }
   const subject = subjectOf(kind, o);
   const available = conditionOf(o, "Available");
