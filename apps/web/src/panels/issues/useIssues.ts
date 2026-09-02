@@ -1,8 +1,10 @@
 import { useEffect, useMemo } from "react";
+import { decodeClusterState } from "@rigel/k8s";
 import { detectIssues, rollUpIssues } from "@rigel/k8s/src/issues/engine";
 import type { Issue, IssueGroup, IssueInput, RawObject } from "@rigel/k8s/src/issues/types";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { useCluster, type KindAccess } from "@/store/cluster";
+import { mergeAgentIssues } from "./issueMerge";
 
 /** Every watch the detection rules read. Watched cluster-wide so a lookup
  *  collection is never narrower than the collection referencing it. */
@@ -63,6 +65,8 @@ const KIND_FIELDS: Record<IssueKind, keyof IssueInput> = {
   "challenges.acme.cert-manager.io": "challenges",
 };
 
+const AGENT_STATE_CONFIGMAP = "assistant-state";
+
 /** Adapt the cluster store's `resources` into `IssueInput`. A kind the store has
  *  never seen, or one this connection may not watch, stays `undefined` rather than
  *  `[]`, so the reference rules skip it instead of reporting every reference to it
@@ -103,9 +107,15 @@ export function useIssues(): UseIssuesResult {
     };
   }, []);
 
+  const agentState = useMemo(() => {
+    const configmaps = Object.values((resources["configmaps"] ?? {}) as Record<string, RawObject>);
+    const state = configmaps.find((c) => c.metadata?.name === AGENT_STATE_CONFIGMAP);
+    return decodeClusterState(state?.data?.["state.json"]);
+  }, [resources]);
+
   const detected = useMemo(
-    () => detectIssues(buildIssueInput(resources, accessByKind)),
-    [resources, accessByKind],
+    () => mergeAgentIssues(detectIssues(buildIssueInput(resources, accessByKind)), agentState),
+    [resources, accessByKind, agentState],
   );
 
   const scoped = useMemo(

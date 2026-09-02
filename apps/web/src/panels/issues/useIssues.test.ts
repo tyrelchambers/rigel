@@ -55,6 +55,30 @@ describe("useIssues watches", () => {
     vi.mocked(subscribe).mockClear();
   });
 
+  it("surfaces an agent incident decoded from the assistant-state ConfigMap", () => {
+    act(() =>
+      useCluster.getState().upsert("configmaps", "rigel/assistant-state", {
+        metadata: { name: "assistant-state", namespace: "rigel" },
+        data: {
+          "state.json": JSON.stringify({
+            queue: [
+              {
+                at: "2026-09-02T10:00:00.000Z",
+                incident: "default/worker-0: panic",
+                suggestion: "Inspect the worker logs",
+                reason: "No safe automatic remediation",
+                fingerprint: "loggedError|default|worker-0|PanicSignature",
+              },
+            ],
+          }),
+        },
+      }),
+    );
+    const { result } = renderHook(() => useIssues());
+    expect(result.current.issues.map((i) => i.source)).toEqual(["agent"]);
+    act(() => useCluster.getState().clearKind("configmaps"));
+  });
+
   it("subscribes every issue kind cluster-wide, never a specific namespace", () => {
     act(() => useCluster.getState().setNamespaceFilter("kube-system"));
     renderHook(() => useIssues());
