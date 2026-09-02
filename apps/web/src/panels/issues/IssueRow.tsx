@@ -18,7 +18,7 @@ import { SectionLabel } from "@/panels/components/MetaCard";
 import { useRepoLink } from "@/panels/gitops/gitApi";
 import { issueFixAction, openIssueSubject, runDiagnose } from "./issueActions";
 
-const CATEGORY_LABELS: Record<IssueCategory, string> = {
+export const CATEGORY_LABELS: Record<IssueCategory, string> = {
   runtime: "Runtime",
   scheduling: "Scheduling",
   networking: "Networking",
