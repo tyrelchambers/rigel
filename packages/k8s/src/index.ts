@@ -113,6 +113,7 @@ export {
   VOICE_CONFIG_KEY,
   AGENTS_CONFIG_KEY,
   CLAUDE_TOKEN_KEY,
+  ISSUES_CONFIG_KEY,
   USER_CONFIG_KEYS,
   type UserConfigKey,
   type UserConfigData,
