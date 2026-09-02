@@ -1711,6 +1711,15 @@ export interface FailoverRunView {
   edgeChange: { host: string; snippet: string; revertSnippet: string; replaceWith: string };
   batchId?: string;
   members: FailoverSubject[];
+  data?: {
+    steps: Array<{
+      kind: string;
+      subject: FailoverSubject;
+      action: "copied" | "skipped";
+      artifacts: string[];
+      warning?: string;
+    }>;
+  };
 }
 
 export interface FailoverLiveState {

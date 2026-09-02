@@ -651,8 +651,14 @@ async function handler(req: Request): Promise<Response> {
       if (!selection) return Response.json({ error: "selection required" }, { status: 422 });
       try {
         const result = await runFailover(context, selection, rewritesFromBody(body));
-        const safe = { ...result, members: result.members };
-        return Response.json(safe);
+        return Response.json({
+          context: result.context,
+          lbAddress: result.lbAddress,
+          edgeChange: result.edgeChange,
+          batchId: result.batchId,
+          members: result.members,
+          data: result.data,
+        });
       } catch (err) {
         const blockers = (err as { blockers?: unknown }).blockers;
         const status = blockers ? 409 : 503;

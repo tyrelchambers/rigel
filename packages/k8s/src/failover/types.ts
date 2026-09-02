@@ -98,6 +98,19 @@ export interface FailoverWorkload {
   replicas: number;
 }
 
+export interface DataCopyStep {
+  kind: DataPlanKind;
+  subject: DataPlan["subject"];
+  action: "copied" | "skipped";
+  /** Basenames only. Dump bytes never go in this object. */
+  artifacts: string[];
+  warning?: string;
+}
+
+export interface DataCopyResult {
+  steps: DataCopyStep[];
+}
+
 export interface FailoverState {
   failedOverTo?: {
     context: string;
@@ -107,6 +120,7 @@ export interface FailoverState {
     lbAddress?: string;
     scaledToZero: FailoverWorkload[];
     edgeConfirmed: boolean;
+    dataPlans?: DataPlan[];
   };
   failoverCopyOf?: {
     context: string;

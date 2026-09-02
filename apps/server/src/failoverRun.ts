@@ -3,11 +3,13 @@ import { cleanExportedManifest } from "@rigel/k8s/src/manifestClean";
 import { failoverClosure, type ClosureMember } from "@rigel/k8s/src/failover/closure";
 import { auditPortability } from "@rigel/k8s/src/failover/portabilityAudit";
 import { planData } from "@rigel/k8s/src/failover/dataPlans";
+import { copyDataPlans, rewriteCnpgClusterForDump } from "@rigel/k8s/src/failover/dumpRestore";
 import { edgeChangeFor, type EdgeChange } from "@rigel/k8s/src/failover/edgeChange";
 import { bothSidesNonZero, localWritesAfterFailover, scaleDownOnReturn } from "@rigel/k8s/src/failover/splitBrain";
 import { parseFailoverState, serializeFailoverState } from "@rigel/k8s/src/failover/state";
 import { serializeFailoverDestination } from "@rigel/k8s/src/failover/destination";
 import type {
+  DataCopyResult,
   DataPlan,
   FailoverSelection,
   FailoverState,
@@ -142,6 +144,13 @@ export async function planFailover(
   const objectStores = await listKind(get, context, "objectstores.barmancloud.cnpg.io", "*");
   const pvcs = await listKind(get, context, "pvc", "*");
   const data = planData({ closure: members, clusters, objectStores, pvcs, acceptedRewrites });
+  for (const p of data.plans) {
+    if (p.subject.kind !== "Cluster") continue;
+    if (members.some((m) => m.kind === "Cluster" && m.namespace === p.subject.namespace && m.name === p.subject.name)) {
+      continue;
+    }
+    members.push({ kind: "Cluster", namespace: p.subject.namespace, name: p.subject.name });
+  }
   const routed = workloads.flatMap((w) => {
     const r = routingFor(w, services, ingresses);
     return r.ingresses.length > 0 ? [{ namespace: w.metadata?.namespace ?? "", name: w.metadata?.name ?? "" }] : [];
@@ -180,6 +189,7 @@ const APPLY_ORDER = [
   "Certificate",
   "Middleware",
   "PersistentVolumeClaim",
+  "Cluster",
   "Deployment",
   "StatefulSet",
   "Service",
@@ -197,23 +207,43 @@ export interface FailoverRunResult {
   edgeChange: EdgeChange;
   batchId?: string;
   members: ClosureMember[];
+  data: DataCopyResult;
 }
 
-async function exportYaml(context: string | null, m: ClosureMember): Promise<string | null> {
+async function exportYaml(
+  context: string | null,
+  m: ClosureMember,
+  plans: DataPlan[],
+  storageClass: string,
+): Promise<string | null> {
   if (m.kind === "HelmRelease") return null;
+  const kind = m.kind === "Cluster" ? "clusters.postgresql.cnpg.io" : m.kind;
   const args = m.namespace
-    ? ["get", m.kind, m.name, "-n", m.namespace, "-o", "yaml"]
-    : ["get", m.kind, m.name, "-o", "yaml"];
+    ? ["get", kind, m.name, "-n", m.namespace, "-o", "yaml"]
+    : ["get", kind, m.name, "-o", "yaml"];
   const res = await kubectl(context, args);
   if (res.code !== 0 || !res.stdout.trim()) return null;
-  return cleanExportedManifest(res.stdout);
+  let yaml = cleanExportedManifest(res.stdout);
+  const plan = plans.find(
+    (p) => p.subject.kind === "Cluster" && p.subject.name === m.name && p.subject.namespace === m.namespace,
+  );
+  if (m.kind === "Cluster" && plan?.kind === "pgDump") {
+    yaml = rewriteCnpgClusterForDump(yaml, storageClass);
+  }
+  return yaml;
 }
 
 export async function runFailover(
   sourceContext: string | null,
   selection: FailoverSelection,
   acceptedRewrites: Array<{ rule: string; to: unknown }> = [],
-  deps: { get?: GetJson; apply?: typeof applyManifest; provision?: typeof provisionDoks; stack?: typeof installFailoverStack } = {},
+  deps: {
+    get?: GetJson;
+    apply?: typeof applyManifest;
+    provision?: typeof provisionDoks;
+    stack?: typeof installFailoverStack;
+    copyData?: typeof copyDataPlans;
+  } = {},
 ): Promise<FailoverRunResult> {
   const dest = await readFailoverDestination(sourceContext);
   if (!dest) throw new Error("No failover destination is configured");
@@ -228,6 +258,8 @@ export async function runFailover(
   const apply = deps.apply ?? applyManifest;
   const provision = deps.provision ?? provisionDoks;
   const stack = deps.stack ?? installFailoverStack;
+  const copyData = deps.copyData ?? copyDataPlans;
+  const storageClass = DOKS_PROFILE(dest.nodeCount).defaultStorageClass ?? "do-block-storage";
 
   const existing = parseFailoverState((await readUserConfig(sourceContext)).data[FAILOVER_STATE_KEY] ?? "");
   let remoteContext = existing.failedOverTo?.context;
@@ -242,7 +274,7 @@ export async function runFailover(
   const sorted = [...plan.members].sort((a, b) => orderIndex(a.kind) - orderIndex(b.kind));
   const yamls: string[] = [];
   for (const m of sorted) {
-    const yaml = await exportYaml(sourceContext, m);
+    const yaml = await exportYaml(sourceContext, m, plan.plans, storageClass);
     if (yaml) yamls.push(yaml);
   }
   const bundle = yamls.join("\n---\n");
@@ -251,8 +283,8 @@ export async function runFailover(
   let lbAddress = "";
   const svc = items(await get(remoteContext, ["get", "svc", "-n", "traefik", "-o", "json"]));
   for (const s of svc) {
-    const ing = (s.status as { loadBalancer?: { ingress?: Array<{ ip?: string; hostname?: string }> } } | undefined)
-      ?.loadBalancer?.ingress?.[0];
+    const ing = (s as { status?: { loadBalancer?: { ingress?: Array<{ ip?: string; hostname?: string }> } } })
+      .status?.loadBalancer?.ingress?.[0];
     lbAddress = ing?.ip ?? ing?.hostname ?? lbAddress;
   }
 
@@ -266,6 +298,7 @@ export async function runFailover(
       lbAddress,
       scaledToZero: plan.workloadsToScale,
       edgeConfirmed: false,
+      dataPlans: plan.plans,
     },
   };
   dest.lastSelection = selection;
@@ -279,12 +312,20 @@ export async function runFailover(
     }),
   }));
 
+  const data = await copyData({
+    fromContext: sourceContext,
+    toContext: remoteContext,
+    plans: plan.plans,
+    storageClass,
+  });
+
   return {
     context: remoteContext,
     lbAddress,
     edgeChange: edgeChangeFor(lbAddress || "REPLACE_ME"),
     batchId: applied.batchId,
     members: plan.members,
+    data,
   };
 }
 
@@ -322,11 +363,24 @@ export async function scaleHome(
 export async function restoreHome(
   context: string | null,
   opts: { localWriteAt?: string } = {},
-): Promise<{ ok: true } | { ok: false; error: string }> {
+  deps: {
+    kubectl?: typeof kubectl;
+    copyData?: typeof copyDataPlans;
+    destroy?: typeof destroyDoks;
+  } = {},
+): Promise<{ ok: true; data: DataCopyResult } | { ok: false; error: string }> {
+  const kubectlRun = deps.kubectl ?? kubectl;
+  const copyData = deps.copyData ?? copyDataPlans;
+  const destroy = deps.destroy ?? destroyDoks;
   const state = await readFailoverLiveState(context);
   if (!state.failedOverTo) return { ok: false, error: "No failover is active" };
   if (localWritesAfterFailover(opts.localWriteAt, state.failedOverTo.at)) {
     return { ok: false, error: "Local writes happened after failover; refusing a wholesale replace" };
+  }
+  const remote = state.failedOverTo.context;
+  const plans = state.failedOverTo.dataPlans ?? [];
+  for (const w of state.failedOverTo.scaledToZero) {
+    await kubectlRun(remote, ["scale", w.kind.toLowerCase(), w.name, "-n", w.namespace, "--replicas=0"]);
   }
   if (
     bothSidesNonZero(
@@ -334,18 +388,24 @@ export async function restoreHome(
       [{ name: "remote", replicas: 1 }],
     )
   ) {
-    /* remote still up is expected until we scale it down first */
-  }
-  for (const w of state.failedOverTo.scaledToZero) {
-    await kubectl(context, ["scale", w.kind.toLowerCase(), w.name, "-n", w.namespace, `--replicas=${w.replicas}`]);
+    /* remote writers are now zero; CNPG stays up so we can dump it */
   }
   const dest = await readFailoverDestination(context);
+  const data = await copyData({
+    fromContext: remote,
+    toContext: context,
+    plans,
+    storageClass: DOKS_PROFILE(dest?.nodeCount ?? 1).defaultStorageClass ?? "do-block-storage",
+  });
+  for (const w of state.failedOverTo.scaledToZero) {
+    await kubectlRun(context, ["scale", w.kind.toLowerCase(), w.name, "-n", w.namespace, `--replicas=${w.replicas}`]);
+  }
   const clusterId = state.failedOverTo.clusterId;
   if (dest && clusterId) {
-    await destroyDoks(dest, clusterId).catch(() => undefined);
+    await destroy(dest, clusterId).catch(() => undefined);
   }
   await writeUserConfig(context, () => ({ [FAILOVER_STATE_KEY]: "{}" }));
-  return { ok: true };
+  return { ok: true, data };
 }
 
 export function selectionFromBody(body: unknown): FailoverSelection | null {

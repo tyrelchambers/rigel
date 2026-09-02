@@ -106,6 +106,13 @@ export default function FailoverPanel() {
               </p>
             )}
             {runMut.error && <p className="text-xs text-[var(--status-failed)]">{runMut.error.message}</p>}
+            {runMut.data?.data?.steps.map((s) => (
+              <p key={`${s.kind}/${s.subject.namespace}/${s.subject.name}`} className="text-xs text-[var(--fg-secondary)]">
+                {s.action} {s.kind} {s.subject.namespace}/{s.subject.name}
+                {s.artifacts.length ? ` (${s.artifacts.join(", ")})` : ""}
+                {s.warning ? `. ${s.warning}` : ""}
+              </p>
+            ))}
           </div>
         )}
       </div>
