@@ -3,10 +3,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { ISSUE_KINDS, buildIssueInput, useIssues } from "./useIssues";
 import { useCluster } from "@/store/cluster";
+import type { IssueMutes } from "@rigel/k8s/src/issues/mutes";
 
 vi.mock("@/lib/ws", () => ({
   subscribe: vi.fn(),
   unsubscribe: vi.fn(),
+}));
+
+const stored = vi.hoisted(() => ({ mutes: {} as IssueMutes }));
+vi.mock("./useIssueMutes", () => ({
+  useIssueMutes: () => ({ mutes: stored.mutes, mute: vi.fn(), unmute: vi.fn(), saving: false }),
 }));
 
 import { subscribe } from "@/lib/ws";
@@ -53,6 +59,7 @@ describe("useIssues watches", () => {
     cleanup();
     act(() => useCluster.getState().setNamespaceFilter(null));
     vi.mocked(subscribe).mockClear();
+    stored.mutes = {};
   });
 
   it("surfaces an agent incident decoded from the assistant-state ConfigMap", () => {
@@ -86,5 +93,54 @@ describe("useIssues watches", () => {
     const calls = vi.mocked(subscribe).mock.calls;
     expect(calls.map((c) => c[0]).sort()).toEqual([...ISSUE_KINDS].sort());
     for (const call of calls) expect(call[1]).toBe("*");
+  });
+});
+
+describe("useIssues mutes", () => {
+  const pod = {
+    metadata: { name: "api-0", namespace: "default" },
+    spec: { containers: [{ name: "api" }] },
+    status: {
+      phase: "Running",
+      containerStatuses: [
+        {
+          name: "api",
+          restartCount: 4,
+          state: { waiting: { reason: "CrashLoopBackOff", message: "back-off 5m0s" } },
+        },
+      ],
+    },
+  };
+
+  afterEach(() => {
+    cleanup();
+    act(() => useCluster.getState().clearKind("pods"));
+    stored.mutes = {};
+  });
+
+  it("keeps a muted issue out of issues and groups but returns it in muted", () => {
+    act(() => useCluster.getState().upsert("pods", "default/api-0", pod));
+    const first = renderHook(() => useIssues());
+    const fingerprint = first.result.current.issues[0]?.fingerprint;
+    expect(fingerprint).toBeTruthy();
+    cleanup();
+
+    stored.mutes = { [fingerprint!]: { until: null } };
+    const { result } = renderHook(() => useIssues());
+    expect(result.current.issues).toEqual([]);
+    expect(result.current.groups).toEqual([]);
+    expect(result.current.muted.map((i) => i.fingerprint)).toEqual([fingerprint]);
+  });
+
+  it("leaves an issue whose snooze has expired in the live list", () => {
+    act(() => useCluster.getState().upsert("pods", "default/api-0", pod));
+    const first = renderHook(() => useIssues());
+    const fingerprint = first.result.current.issues[0]!.fingerprint;
+    cleanup();
+
+    stored.mutes = { [fingerprint]: { until: "2000-01-01T00:00:00.000Z" } };
+    const { result } = renderHook(() => useIssues());
+    expect(result.current.issues.map((i) => i.fingerprint)).toEqual([fingerprint]);
+    expect(result.current.muted).toEqual([]);
   });
 });

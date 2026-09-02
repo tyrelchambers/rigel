@@ -2,9 +2,11 @@ import { useEffect, useMemo } from "react";
 import { decodeClusterState } from "@rigel/k8s";
 import { detectIssues, rollUpIssues } from "@rigel/k8s/src/issues/engine";
 import type { Issue, IssueGroup, IssueInput, RawObject } from "@rigel/k8s/src/issues/types";
+import { isMuted } from "@rigel/k8s/src/issues/mutes";
 import { subscribe, unsubscribe } from "@/lib/ws";
 import { useCluster, type KindAccess } from "@/store/cluster";
 import { mergeAgentIssues } from "./issueMerge";
+import { useIssueMutes } from "./useIssueMutes";
 
 /** Every watch the detection rules read. Watched cluster-wide so a lookup
  *  collection is never narrower than the collection referencing it. */
@@ -88,6 +90,7 @@ export function buildIssueInput(
 
 export interface UseIssuesResult {
   issues: Issue[];
+  muted: Issue[];
   groups: IssueGroup[];
   loading: boolean;
   updatedAt: Date;
@@ -128,8 +131,12 @@ export function useIssues(): UseIssuesResult {
     [detected, namespaceFilter],
   );
 
-  const groups = useMemo(() => rollUpIssues(scoped), [scoped]);
+  const { mutes } = useIssueMutes();
+  const live = useMemo(() => scoped.filter((i) => !isMuted(mutes, i.fingerprint)), [scoped, mutes]);
+  const muted = useMemo(() => scoped.filter((i) => isMuted(mutes, i.fingerprint)), [scoped, mutes]);
+
+  const groups = useMemo(() => rollUpIssues(live), [live]);
   const updatedAt = useMemo(() => new Date(), [scoped]);
 
-  return { issues: scoped, groups, loading, updatedAt };
+  return { issues: live, muted, groups, loading, updatedAt };
 }
