@@ -59,7 +59,17 @@ import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusM
 import { handleUpdates, type UpdatesRequest } from "./updates";
 import { chatConfig, setClaudeToken } from "./chatConfig";
 import { voiceStatus, voiceEnabled, setVoiceConfig, voiceConfig, missingVoiceFields } from "./voiceConfig";
-import { failoverConfigView, failoverPatchFromBody, writeFailoverPatch } from "./failoverConfig";
+import { failoverConfigView, failoverPatchFromBody, readFailoverDestination, writeFailoverPatch } from "./failoverConfig";
+import {
+  confirmEdge,
+  planFailover,
+  readFailoverLiveState,
+  restoreHome,
+  rewritesFromBody,
+  runFailover,
+  scaleHome,
+  selectionFromBody,
+} from "./failoverRun";
 import { mintVoiceToken, agentConfigResponse, checkWorkerToken, isVoiceWorkerRequest, maskedVoiceConfig, voiceConfigPatch, VOICE_WORKER_HEADER, type VoiceRole } from "./voiceRoutes";
 import { recordAiAction } from "./aiActionLedger";
 import { buildAiActionEntry, summarizeActionDetail } from "@rigel/k8s/src/aiActionLedger";
@@ -618,6 +628,52 @@ async function handler(req: Request): Promise<Response> {
         const status = /required/.test(message) ? 422 : 503;
         return Response.json({ error: message }, { status });
       }
+    }
+
+    if (url.pathname === "/api/failover/state" && req.method === "GET") {
+      return Response.json(await readFailoverLiveState(context));
+    }
+    if (url.pathname === "/api/failover/plan" && req.method === "POST") {
+      let body: unknown;
+      try { body = await req.json(); }
+      catch { return Response.json({ error: "invalid JSON body" }, { status: 400 }); }
+      const selection = selectionFromBody(body);
+      if (!selection) return Response.json({ error: "selection required" }, { status: 422 });
+      const dest = await readFailoverDestination(context);
+      const plan = await planFailover(context, selection, rewritesFromBody(body), dest?.nodeCount ?? 1);
+      return Response.json(plan);
+    }
+    if (url.pathname === "/api/failover/run" && req.method === "POST") {
+      let body: unknown;
+      try { body = await req.json(); }
+      catch { return Response.json({ error: "invalid JSON body" }, { status: 400 }); }
+      const selection = selectionFromBody(body);
+      if (!selection) return Response.json({ error: "selection required" }, { status: 422 });
+      try {
+        const result = await runFailover(context, selection, rewritesFromBody(body));
+        const safe = { ...result, members: result.members };
+        return Response.json(safe);
+      } catch (err) {
+        const blockers = (err as { blockers?: unknown }).blockers;
+        const status = blockers ? 409 : 503;
+        return Response.json({ error: errorText(err), blockers }, { status });
+      }
+    }
+    if (url.pathname === "/api/failover/confirm-edge" && req.method === "POST") {
+      try { return Response.json(await confirmEdge(context)); }
+      catch (err) { return Response.json({ error: errorText(err) }, { status: 409 }); }
+    }
+    if (url.pathname === "/api/failover/scale-home" && req.method === "POST") {
+      try { return Response.json(await scaleHome(context)); }
+      catch (err) {
+        const status = (err as { status?: number }).status === 409 ? 409 : 503;
+        return Response.json({ error: errorText(err) }, { status });
+      }
+    }
+    if (url.pathname === "/api/failover/restore" && req.method === "POST") {
+      let body: { localWriteAt?: string } = {};
+      try { body = (await req.json()) as typeof body; } catch { /* empty body is fine */ }
+      return Response.json(await restoreHome(context, { localWriteAt: body.localWriteAt }));
     }
 
     // POST /api/voice/token: mint a room JWT for the renderer (or a phone, for

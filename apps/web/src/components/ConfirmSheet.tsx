@@ -139,7 +139,8 @@ export function ConfirmSheet({
     if (
       action.kind === "purge" ||
       action.kind === "applyManifest" ||
-      action.kind === "proposeRepoFix"
+      action.kind === "proposeRepoFix" ||
+      action.kind === "failoverPlan"
     ) {
       setPreviewCommand(null);
       setPreviewError(null);

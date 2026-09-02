@@ -73,6 +73,7 @@ const CANONICAL: Record<string, SuggestedAction> = {
     label: "Adopt web into Git", kind: "adoptWorkload", name: "web", namespace: "shop", resourceKind: "deployment",
     source: "shop-web-82b3ade", title: "Add manifests for web", body: "so it can be redeployed",
   },
+  failoverPlan: { label: "Failover default", kind: "failoverPlan", name: "default", namespace: "default" },
   proposeRepoFix: {
     label: "Open a PR", kind: "proposeRepoFix", name: "web", namespace: "shop", resourceKind: "deployment",
     source: "shop-web-82b3ade", title: "Annotate web", body: "asked for over voice",
@@ -164,6 +165,6 @@ describe("actionSchema survives the SDK's own conversion", () => {
   });
 
   test("stays inside its size budget, because every turn pays for it", () => {
-    expect(JSON.stringify(converted()).length).toBeLessThan(10_000);
+    expect(JSON.stringify(converted()).length).toBeLessThan(11_000);
   });
 });

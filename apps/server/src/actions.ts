@@ -440,6 +440,9 @@ export function buildCommand(a: ActionBlock): string[] {
     case "proposeRepoFix":
       throw new Error("proposeRepoFix opens a pull request via /api/git/propose-fix, not /api/action");
 
+    case "failoverPlan":
+      throw new Error("failoverPlan is planned via /api/failover/plan");
+
     // -----------------------------------------------------------------------
     default:
       throw new Error(`unsupported action kind: ${a.kind}`);

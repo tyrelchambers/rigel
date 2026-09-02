@@ -41,3 +41,75 @@ export interface FailoverDestinationPatch {
   nodeSize?: string;
   nodeCount?: number;
 }
+
+export type DataPlanKind = "cnpgBarman" | "pgDump" | "pvcTar" | "startEmpty";
+
+export interface DataPlan {
+  subject: { kind: string; namespace: string; name: string };
+  kind: DataPlanKind;
+  bytes?: number;
+  warning?: string;
+}
+
+export type PortabilityRuleId =
+  | "storageClassMissing"
+  | "nfsBackedVolume"
+  | "hostPathVolume"
+  | "nodeSelectorUnsatisfiable"
+  | "ingressClassMissing"
+  | "ingressControllerAnnotationsWillBeIgnored"
+  | "middlewareCrdMissing"
+  | "loadBalancerServiceIsLocalOnly"
+  | "tailnetAddressInSpec"
+  | "imagePullSecretMissing"
+  | "mutableImageTag"
+  | "tlsSecretWithoutCertificate"
+  | "dns01SolverSecretOutOfClosure"
+  | "crossNamespaceDependency"
+  | "sharedInfraDependency"
+  | "statefulDataPlanMissing"
+  | "backupTargetIsInsideSourceCluster";
+
+export type PortabilitySeverity = "blocker" | "rewrite" | "warning";
+
+export interface PortabilityFinding {
+  rule: PortabilityRuleId;
+  severity: PortabilitySeverity;
+  subject: { kind: string; namespace: string; name: string };
+  whatsWrong: string;
+  rewrite?: { label: string; from: unknown; to: unknown };
+}
+
+export interface TargetProfile {
+  storageClasses: string[];
+  defaultStorageClass?: string;
+  ingressClasses: string[];
+  loadBalancerKind: "LoadBalancer" | "NodePort";
+  hasCertManager: boolean;
+  hasCnpg: boolean;
+  hasTraefikCrds: boolean;
+  nodeCount: number;
+}
+
+export interface FailoverWorkload {
+  kind: string;
+  namespace: string;
+  name: string;
+  replicas: number;
+}
+
+export interface FailoverState {
+  failedOverTo?: {
+    context: string;
+    clusterId?: string;
+    at: string;
+    batchId: string;
+    lbAddress?: string;
+    scaledToZero: FailoverWorkload[];
+    edgeConfirmed: boolean;
+  };
+  failoverCopyOf?: {
+    context: string;
+    batchId: string;
+  };
+}

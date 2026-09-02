@@ -17,18 +17,21 @@ export const VOICE_CONFIG_KEY = "voice.json";
 export const AGENTS_CONFIG_KEY = "agents.json";
 export const CLAUDE_TOKEN_KEY = "claude-oauth-token";
 export const FAILOVER_CONFIG_KEY = "failover.json";
+export const FAILOVER_STATE_KEY = "failover-state.json";
 
 export type UserConfigKey =
   | typeof VOICE_CONFIG_KEY
   | typeof AGENTS_CONFIG_KEY
   | typeof CLAUDE_TOKEN_KEY
-  | typeof FAILOVER_CONFIG_KEY;
+  | typeof FAILOVER_CONFIG_KEY
+  | typeof FAILOVER_STATE_KEY;
 
 export const USER_CONFIG_KEYS: readonly UserConfigKey[] = [
   VOICE_CONFIG_KEY,
   AGENTS_CONFIG_KEY,
   CLAUDE_TOKEN_KEY,
   FAILOVER_CONFIG_KEY,
+  FAILOVER_STATE_KEY,
 ];
 
 export type UserConfigData = Record<UserConfigKey, string>;
@@ -42,6 +45,7 @@ export function emptyUserConfigData(): UserConfigData {
     [AGENTS_CONFIG_KEY]: "",
     [CLAUDE_TOKEN_KEY]: "",
     [FAILOVER_CONFIG_KEY]: "",
+    [FAILOVER_STATE_KEY]: "",
   };
 }
 

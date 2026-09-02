@@ -1684,6 +1684,138 @@ export function useFailoverConfig() {
   });
 }
 
+export interface FailoverSubject {
+  kind: string;
+  namespace: string;
+  name: string;
+}
+
+export interface FailoverPlanView {
+  members: FailoverSubject[];
+  findings: Array<{
+    rule: string;
+    severity: "blocker" | "rewrite" | "warning";
+    subject: FailoverSubject;
+    whatsWrong: string;
+    rewrite?: { label: string; from: unknown; to: unknown };
+  }>;
+  plans: Array<{ subject: FailoverSubject; kind: string; bytes?: number; warning?: string }>;
+  blockers: FailoverPlanView["findings"];
+  outbound: FailoverSubject[];
+  workloadsToScale: Array<FailoverSubject & { replicas: number }>;
+}
+
+export interface FailoverRunView {
+  context: string;
+  lbAddress: string;
+  edgeChange: { host: string; snippet: string; revertSnippet: string; replaceWith: string };
+  batchId?: string;
+  members: FailoverSubject[];
+}
+
+export interface FailoverLiveState {
+  failedOverTo?: {
+    context: string;
+    at: string;
+    batchId: string;
+    lbAddress?: string;
+    edgeConfirmed: boolean;
+    scaledToZero: Array<FailoverSubject & { replicas: number }>;
+  };
+}
+
+export function useFailoverState() {
+  const context = useCluster((s) => s.activeContext);
+  return useQuery({
+    queryKey: ["failover-state", context] as const,
+    queryFn: async (): Promise<FailoverLiveState> => {
+      const res = await apiFetch("/api/failover/state");
+      if (!res.ok) throw new Error(`failover state failed: ${res.status}`);
+      return (await res.json()) as FailoverLiveState;
+    },
+    refetchInterval: 15_000,
+  });
+}
+
+export function useFailoverPlan() {
+  const qc = useQueryClient();
+  const context = useCluster((s) => s.activeContext);
+  return useMutation<FailoverPlanView, Error, { selection: unknown; acceptedRewrites?: unknown[] }>({
+    mutationFn: async (body) => {
+      const res = await apiFetch("/api/failover/plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(err.error ?? "failed to plan failover");
+      }
+      return (await res.json()) as FailoverPlanView;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["failover-state", context] }),
+  });
+}
+
+export function useFailoverRun() {
+  const qc = useQueryClient();
+  const context = useCluster((s) => s.activeContext);
+  return useMutation<FailoverRunView, Error, { selection: unknown; acceptedRewrites?: unknown[] }>({
+    mutationFn: async (body) => {
+      const res = await apiFetch("/api/failover/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = (await res.json().catch(() => ({}))) as FailoverRunView & { error?: string };
+      if (!res.ok) throw new Error(json.error ?? "failover run failed");
+      return json;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["failover-state", context] }),
+  });
+}
+
+export function useFailoverEdgeConfirm() {
+  const qc = useQueryClient();
+  const context = useCluster((s) => s.activeContext);
+  return useMutation({
+    mutationFn: async () => {
+      const res = await apiFetch("/api/failover/confirm-edge", { method: "POST" });
+      if (!res.ok) throw new Error("confirm edge failed");
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["failover-state", context] }),
+  });
+}
+
+export function useFailoverScaleHome() {
+  const qc = useQueryClient();
+  const context = useCluster((s) => s.activeContext);
+  return useMutation({
+    mutationFn: async () => {
+      const res = await apiFetch("/api/failover/scale-home", { method: "POST" });
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(json.error ?? "scale home failed");
+      return json;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["failover-state", context] }),
+  });
+}
+
+export function useFailoverRestore() {
+  const qc = useQueryClient();
+  const context = useCluster((s) => s.activeContext);
+  return useMutation({
+    mutationFn: async () => {
+      const res = await apiFetch("/api/failover/restore", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || json.ok === false) throw new Error(json.error ?? "restore failed");
+      return json;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["failover-state", context] }),
+  });
+}
+
 export function useSaveFailoverConfig() {
   const qc = useQueryClient();
   const context = useCluster((s) => s.activeContext);

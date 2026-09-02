@@ -129,6 +129,7 @@ export const ACTION_KINDS = [
   "proposeRepoFix",
   "adoptWorkload",
   "mergePullRequest",
+  "failoverPlan",
 ] as const;
 
 /**
