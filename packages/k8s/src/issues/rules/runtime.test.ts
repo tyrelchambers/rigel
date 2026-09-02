@@ -422,6 +422,69 @@ describe("degradedDeployment", () => {
     });
   });
 
+  it("does not fire while a rollout is in flight", () => {
+    const out = runtimeRules({
+      deployments: [
+        deployment({
+          spec: { replicas: 3 },
+          status: {
+            readyReplicas: 1,
+            conditions: [
+              {
+                type: "Progressing",
+                status: "True",
+                reason: "ReplicaSetUpdated",
+                message: 'ReplicaSet "api-7d9f" is progressing.',
+                lastTransitionTime: "2026-03-03T00:00:00Z",
+              },
+            ],
+          },
+        }),
+      ],
+    });
+    expect(out).toEqual([]);
+  });
+
+  it("fires when the rollout has stalled past its progress deadline", () => {
+    const out = runtimeRules({
+      deployments: [
+        deployment({
+          spec: { replicas: 3 },
+          status: {
+            readyReplicas: 1,
+            conditions: [
+              {
+                type: "Available",
+                status: "False",
+                message: "Deployment does not have minimum availability.",
+                lastTransitionTime: "2026-03-03T00:00:00Z",
+              },
+              {
+                type: "Progressing",
+                status: "False",
+                reason: "ProgressDeadlineExceeded",
+                message: 'ReplicaSet "api-7d9f" has timed out progressing.',
+                lastTransitionTime: "2026-03-03T00:10:00Z",
+              },
+            ],
+          },
+        }),
+      ],
+    });
+    expect(out.map((i) => i.rule)).toEqual(["degradedDeployment"]);
+    expect(out[0].severity).toBe("critical");
+  });
+
+  it("fires when replicas are missing and no Progressing condition is reported", () => {
+    const out = runtimeRules({
+      deployments: [
+        deployment({ spec: { replicas: 3 }, status: { readyReplicas: 1, conditions: [] } }),
+      ],
+    });
+    expect(out.map((i) => i.rule)).toEqual(["degradedDeployment"]);
+    expect(out[0].severity).toBe("critical");
+  });
+
   it("does not fire on a fully ready deployment", () => {
     const out = runtimeRules({ deployments: [deployment()] });
     expect(out).toEqual([]);

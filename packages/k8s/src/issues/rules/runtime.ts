@@ -5,6 +5,8 @@ const RESTART_STORM_THRESHOLD = 10;
 
 const IMAGE_PULL_REASONS = new Set(["ImagePullBackOff", "ErrImagePull"]);
 
+const ROLLOUT_IN_FLIGHT_REASON = "ReplicaSetUpdated";
+
 const PRESSURE_CAUSES: Record<string, string> = {
   MemoryPressure: "Node under memory pressure",
   DiskPressure: "Node under disk pressure",
@@ -271,6 +273,12 @@ function degradedReplicaSetIssue(
   if (typeof desired !== "number" || desired <= 0) return undefined;
   const ready = typeof o.status?.readyReplicas === "number" ? o.status.readyReplicas : 0;
   if (ready >= desired) return undefined;
+  if (kind === "Deployment") {
+    const progressing = conditionOf(o, "Progressing");
+    if (progressing?.status === "True" && progressing.reason === ROLLOUT_IN_FLIGHT_REASON) {
+      return undefined;
+    }
+  }
   const subject = subjectOf(kind, o);
   const available = conditionOf(o, "Available");
   const unavailable = available?.status === "False" ? available : undefined;
