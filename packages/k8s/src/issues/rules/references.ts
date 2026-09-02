@@ -36,7 +36,7 @@ function textOf(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
-function refKey(namespace: string, name: string): string {
+export function refKey(namespace: string, name: string): string {
   return `${namespace}/${name}`;
 }
 
@@ -48,7 +48,7 @@ function subjectOf(kind: string, o: RawObject): IssueSubject {
   };
 }
 
-function nameIndex(objs: RawObject[] | undefined): NameIndex {
+export function nameIndex(objs: RawObject[] | undefined): NameIndex {
   if (!objs) return null;
   return new Map(
     objs.map((o) => [refKey(textOf(o.metadata?.namespace) ?? "", textOf(o.metadata?.name) ?? ""), o]),
