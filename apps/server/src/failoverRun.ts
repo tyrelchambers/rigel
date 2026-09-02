@@ -5,6 +5,11 @@ import { auditPortability } from "@rigel/k8s/src/failover/portabilityAudit";
 import { planData } from "@rigel/k8s/src/failover/dataPlans";
 import { copyDataPlans, rewriteCnpgClusterForDump } from "@rigel/k8s/src/failover/dumpRestore";
 import { edgeChangeFor, type EdgeChange } from "@rigel/k8s/src/failover/edgeChange";
+import {
+  applyEndpointRewrites,
+  planEndpointRewrites,
+  type EndpointRewrite,
+} from "@rigel/k8s/src/failover/endpointRewrites";
 import { bothSidesNonZero, localWritesAfterFailover, scaleDownOnReturn } from "@rigel/k8s/src/failover/splitBrain";
 import { parseFailoverState, serializeFailoverState } from "@rigel/k8s/src/failover/state";
 import { serializeFailoverDestination } from "@rigel/k8s/src/failover/destination";
@@ -64,6 +69,8 @@ const KIND_ALIAS: Record<string, string> = {
   pdb: "PodDisruptionBudget",
   hpa: "HorizontalPodAutoscaler",
   pvc: "PersistentVolumeClaim",
+  secrets: "Secret",
+  configmaps: "ConfigMap",
   rolebindings: "RoleBinding",
   clusterrolebindings: "ClusterRoleBinding",
 };
@@ -86,6 +93,7 @@ export interface FailoverPlanView {
   blockers: PortabilityFinding[];
   outbound: ClosureMember[];
   workloadsToScale: FailoverWorkload[];
+  endpointRewrites: EndpointRewrite[];
 }
 
 function namespacesOf(selection: FailoverSelection): string[] {
@@ -105,6 +113,7 @@ export async function planFailover(
   const workloads: ClusterObject[] = [];
   const services: ClusterObject[] = [];
   const ingresses: ClusterObject[] = [];
+  const configured: ClusterObject[] = [];
   for (const ns of namespaces) {
     workloads.push(
       ...(await listKind(get, context, "deployments", ns)),
@@ -112,6 +121,10 @@ export async function planFailover(
     );
     services.push(...(await listKind(get, context, "services", ns)));
     ingresses.push(...(await listKind(get, context, "ingresses", ns)));
+    configured.push(
+      ...(await listKind(get, context, "secrets", ns)),
+      ...(await listKind(get, context, "configmaps", ns)),
+    );
   }
   if (selection.kind === "workloads") {
     const wanted = new Set(selection.items.map((i) => `${i.kind}/${i.namespace}/${i.name}`));
@@ -151,6 +164,15 @@ export async function planFailover(
     }
     members.push({ kind: "Cluster", namespace: p.subject.namespace, name: p.subject.name });
   }
+  const inClosure = (o: ClusterObject) =>
+    members.some(
+      (m) => m.kind === o.kind && m.name === o.metadata?.name && m.namespace === o.metadata?.namespace,
+    );
+  const endpoints = planEndpointRewrites({
+    objects: configured.filter(inClosure),
+    services,
+    plans: data.plans,
+  });
   const routed = workloads.flatMap((w) => {
     const r = routingFor(w, services, ingresses);
     return r.ingresses.length > 0 ? [{ namespace: w.metadata?.namespace ?? "", name: w.metadata?.name ?? "" }] : [];
@@ -168,8 +190,17 @@ export async function planFailover(
     ...findings.filter((f) => f.severity === "blocker"),
     ...findings.filter((f) => f.severity === "rewrite" && !acceptedRewrites.some((a) => a.rule === f.rule)),
     ...data.blockers,
+    ...endpoints.blockers,
   ];
-  return { members, findings, plans: data.plans, blockers, outbound, workloadsToScale };
+  return {
+    members,
+    findings,
+    plans: data.plans,
+    blockers,
+    outbound,
+    workloadsToScale,
+    endpointRewrites: endpoints.rewrites,
+  };
 }
 
 function specReplicas(w: ClusterObject): number | undefined {
@@ -215,6 +246,7 @@ async function exportYaml(
   m: ClosureMember,
   plans: DataPlan[],
   storageClass: string,
+  endpointRewrites: EndpointRewrite[] = [],
 ): Promise<string | null> {
   if (m.kind === "HelmRelease") return null;
   const kind = m.kind === "Cluster" ? "clusters.postgresql.cnpg.io" : m.kind;
@@ -230,7 +262,7 @@ async function exportYaml(
   if (m.kind === "Cluster" && plan?.kind === "pgDump") {
     yaml = rewriteCnpgClusterForDump(yaml, storageClass);
   }
-  return yaml;
+  return applyEndpointRewrites(yaml, endpointRewrites);
 }
 
 export async function runFailover(
@@ -274,7 +306,7 @@ export async function runFailover(
   const sorted = [...plan.members].sort((a, b) => orderIndex(a.kind) - orderIndex(b.kind));
   const yamls: string[] = [];
   for (const m of sorted) {
-    const yaml = await exportYaml(sourceContext, m, plan.plans, storageClass);
+    const yaml = await exportYaml(sourceContext, m, plan.plans, storageClass, plan.endpointRewrites);
     if (yaml) yamls.push(yaml);
   }
   const bundle = yamls.join("\n---\n");

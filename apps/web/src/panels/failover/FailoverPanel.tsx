@@ -156,6 +156,29 @@ function PlanBody({
           ))}
         </Section>
       )}
+      <Section title={`Connections (${plan.endpointRewrites.length})`}>
+        {plan.endpointRewrites.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            Every database address in the closure already resolves on the target under the same name.
+          </p>
+        )}
+        {plan.endpointRewrites.map((r) => (
+          <div
+            key={`${r.subject.namespace}/${r.subject.name}/${r.key}`}
+            className="flex flex-col gap-1 rounded-md border border-[var(--status-pending)] bg-[var(--surface-elevated)] p-3"
+          >
+            <p className="font-mono text-2xs text-[var(--fg-secondary)]">
+              <span className="font-bold text-[var(--status-pending)]">REWRITE</span> {r.subject.kind}{" "}
+              {r.subject.namespace}/{r.subject.name} · {r.key}
+            </p>
+            <p className="font-mono text-2xs text-[var(--fg-tertiary)]">from {r.from}</p>
+            <p className="font-mono text-2xs text-[var(--accent-soft)]">to {r.to}</p>
+            <p className="text-xs text-muted-foreground">
+              {r.via} does not survive the move. Only the copy applied to DigitalOcean changes.
+            </p>
+          </div>
+        ))}
+      </Section>
       <Section title="Findings">
         {plan.findings.length === 0 && <p className="text-xs text-muted-foreground">No portability findings.</p>}
         {plan.findings.map((f) => (

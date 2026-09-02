@@ -79,7 +79,7 @@ describe("crossNamespaceServiceRefs", () => {
   });
   it("skips a host in the same namespace", () => {
     const w = workload();
-    (w.spec as { template: { spec: { containers: Array<{ env: Array<{ value: string }> }> } } }).template.spec.containers[0]!.env =
+    (w.spec as { template: { spec: { containers: Array<{ env: Array<{ name: string; value: string }> }> } } }).template.spec.containers[0]!.env =
       [{ name: "DB", value: "postgres-rw.default.svc.cluster.local" }];
     expect(crossNamespaceServiceRefs(w)).toEqual([]);
   });

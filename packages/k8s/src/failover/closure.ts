@@ -75,8 +75,8 @@ export function middlewaresForIngress(
 export function crossNamespaceServiceRefs(workload: ClusterObject): Array<{ namespace: string; name: string }> {
   const spec = workload.spec as { template?: { spec?: Record<string, unknown> } } | undefined;
   const pod = (spec?.template?.spec ?? {}) as {
-    containers?: Array<{ env?: Array<{ value?: string }> }>;
-    initContainers?: Array<{ env?: Array<{ value?: string }> }>;
+    containers?: Array<{ env?: Array<{ name?: string; value?: string }> }>;
+    initContainers?: Array<{ env?: Array<{ name?: string; value?: string }> }>;
   };
   const found: Array<{ namespace: string; name: string }> = [];
   const seen = new Set<string>();
@@ -145,7 +145,8 @@ function selectorOf(o: ClusterObject): Record<string, string> | undefined {
   const sel = (o.spec as { selector?: { matchLabels?: Record<string, string> } | Record<string, string> } | undefined)
     ?.selector;
   if (!sel) return undefined;
-  if (sel.matchLabels) return sel.matchLabels;
+  const matchLabels = (sel as { matchLabels?: Record<string, string> }).matchLabels;
+  if (matchLabels && typeof matchLabels === "object") return matchLabels;
   return sel as Record<string, string>;
 }
 

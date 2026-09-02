@@ -15,8 +15,18 @@
 
 export interface ClusterObject {
   kind?: string;
-  metadata?: { name?: string; namespace?: string };
+  metadata?: {
+    name?: string;
+    namespace?: string;
+    labels?: Record<string, string>;
+    annotations?: Record<string, string>;
+  };
   spec?: Record<string, unknown>;
+  status?: Record<string, unknown>;
+  data?: Record<string, string>;
+  stringData?: Record<string, string>;
+  subjects?: Array<{ kind?: string; name?: string; namespace?: string }>;
+  roleRef?: { kind?: string; name?: string };
 }
 
 export interface ClosureRef {

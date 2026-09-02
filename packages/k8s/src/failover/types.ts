@@ -68,6 +68,7 @@ export type PortabilityRuleId =
   | "crossNamespaceDependency"
   | "sharedInfraDependency"
   | "statefulDataPlanMissing"
+  | "secretPointsAtUnrestoredDatabase"
   | "backupTargetIsInsideSourceCluster";
 
 export type PortabilitySeverity = "blocker" | "rewrite" | "warning";

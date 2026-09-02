@@ -1703,6 +1703,13 @@ export interface FailoverPlanView {
   blockers: FailoverPlanView["findings"];
   outbound: FailoverSubject[];
   workloadsToScale: Array<FailoverSubject & { replicas: number }>;
+  endpointRewrites: Array<{
+    subject: FailoverSubject;
+    key: string;
+    from: string;
+    to: string;
+    via: string;
+  }>;
 }
 
 export interface FailoverRunView {

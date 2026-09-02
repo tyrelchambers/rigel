@@ -33,8 +33,21 @@ const garageStore = {
   spec: { configuration: { endpointURL: "http://garage-s3.default.svc.cluster.local:3900" } },
 };
 
+const poolerSecret = {
+  metadata: { name: "reddex-env", namespace: "default" },
+  data: {
+    DATABASE_URL: Buffer.from("postgres://a:b@postgres-pooler.default:5432/reddex").toString("base64"),
+  },
+};
+const poolerService = {
+  metadata: { name: "postgres-pooler", namespace: "default", labels: { "cnpg.io/cluster": "postgres" } },
+  spec: { type: "ClusterIP", selector: { "cnpg.io/poolerName": "postgres-pooler" }, ports: [{ port: 5432 }] },
+};
+
 function getJson(_ctx: string | null, args: string[]): Promise<unknown> {
   const kind = args[1];
+  if (kind === "secrets") return Promise.resolve({ items: [poolerSecret] });
+  if (kind === "services") return Promise.resolve({ items: [poolerService] });
   if (kind === "clusters.postgresql.cnpg.io") return Promise.resolve({ items: [garageCluster] });
   if (kind === "objectstores.barmancloud.cnpg.io") return Promise.resolve({ items: [garageStore] });
   if (kind === "deployments") {
@@ -43,7 +56,12 @@ function getJson(_ctx: string | null, args: string[]): Promise<unknown> {
         {
           kind: "Deployment",
           metadata: { name: "reddex-deploy", namespace: "default" },
-          spec: { selector: { matchLabels: { app: "reddex" } }, template: { spec: { containers: [{ image: "reddex:1" }] } } },
+          spec: {
+            selector: { matchLabels: { app: "reddex" } },
+            template: {
+              spec: { containers: [{ image: "reddex:1", envFrom: [{ secretRef: { name: "reddex-env" } }] }] },
+            },
+          },
         },
       ],
     });
@@ -68,6 +86,28 @@ describe("planFailover", () => {
     expect(plan.blockers.filter((b) => b.rule === "backupTargetIsInsideSourceCluster")).toEqual([]);
     expect(plan.plans.some((p) => p.kind === "pgDump")).toBe(true);
     expect(plan.members.some((m) => m.kind === "Cluster" && m.name === "postgres")).toBe(true);
+  });
+});
+
+describe("planFailover endpoint rewrites", () => {
+  const accepted = [{ rule: "backupTargetIsInsideSourceCluster", to: "pgDump" }];
+
+  it("repoints a pooler URL held in a Secret the closure carries", async () => {
+    const plan = await planFailover(CTX, { kind: "namespace", namespace: "default" }, accepted, 1, getJson);
+    expect(plan.endpointRewrites).toEqual([
+      expect.objectContaining({
+        key: "DATABASE_URL",
+        to: "postgres://a:b@postgres-rw.default.svc.cluster.local:5432/reddex",
+        via: "postgres-pooler",
+      }),
+    ]);
+  });
+
+  it("ignores Secrets that are not in the closure", async () => {
+    const strayOnly = (ctx: string | null, args: string[]) =>
+      args[1] === "deployments" ? Promise.resolve({ items: [] }) : getJson(ctx, args);
+    const plan = await planFailover(CTX, { kind: "namespace", namespace: "default" }, accepted, 1, strayOnly);
+    expect(plan.endpointRewrites).toEqual([]);
   });
 });
 
