@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { PanelHeader } from "@/panels/components/PanelHeader";
+import { FailoverSelect } from "./FailoverSelect";
 import {
   useFailoverConfig,
   useFailoverEdgeConfirm,
@@ -13,8 +14,6 @@ import {
   type FailoverPlanView,
 } from "@/lib/api";
 
-const CUSTOMER_NAMESPACES = ["default", "dynamic-sites", "redis-actual"];
-
 export default function FailoverPanel() {
   const dest = useFailoverConfig();
   const live = useFailoverState();
@@ -23,11 +22,10 @@ export default function FailoverPanel() {
   const confirm = useFailoverEdgeConfirm();
   const scale = useFailoverScaleHome();
   const restore = useFailoverRestore();
-  const [namespace, setNamespace] = useState("default");
   const [rewrites, setRewrites] = useState<Array<{ rule: string; to: unknown }>>([]);
+  const [selection, setSelection] = useState<unknown>(null);
   const plan = planMut.data;
   const active = live.data?.failedOverTo;
-  const selection = { kind: "namespace" as const, namespace };
 
   function accept(rule: string, to: unknown) {
     setRewrites((prev) => [...prev.filter((r) => r.rule !== rule), { rule, to }]);
@@ -71,33 +69,23 @@ export default function FailoverPanel() {
           />
         )}
 
-        <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold">Selection</h2>
-          <p className="text-xs text-muted-foreground">
-            Customer apps live in default, dynamic-sites, and redis-actual. One namespace per run.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {CUSTOMER_NAMESPACES.map((ns) => (
-              <button
-                key={ns}
-                type="button"
-                onClick={() => setNamespace(ns)}
-                className={`rounded-md border px-2.5 py-1 font-mono text-2xs ${namespace === ns ? "border-[var(--accent-primary)] bg-[var(--accent-dim)] text-[var(--accent-soft)]" : "border-[var(--border-subtle)] text-[var(--fg-secondary)]"}`}
-              >
-                {ns}
-              </button>
-            ))}
-          </div>
-          <Button size="sm" variant="outline" disabled={planMut.isPending} onClick={() => planMut.mutate({ selection, acceptedRewrites: rewrites })}>
-            Preview plan
-          </Button>
-        </section>
+        <FailoverSelect
+          previewPending={planMut.isPending}
+          onPreview={(next) => {
+            setSelection(next);
+            planMut.mutate({ selection: next, acceptedRewrites: rewrites });
+          }}
+        />
 
         {plan && <PlanBody plan={plan} onAccept={accept} accepted={rewrites} />}
 
         {plan && (
           <div className="flex flex-col gap-2">
-            <Button size="sm" disabled={plan.blockers.length > 0 || runMut.isPending} onClick={() => runMut.mutate({ selection, acceptedRewrites: rewrites })}>
+            <Button
+              size="sm"
+              disabled={plan.blockers.length > 0 || runMut.isPending || !selection}
+              onClick={() => selection && runMut.mutate({ selection, acceptedRewrites: rewrites })}
+            >
               Run failover
             </Button>
             {plan.blockers.length > 0 && (
