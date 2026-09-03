@@ -69,7 +69,7 @@ import {
   scaleHome,
   selectionFromBody,
 } from "./failoverRun";
-import { readFailoverJob, startFailoverJob } from "./failoverJob";
+import { loadFailoverJob, startFailoverJob } from "./failoverJob";
 import { readIssueMutes, writeIssueMutes } from "./issuesConfig";
 import { parseIssueMutes } from "@rigel/k8s/src/issues/mutes";
 import { mintVoiceToken, agentConfigResponse, checkWorkerToken, isVoiceWorkerRequest, maskedVoiceConfig, voiceConfigPatch, VOICE_WORKER_HEADER, type VoiceRole } from "./voiceRoutes";
@@ -663,7 +663,7 @@ async function handler(req: Request): Promise<Response> {
       }
     }
     if (url.pathname === "/api/failover/run/status" && req.method === "GET") {
-      const job = readFailoverJob();
+      const job = await loadFailoverJob(context);
       if (!job) return Response.json({ status: "idle", steps: [] });
       return Response.json(job);
     }

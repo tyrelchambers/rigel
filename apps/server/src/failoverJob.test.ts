@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FailoverStep } from "@rigel/k8s/src/failover/types";
+import { FAILOVER_JOB_KEY } from "@rigel/k8s/src/userConfig";
 import {
   __awaitFailoverJob,
   __resetFailoverJob,
   failoverJobIsRunning,
   mergeStep,
   plannedSteps,
+  loadFailoverJob,
   readFailoverJob,
   startFailoverJob,
 } from "./failoverJob";
@@ -24,6 +26,16 @@ const result = {
 afterEach(() => {
   __resetFailoverJob();
 });
+
+/** Captures what the job wrote, in order. */
+function recorder() {
+  const writes: string[] = [];
+  const save = vi.fn(async (_ctx: string | null, edit: () => Record<string, string>) => {
+    writes.push(edit()[FAILOVER_JOB_KEY]!);
+    return { state: "ok" } as never;
+  });
+  return { writes, save: save as never };
+}
 
 describe("mergeStep", () => {
   it("replaces a step in place rather than appending a duplicate", () => {
@@ -124,5 +136,42 @@ describe("startFailoverJob", () => {
     await __awaitFailoverJob();
     expect(second.id).not.toBe(first.id);
     expect(run).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("persistence", () => {
+  it("writes the job when it starts and after every step", async () => {
+    const { writes, save } = recorder();
+    const run = vi.fn(async (_c, _s, _r, deps: { report: (s: FailoverStep) => void }) => {
+      deps.report({ id: "provision", label: "Provision DOKS", status: "done" });
+      return result;
+    });
+    startFailoverJob("home", selection, [], run as never, save);
+    await __awaitFailoverJob();
+
+    expect(writes.length).toBeGreaterThanOrEqual(3);
+    const last = JSON.parse(writes.at(-1)!);
+    expect(last.status).toBe("done");
+    expect(last.steps.find((s: FailoverStep) => s.id === "provision").status).toBe("done");
+  });
+
+  it("keeps running when the cluster write fails", async () => {
+    const save = vi.fn(async () => {
+      throw new Error("no cluster to save to");
+    });
+    const run = vi.fn(async () => result);
+    startFailoverJob("home", selection, [], run as never, save as never);
+    await __awaitFailoverJob();
+    expect(readFailoverJob()?.status).toBe("done");
+  });
+});
+
+describe("loadFailoverJob", () => {
+  it("prefers the job in this process", async () => {
+    const { save } = recorder();
+    const run = vi.fn(async () => result);
+    const started = startFailoverJob("home", selection, [], run as never, save);
+    await __awaitFailoverJob();
+    expect((await loadFailoverJob("home"))?.id).toBe(started.id);
   });
 });

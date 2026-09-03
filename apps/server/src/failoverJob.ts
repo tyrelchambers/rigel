@@ -1,5 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { FailoverJob, FailoverSelection, FailoverStep } from "@rigel/k8s/src/failover/types";
+import {
+  parseFailoverJob,
+  reviveFailoverJob,
+  serializeFailoverJob,
+} from "@rigel/k8s/src/failover/state";
+import { FAILOVER_JOB_KEY } from "@rigel/k8s/src/userConfig";
+import { readUserConfig, writeUserConfig } from "./clusterConfigStore";
 import { runFailover, type FailoverRunResult } from "./failoverRun";
 
 /**
@@ -37,6 +44,26 @@ export function readFailoverJob(): FailoverJob | null {
   return current;
 }
 
+/**
+ * The job in this process if there is one, otherwise the last one written to the
+ * cluster. A restart mid-run leaves a real DOKS cluster behind, so the panel has
+ * to be able to see the run it lost.
+ */
+export async function loadFailoverJob(context: string | null): Promise<FailoverJob | null> {
+  if (current) return current;
+  const read = await readUserConfig(context).catch(() => null);
+  return reviveFailoverJob(parseFailoverJob(read?.data?.[FAILOVER_JOB_KEY] ?? ""));
+}
+
+/** Serialised through writeUserConfig's queue; a later write wins. */
+function persist(job: FailoverJob, save: PersistFn): void {
+  save(job.context, () => ({ [FAILOVER_JOB_KEY]: serializeFailoverJob(job) })).catch(() => {
+    /* a run that cannot write its own progress must still finish running */
+  });
+}
+
+export type PersistFn = typeof writeUserConfig;
+
 export function failoverJobIsRunning(): boolean {
   return current?.status === "running";
 }
@@ -57,6 +84,7 @@ export function startFailoverJob(
   selection: FailoverSelection,
   acceptedRewrites: Array<{ rule: string; to: unknown }> = [],
   run: typeof runFailover = runFailover,
+  save: PersistFn = writeUserConfig,
 ): FailoverJob {
   if (current?.status === "running") {
     const err = new Error("A failover is already running") as Error & { status: number };
@@ -72,10 +100,12 @@ export function startFailoverJob(
     steps: plannedSteps(),
   };
   current = job;
+  persist(job, save);
 
   running = run(context, selection, acceptedRewrites, {
     report: (step) => {
       job.steps = mergeStep(job.steps, step);
+      persist(job, save);
     },
   })
     .then((result: FailoverRunResult) => {
@@ -100,6 +130,7 @@ export function startFailoverJob(
     })
     .finally(() => {
       job.endedAt = new Date().toISOString();
+      persist(job, save);
     });
 
   return job;

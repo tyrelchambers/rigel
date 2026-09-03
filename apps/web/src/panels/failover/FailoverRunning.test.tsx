@@ -73,4 +73,23 @@ describe("FailoverRunning", () => {
     render(<FailoverRunning job={job()} />);
     expect(screen.getByText(/dump bytes stay on this machine/i)).toBeInTheDocument();
   });
+
+  it("shows a run that was lost to an app restart", () => {
+    render(
+      <FailoverRunning
+        job={job({
+          status: "failed",
+          error:
+            "The app restarted while this run was in flight. Check the destination for a cluster that was left behind.",
+          steps: [
+            { id: "provision", label: "Provision DOKS", status: "done", detail: "do-tor1-x" },
+            { id: "apply", label: "Apply closure", status: "failed" },
+          ],
+        })}
+      />,
+    );
+    expect(screen.getByText("Run failed")).toBeInTheDocument();
+    expect(screen.getByText(/cluster that was left behind/i)).toBeInTheDocument();
+    expect(screen.getByText("do-tor1-x")).toBeInTheDocument();
+  });
 });
