@@ -59,6 +59,8 @@ import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusM
 import { handleUpdates, type UpdatesRequest } from "./updates";
 import { chatConfig, setClaudeToken } from "./chatConfig";
 import { voiceStatus, voiceEnabled, setVoiceConfig, voiceConfig, missingVoiceFields } from "./voiceConfig";
+import { readIssueMutes, writeIssueMutes } from "./issuesConfig";
+import { parseIssueMutes } from "@rigel/k8s/src/issues/mutes";
 import { mintVoiceToken, agentConfigResponse, checkWorkerToken, isVoiceWorkerRequest, maskedVoiceConfig, voiceConfigPatch, VOICE_WORKER_HEADER, type VoiceRole } from "./voiceRoutes";
 import { recordAiAction } from "./aiActionLedger";
 import { buildAiActionEntry, summarizeActionDetail } from "@rigel/k8s/src/aiActionLedger";
@@ -596,6 +598,27 @@ async function handler(req: Request): Promise<Response> {
         return Response.json({ error: errorText(err) }, { status: 503 });
       }
       return Response.json(await maskedVoiceConfig(context));
+    }
+
+    // GET /api/issues/config: this cluster's issue mutes, keyed by fingerprint.
+    // PUT /api/issues/config: replace the whole map.
+    if (url.pathname === "/api/issues/config" && req.method === "GET") {
+      return Response.json({ mutes: await readIssueMutes(context) });
+    }
+    if (url.pathname === "/api/issues/config" && req.method === "PUT") {
+      let body: unknown;
+      try {
+        body = await req.json();
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      const mutes = parseIssueMutes(JSON.stringify((body as { mutes?: unknown })?.mutes ?? {}));
+      try {
+        await writeIssueMutes(context, mutes);
+      } catch (err) {
+        return Response.json({ error: errorText(err) }, { status: 503 });
+      }
+      return Response.json({ mutes });
     }
 
     // POST /api/voice/token: mint a room JWT for the renderer (or a phone, for
