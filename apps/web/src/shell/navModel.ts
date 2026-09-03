@@ -5,7 +5,7 @@ import {
   faCodeBranch, faSignsPost, faNetworkWired, faDatabase, faKey, faFileLines,
   faHardDrive, faShieldCheck, faCircleCheck, faBell, faScroll, faSquareDashed,
   faUserLock, faGear, faWindowMaximize, faFilePlus, faFileImport, faBox, faPuzzlePiece,
-  faReceipt, faListCheck, faBoxArchive,
+  faReceipt, faListCheck, faBoxArchive, faTriangleExclamation,
 } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { RigelMark } from "@/components/RigelMark";
 
@@ -28,6 +28,7 @@ export interface PanelMeta {
 
 export const PANEL_META: Record<string, PanelMeta> = {
   overview:     { route: "/overview",     title: "Overview",     subtitle: "Health at a glance",    icon: faTableColumns },
+  issues:       { route: "/issues",       title: "Issues",       subtitle: "Detected problems",     icon: faTriangleExclamation },
   assistant:    { route: "/assistant",    title: "Assistant",    subtitle: "AI cluster operator",   icon: RigelMark },
   deployments:  { route: "/deployments",  title: "Deployments",  subtitle: "Rollouts & replicas",   icon: faLayerGroup },
   pods:         { route: "/pods",         title: "Pods",         subtitle: "Running containers",    icon: faCube },
@@ -66,7 +67,7 @@ export interface NavGroup {
 }
 
 export const NAV_GROUPS: NavGroup[] = [
-  { title: null, panels: ["overview", "assistant"] },
+  { title: null, panels: ["overview", "issues", "assistant"] },
   { title: "Workloads", panels: ["deployments", "pods", "workloads", "rightsizing"] },
   { title: "Networking", panels: ["services", "ingresses"] },
   { title: "Config & Storage", panels: ["configmaps", "secrets", "storage", "databases", "backups"] },
