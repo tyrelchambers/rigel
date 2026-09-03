@@ -5,7 +5,7 @@ import { parseDocument } from "yaml";
 import { cleanExportedManifest } from "../manifestClean";
 import { kubectl as defaultKubectl, type RunProcessOpts, type RunResult } from "../run";
 import type { ClusterObject } from "../workloadClosure";
-import type { DataCopyResult, DataCopyStep, DataPlan } from "./types";
+import type { DataCopyResult, DataCopyStep, DataPlan, FailoverReporter } from "./types";
 
 export type KubectlFn = (
   context: string | null,
@@ -49,15 +49,27 @@ export async function copyDataPlans(opts: {
   waitTimeout?: string;
   kubectl?: KubectlFn;
   tmpDir?: string;
+  onStep?: FailoverReporter;
 }): Promise<DataCopyResult> {
   const kubectl = opts.kubectl ?? defaultKubectl;
   const waitTimeout = opts.waitTimeout ?? "600s";
   const storageClass = opts.storageClass ?? "do-block-storage";
   const dir = opts.tmpDir ?? (await mkdtemp(join(tmpdir(), "rigel-failover-")));
   const steps: DataCopyStep[] = [];
+  const report = opts.onStep ?? (() => {});
+  const LABELS: Record<DataPlan["kind"], string> = {
+    pgDump: "Dump and restore Postgres",
+    cnpgBarman: "Recover Postgres from backup",
+    pvcTar: "Copy volume",
+    startEmpty: "Start cache empty",
+  };
 
   for (const plan of opts.plans) {
+    const id = `data:${plan.subject.namespace}/${plan.subject.name}`;
+    const label = LABELS[plan.kind];
+    const subject = `${plan.subject.namespace}/${plan.subject.name}`;
     if (plan.kind === "startEmpty") {
+      report({ id, label, status: "skipped", detail: subject });
       steps.push({
         kind: plan.kind,
         subject: plan.subject,
@@ -68,6 +80,7 @@ export async function copyDataPlans(opts: {
       continue;
     }
     if (plan.kind === "cnpgBarman") {
+      report({ id, label, status: "skipped", detail: subject });
       steps.push({
         kind: plan.kind,
         subject: plan.subject,
@@ -77,14 +90,22 @@ export async function copyDataPlans(opts: {
       });
       continue;
     }
-    if (plan.kind === "pgDump") {
-      steps.push(
-        await copyPg(kubectl, opts.fromContext, opts.toContext, plan, dir, waitTimeout, storageClass),
-      );
-      continue;
-    }
-    if (plan.kind === "pvcTar") {
-      steps.push(await copyPvc(kubectl, opts.fromContext, opts.toContext, plan, dir, waitTimeout));
+    report({ id, label, status: "running", detail: subject });
+    try {
+      const done =
+        plan.kind === "pgDump"
+          ? await copyPg(kubectl, opts.fromContext, opts.toContext, plan, dir, waitTimeout, storageClass)
+          : await copyPvc(kubectl, opts.fromContext, opts.toContext, plan, dir, waitTimeout);
+      steps.push(done);
+      report({
+        id,
+        label,
+        status: "done",
+        detail: done.artifacts.length ? `${subject} · ${done.artifacts.join(", ")}` : subject,
+      });
+    } catch (err) {
+      report({ id, label, status: "failed", detail: subject, error: (err as Error).message });
+      throw err;
     }
   }
 

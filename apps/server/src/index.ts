@@ -66,10 +66,10 @@ import {
   readFailoverLiveState,
   restoreHome,
   rewritesFromBody,
-  runFailover,
   scaleHome,
   selectionFromBody,
 } from "./failoverRun";
+import { readFailoverJob, startFailoverJob } from "./failoverJob";
 import { readIssueMutes, writeIssueMutes } from "./issuesConfig";
 import { parseIssueMutes } from "@rigel/k8s/src/issues/mutes";
 import { mintVoiceToken, agentConfigResponse, checkWorkerToken, isVoiceWorkerRequest, maskedVoiceConfig, voiceConfigPatch, VOICE_WORKER_HEADER, type VoiceRole } from "./voiceRoutes";
@@ -645,6 +645,9 @@ async function handler(req: Request): Promise<Response> {
       const plan = await planFailover(context, selection, rewritesFromBody(body), dest?.nodeCount ?? 1);
       return Response.json(plan);
     }
+    // POST /api/failover/run starts a job and returns at once. Provisioning,
+    // dumping and restoring take many minutes, which is longer than any request
+    // should be held open. Progress is read from /api/failover/run/status.
     if (url.pathname === "/api/failover/run" && req.method === "POST") {
       let body: unknown;
       try { body = await req.json(); }
@@ -652,20 +655,17 @@ async function handler(req: Request): Promise<Response> {
       const selection = selectionFromBody(body);
       if (!selection) return Response.json({ error: "selection required" }, { status: 422 });
       try {
-        const result = await runFailover(context, selection, rewritesFromBody(body));
-        return Response.json({
-          context: result.context,
-          lbAddress: result.lbAddress,
-          edgeChange: result.edgeChange,
-          batchId: result.batchId,
-          members: result.members,
-          data: result.data,
-        });
+        const job = startFailoverJob(context, selection, rewritesFromBody(body));
+        return Response.json(job, { status: 202 });
       } catch (err) {
-        const blockers = (err as { blockers?: unknown }).blockers;
-        const status = blockers ? 409 : 503;
-        return Response.json({ error: errorText(err), blockers }, { status });
+        const status = (err as { status?: number }).status === 409 ? 409 : 503;
+        return Response.json({ error: errorText(err) }, { status });
       }
+    }
+    if (url.pathname === "/api/failover/run/status" && req.method === "GET") {
+      const job = readFailoverJob();
+      if (!job) return Response.json({ status: "idle", steps: [] });
+      return Response.json(job);
     }
     if (url.pathname === "/api/failover/confirm-edge" && req.method === "POST") {
       try { return Response.json(await confirmEdge(context)); }

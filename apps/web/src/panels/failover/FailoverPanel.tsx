@@ -3,9 +3,11 @@ import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { FailoverSelect } from "./FailoverSelect";
+import { FailoverRunning } from "./FailoverRunning";
 import {
   useFailoverConfig,
   useFailoverEdgeConfirm,
+  useFailoverJob,
   useFailoverPlan,
   useFailoverRestore,
   useFailoverRun,
@@ -19,6 +21,7 @@ export default function FailoverPanel() {
   const live = useFailoverState();
   const planMut = useFailoverPlan();
   const runMut = useFailoverRun();
+  const job = useFailoverJob();
   const confirm = useFailoverEdgeConfirm();
   const scale = useFailoverScaleHome();
   const restore = useFailoverRestore();
@@ -56,8 +59,8 @@ export default function FailoverPanel() {
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-auto p-5">
         {active && (
           <ActiveFailover
-            snippet={runMut.data?.edgeChange.snippet}
-            revert={runMut.data?.edgeChange.revertSnippet}
+            snippet={job.data?.result?.edgeChange.snippet}
+            revert={job.data?.result?.edgeChange.revertSnippet}
             confirmed={active.edgeConfirmed}
             onConfirm={() => confirm.mutate()}
             onScale={() => scale.mutate()}
@@ -68,6 +71,8 @@ export default function FailoverPanel() {
             error={confirm.error?.message ?? scale.error?.message ?? restore.error?.message}
           />
         )}
+
+        {job.data && <FailoverRunning job={job.data} />}
 
         <FailoverSelect
           previewPending={planMut.isPending}
@@ -83,7 +88,7 @@ export default function FailoverPanel() {
           <div className="flex flex-col gap-2">
             <Button
               size="sm"
-              disabled={plan.blockers.length > 0 || runMut.isPending || !selection}
+              disabled={plan.blockers.length > 0 || runMut.isPending || !selection || job.data?.status === "running"}
               onClick={() => selection && runMut.mutate({ selection, acceptedRewrites: rewrites })}
             >
               Run failover
@@ -94,13 +99,6 @@ export default function FailoverPanel() {
               </p>
             )}
             {runMut.error && <p className="text-xs text-[var(--status-failed)]">{runMut.error.message}</p>}
-            {runMut.data?.data?.steps.map((s) => (
-              <p key={`${s.kind}/${s.subject.namespace}/${s.subject.name}`} className="text-xs text-[var(--fg-secondary)]">
-                {s.action} {s.kind} {s.subject.namespace}/{s.subject.name}
-                {s.artifacts.length ? ` (${s.artifacts.join(", ")})` : ""}
-                {s.warning ? `. ${s.warning}` : ""}
-              </p>
-            ))}
           </div>
         )}
       </div>

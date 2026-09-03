@@ -16,6 +16,7 @@ import { serializeFailoverDestination } from "@rigel/k8s/src/failover/destinatio
 import type {
   DataCopyResult,
   DataPlan,
+  FailoverReporter,
   FailoverSelection,
   FailoverState,
   FailoverWorkload,
@@ -275,8 +276,12 @@ export async function runFailover(
     provision?: typeof provisionDoks;
     stack?: typeof installFailoverStack;
     copyData?: typeof copyDataPlans;
+    report?: FailoverReporter;
   } = {},
 ): Promise<FailoverRunResult> {
+  const report: FailoverReporter = deps.report ?? (() => {});
+  const step = (id: string, label: string, status: Parameters<FailoverReporter>[0]["status"], detail?: string) =>
+    report({ id, label, status, detail });
   const dest = await readFailoverDestination(sourceContext);
   if (!dest) throw new Error("No failover destination is configured");
   const plan = await planFailover(sourceContext, selection, acceptedRewrites, dest.nodeCount, deps.get);
@@ -296,22 +301,43 @@ export async function runFailover(
   const existing = parseFailoverState((await readUserConfig(sourceContext)).data[FAILOVER_STATE_KEY] ?? "");
   let remoteContext = existing.failedOverTo?.context;
   let clusterId = existing.failedOverTo?.clusterId;
-  if (!remoteContext) {
+  if (remoteContext) {
+    step("provision", "Provision DOKS", "skipped", `reusing ${remoteContext}`);
+    step("stack", "Install stack", "skipped", "already installed");
+  } else {
+    step("provision", "Provision DOKS", "running", `${dest.region} · ${dest.nodeCount} × ${dest.nodeSize}`);
     const created = await provision(dest);
     remoteContext = created.context;
     clusterId = created.id;
+    step("provision", "Provision DOKS", "done", created.context);
+    step("stack", "Install stack", "running", "cert-manager, cloudnative-pg, traefik");
     await stack(remoteContext);
+    step("stack", "Install stack", "done", "cert-manager, cloudnative-pg, traefik");
   }
 
+  const rewriteCount = plan.endpointRewrites.length;
+  step(
+    "rewrite",
+    "Rewrite endpoints",
+    rewriteCount === 0 ? "skipped" : "running",
+    rewriteCount === 0 ? "every address already resolves on the target" : `${rewriteCount} values repointed · home untouched`,
+  );
   const sorted = [...plan.members].sort((a, b) => orderIndex(a.kind) - orderIndex(b.kind));
   const yamls: string[] = [];
   for (const m of sorted) {
     const yaml = await exportYaml(sourceContext, m, plan.plans, storageClass, plan.endpointRewrites);
     if (yaml) yamls.push(yaml);
   }
+  if (rewriteCount > 0) {
+    step("rewrite", "Rewrite endpoints", "done", `${rewriteCount} values repointed · home untouched`);
+  }
+
+  step("apply", "Apply closure", "running", `${plan.members.length} objects`);
   const bundle = yamls.join("\n---\n");
   const applied = await apply(remoteContext, bundle, false, "failover");
+  step("apply", "Apply closure", "done", `${plan.members.length} objects`);
 
+  step("loadBalancer", "Read load balancer", "running");
   let lbAddress = "";
   const svc = items(await get(remoteContext, ["get", "svc", "-n", "traefik", "-o", "json"]));
   for (const s of svc) {
@@ -319,6 +345,7 @@ export async function runFailover(
       .status?.loadBalancer?.ingress?.[0];
     lbAddress = ing?.ip ?? ing?.hostname ?? lbAddress;
   }
+  step("loadBalancer", "Read load balancer", lbAddress ? "done" : "failed", lbAddress || "no address yet");
 
   const at = new Date().toISOString();
   const state: FailoverState = {
@@ -349,6 +376,7 @@ export async function runFailover(
     toContext: remoteContext,
     plans: plan.plans,
     storageClass,
+    onStep: report,
   });
 
   return {

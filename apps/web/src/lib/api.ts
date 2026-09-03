@@ -1712,6 +1712,27 @@ export interface FailoverPlanView {
   }>;
 }
 
+export type FailoverStepStatus = "pending" | "running" | "done" | "failed" | "skipped";
+
+export interface FailoverStepView {
+  id: string;
+  label: string;
+  detail?: string;
+  status: FailoverStepStatus;
+  error?: string;
+}
+
+export interface FailoverJobView {
+  id?: string;
+  startedAt?: string;
+  endedAt?: string;
+  status: "idle" | "running" | "done" | "failed";
+  steps: FailoverStepView[];
+  error?: string;
+  blockers?: FailoverPlanView["findings"];
+  result?: FailoverRunView;
+}
+
 export interface FailoverRunView {
   context: string;
   lbAddress: string;
@@ -1776,18 +1797,32 @@ export function useFailoverPlan() {
 export function useFailoverRun() {
   const qc = useQueryClient();
   const context = useCluster((s) => s.activeContext);
-  return useMutation<FailoverRunView, Error, { selection: unknown; acceptedRewrites?: unknown[] }>({
+  return useMutation<FailoverJobView, Error, { selection: unknown; acceptedRewrites?: unknown[] }>({
     mutationFn: async (body) => {
       const res = await apiFetch("/api/failover/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const json = (await res.json().catch(() => ({}))) as FailoverRunView & { error?: string };
+      const json = (await res.json().catch(() => ({}))) as FailoverJobView & { error?: string };
       if (!res.ok) throw new Error(json.error ?? "failover run failed");
       return json;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["failover-state", context] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["failover-job", context] }),
+  });
+}
+
+/** Polls while a run is in flight. A failover outlives the request that starts it. */
+export function useFailoverJob() {
+  const context = useCluster((s) => s.activeContext);
+  return useQuery<FailoverJobView>({
+    queryKey: ["failover-job", context],
+    queryFn: async () => {
+      const res = await apiFetch("/api/failover/run/status");
+      if (!res.ok) throw new Error("could not read the failover job");
+      return (await res.json()) as FailoverJobView;
+    },
+    refetchInterval: (q) => (q.state.data?.status === "running" ? 1500 : false),
   });
 }
 

@@ -112,6 +112,31 @@ export interface DataCopyResult {
   steps: DataCopyStep[];
 }
 
+export type FailoverStepStatus = "pending" | "running" | "done" | "failed" | "skipped";
+
+/** One line of the Running screen. `id` is stable so a step can be updated. */
+export interface FailoverStep {
+  id: string;
+  label: string;
+  detail?: string;
+  status: FailoverStepStatus;
+  error?: string;
+}
+
+export type FailoverReporter = (step: FailoverStep) => void;
+
+export interface FailoverJob {
+  id: string;
+  context: string | null;
+  startedAt: string;
+  endedAt?: string;
+  status: "running" | "done" | "failed";
+  steps: FailoverStep[];
+  error?: string;
+  /** Present once status is done. Dump bytes never appear here. */
+  result?: unknown;
+}
+
 export interface FailoverState {
   failedOverTo?: {
     context: string;

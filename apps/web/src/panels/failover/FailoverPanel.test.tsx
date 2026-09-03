@@ -17,12 +17,13 @@ const config = {
   cluster: { context: "home", namespace: "rigel", secret: "rigel-user-config", state: "ok" },
 };
 
-const state = { configured: config, plan: undefined as unknown };
+const state = { configured: config, plan: undefined as unknown, job: undefined as unknown };
 
 vi.mock("@/lib/api", () => ({
   useFailoverConfig: () => ({ data: state.configured }),
   useFailoverState: () => ({ data: {} }),
   useFailoverPlan: () => ({ data: state.plan, mutate: vi.fn(), isPending: false }),
+  useFailoverJob: () => ({ data: state.job }),
   useFailoverRun: () => ({ data: undefined, mutate: vi.fn(), isPending: false, error: null }),
   useFailoverEdgeConfirm: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useFailoverScaleHome: () => ({ mutate: vi.fn(), isPending: false, error: null }),
@@ -52,9 +53,21 @@ const emptyPlan = {
 beforeEach(() => {
   state.configured = config;
   state.plan = undefined;
+  state.job = undefined;
 });
 
 describe("FailoverPanel", () => {
+  it("shows the run steps while a failover is in flight", () => {
+    state.configured = { ...config, configured: true };
+    state.job = {
+      status: "running",
+      steps: [{ id: "provision", label: "Provision DOKS", status: "running", detail: "tor1" }],
+    };
+    renderPanel();
+    expect(screen.getByText("Running")).toBeInTheDocument();
+    expect(screen.getByText("Provision DOKS")).toBeInTheDocument();
+  });
+
   it("sends an unconfigured cluster to Settings", () => {
     renderPanel();
     expect(screen.getByText(/configure a digitalocean destination first/i)).toBeInTheDocument();
