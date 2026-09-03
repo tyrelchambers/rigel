@@ -4,7 +4,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { __setClusterConfigIO, __useFakeClusterConfig } from "./clusterConfigStore";
 import { writeFailoverPatch } from "./failoverConfig";
-import { confirmEdge, planFailover, restoreHome, runFailover, scaleHome } from "./failoverRun";
+import {
+  confirmEdge,
+  planFailover,
+  readFailoverLiveState,
+  restoreHome,
+  runFailover,
+  scaleHome,
+  teardownLeftBehind,
+} from "./failoverRun";
 
 const CTX = "home";
 
@@ -265,5 +273,101 @@ describe("restoreHome", () => {
     expect(order[1]).toBe("copy:do-tor1-x->home");
     expect(order[2]).toBe("home:scale deployment reddex-deploy -n default --replicas=3");
     expect(order[3]).toBe("destroy");
+  });
+});
+
+
+describe("restoreHome teardown", () => {
+  const state = {
+    failedOverTo: {
+      context: "do-tor1-x",
+      clusterId: "abc-123",
+      at: "2026-09-03T00:00:00.000Z",
+      batchId: "b1",
+      scaledToZero: [{ kind: "Deployment", namespace: "default", name: "reddex-deploy", replicas: 2 }],
+      edgeConfirmed: true,
+      dataPlans: [],
+    },
+  };
+
+  async function seed() {
+    await writeFailoverPatch(CTX, { token: "t", spacesKey: "k", spacesSecret: "s", nodeCount: 1 });
+    const { writeUserConfig } = await import("./clusterConfigStore");
+    const { FAILOVER_STATE_KEY } = await import("@rigel/k8s/src/userConfig");
+    await writeUserConfig(CTX, () => ({ [FAILOVER_STATE_KEY]: JSON.stringify(state) }));
+  }
+
+  it("reports each restore step", async () => {
+    await seed();
+    const steps: string[] = [];
+    const out = await restoreHome(CTX, {}, {
+      kubectl: async () => ({ code: 0, stdout: "", stderr: "" }),
+      copyData: async () => ({ steps: [] }),
+      destroy: async () => undefined,
+      report: (s) => steps.push(`${s.id}:${s.status}`),
+    });
+    expect(out.ok).toBe(true);
+    expect(steps).toContain("scaleRemote:done");
+    expect(steps).toContain("scaleHome:done");
+    expect(steps).toContain("destroy:done");
+  });
+
+  it("still restores when the teardown fails, and remembers the cluster", async () => {
+    await seed();
+    const out = await restoreHome(CTX, {}, {
+      kubectl: async () => ({ code: 0, stdout: "", stderr: "" }),
+      copyData: async () => ({ steps: [] }),
+      destroy: async () => { throw new Error("droplet API refused"); },
+    });
+    expect(out).toMatchObject({ ok: true, leftBehind: { clusterId: "abc-123", error: "droplet API refused" } });
+
+    const live = await readFailoverLiveState(CTX);
+    expect(live.leftBehind?.clusterId).toBe("abc-123");
+    expect(live.failedOverTo).toBeUndefined();
+  });
+
+  it("clears the state when the teardown works", async () => {
+    await seed();
+    await restoreHome(CTX, {}, {
+      kubectl: async () => ({ code: 0, stdout: "", stderr: "" }),
+      copyData: async () => ({ steps: [] }),
+      destroy: async () => undefined,
+    });
+    const live = await readFailoverLiveState(CTX);
+    expect(live.leftBehind).toBeUndefined();
+    expect(live.failedOverTo).toBeUndefined();
+  });
+});
+
+describe("teardownLeftBehind", () => {
+  it("refuses when nothing was left behind", async () => {
+    await writeFailoverPatch(CTX, { token: "t", spacesKey: "k", spacesSecret: "s", nodeCount: 1 });
+    expect(await teardownLeftBehind(CTX)).toEqual({ ok: false, error: "No cluster is recorded as left behind" });
+  });
+
+  it("destroys the remembered cluster and clears the state", async () => {
+    await writeFailoverPatch(CTX, { token: "t", spacesKey: "k", spacesSecret: "s", nodeCount: 1 });
+    const { writeUserConfig } = await import("./clusterConfigStore");
+    const { FAILOVER_STATE_KEY } = await import("@rigel/k8s/src/userConfig");
+    await writeUserConfig(CTX, () => ({
+      [FAILOVER_STATE_KEY]: JSON.stringify({ leftBehind: { clusterId: "abc-123", context: "do-tor1-x", at: "x", error: "boom" } }),
+    }));
+
+    let destroyed = "";
+    expect(await teardownLeftBehind(CTX, { destroy: async (_d, id) => { destroyed = id; } })).toEqual({ ok: true });
+    expect(destroyed).toBe("abc-123");
+    expect((await readFailoverLiveState(CTX)).leftBehind).toBeUndefined();
+  });
+
+  it("keeps the record when the retry also fails", async () => {
+    await writeFailoverPatch(CTX, { token: "t", spacesKey: "k", spacesSecret: "s", nodeCount: 1 });
+    const { writeUserConfig } = await import("./clusterConfigStore");
+    const { FAILOVER_STATE_KEY } = await import("@rigel/k8s/src/userConfig");
+    await writeUserConfig(CTX, () => ({
+      [FAILOVER_STATE_KEY]: JSON.stringify({ leftBehind: { clusterId: "abc-123", context: "do-tor1-x", at: "x", error: "boom" } }),
+    }));
+    const out = await teardownLeftBehind(CTX, { destroy: async () => { throw new Error("still refusing"); } });
+    expect(out).toEqual({ ok: false, error: "still refusing" });
+    expect((await readFailoverLiveState(CTX)).leftBehind?.clusterId).toBe("abc-123");
   });
 });

@@ -7,7 +7,7 @@ import {
 } from "@rigel/k8s/src/failover/state";
 import { FAILOVER_JOB_KEY } from "@rigel/k8s/src/userConfig";
 import { readUserConfig, writeUserConfig } from "./clusterConfigStore";
-import { runFailover, type FailoverRunResult } from "./failoverRun";
+import { restoreHome, runFailover, type FailoverRunResult } from "./failoverRun";
 
 /**
  * A failover run outlives any one HTTP request: provisioning, installing the
@@ -19,6 +19,15 @@ import { runFailover, type FailoverRunResult } from "./failoverRun";
  */
 let current: FailoverJob | null = null;
 let running: Promise<void> | null = null;
+
+/** The steps a restore shows before anything has reported in. */
+export function plannedRestoreSteps(): FailoverStep[] {
+  return [
+    { id: "scaleRemote", label: "Scale remote writers to zero", status: "pending" },
+    { id: "scaleHome", label: "Scale home replicas back", status: "pending" },
+    { id: "destroy", label: "Destroy the DOKS cluster", status: "pending" },
+  ];
+}
 
 /** The steps the Running screen shows before anything has reported in. */
 export function plannedSteps(): FailoverStep[] {
@@ -124,6 +133,59 @@ export function startFailoverJob(
       job.error = (err as Error)?.message ?? String(err);
       const blockers = (err as { blockers?: unknown }).blockers;
       if (blockers) (job as FailoverJob & { blockers?: unknown }).blockers = blockers;
+      job.steps = job.steps.map((s) =>
+        s.status === "running" ? { ...s, status: "failed", error: job.error } : s,
+      );
+    })
+    .finally(() => {
+      job.endedAt = new Date().toISOString();
+      persist(job, save);
+    });
+
+  return job;
+}
+
+/** A restore is the same shape of long job: many minutes, reported as steps. */
+export function startRestoreJob(
+  context: string | null,
+  opts: { localWriteAt?: string } = {},
+  restore: typeof restoreHome = restoreHome,
+  save: PersistFn = writeUserConfig,
+): FailoverJob {
+  if (current?.status === "running") {
+    const err = new Error("A failover is already running") as Error & { status: number };
+    err.status = 409;
+    throw err;
+  }
+
+  const job: FailoverJob = {
+    id: randomUUID(),
+    context,
+    startedAt: new Date().toISOString(),
+    status: "running",
+    steps: plannedRestoreSteps(),
+  };
+  current = job;
+  persist(job, save);
+
+  running = restore(context, opts, {
+    report: (step) => {
+      job.steps = mergeStep(job.steps, step);
+      persist(job, save);
+    },
+  })
+    .then((out) => {
+      if (!out.ok) {
+        job.status = "failed";
+        job.error = out.error;
+        return;
+      }
+      job.status = "done";
+      job.result = out;
+    })
+    .catch((err: unknown) => {
+      job.status = "failed";
+      job.error = (err as Error)?.message ?? String(err);
       job.steps = job.steps.map((s) =>
         s.status === "running" ? { ...s, status: "failed", error: job.error } : s,
       );

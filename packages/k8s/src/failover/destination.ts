@@ -23,6 +23,23 @@ function text(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 
+function parseEdge(value: unknown): import("./types").FailoverEdge | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const o = value as Record<string, unknown>;
+  const host = text(o.host);
+  if (!host) return undefined;
+  const backends = Array.isArray(o.backends)
+    ? o.backends.flatMap((b) => {
+        if (!b || typeof b !== "object") return [];
+        const r = b as Record<string, unknown>;
+        const name = text(r.name);
+        const ip = text(r.ip);
+        return name && ip ? [{ name, ip }] : [];
+      })
+    : [];
+  return { host, backends };
+}
+
 function parseSelection(value: unknown): FailoverSelection | undefined {
   if (!value || typeof value !== "object") return undefined;
   const o = value as Record<string, unknown>;
@@ -80,6 +97,8 @@ export function parseFailoverDestination(blob: string): FailoverDestination | nu
     nodeSize: text(o.nodeSize) ?? DEFAULT_FAILOVER_NODE_SIZE,
     nodeCount,
   };
+  const edge = parseEdge(o.edge);
+  if (edge) dest.edge = edge;
   const lastSelection = parseSelection(o.lastSelection);
   if (lastSelection) dest.lastSelection = lastSelection;
   return dest;
@@ -111,6 +130,7 @@ export function maskFailoverDestination(dest: FailoverDestination | null): Failo
     region: dest.region,
     nodeSize: dest.nodeSize,
     nodeCount: dest.nodeCount,
+    ...(dest.edge ? { edge: dest.edge } : {}),
     ...(dest.lastSelection ? { lastSelection: dest.lastSelection } : {}),
   };
 }
@@ -137,6 +157,7 @@ export function applyFailoverPatch(
     region: text(patch.region) ?? current?.region ?? DEFAULT_FAILOVER_REGION,
     nodeSize: text(patch.nodeSize) ?? current?.nodeSize ?? DEFAULT_FAILOVER_NODE_SIZE,
     nodeCount,
+    ...(patch.edge ?? current?.edge ? { edge: patch.edge ?? current?.edge } : {}),
     ...(current?.lastSelection ? { lastSelection: current.lastSelection } : {}),
   };
 }

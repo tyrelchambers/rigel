@@ -9,6 +9,14 @@ export type FailoverSelection =
   | { kind: "namespace"; namespace: string }
   | { kind: "workloads"; items: Array<{ kind: string; namespace: string; name: string }> };
 
+/** What sits in front of the cluster and has to be repointed at the copy. */
+export interface FailoverEdge {
+  /** Host to SSH to, e.g. an haproxy VPS. */
+  host: string;
+  /** The server lines to replace, by name. */
+  backends: Array<{ name: string; ip: string }>;
+}
+
 export interface FailoverDestination {
   provider: FailoverProvider;
   token: string;
@@ -17,6 +25,7 @@ export interface FailoverDestination {
   region: string;
   nodeSize: string;
   nodeCount: number;
+  edge?: FailoverEdge;
   lastSelection?: FailoverSelection;
 }
 
@@ -30,6 +39,7 @@ export interface FailoverDestinationView {
   region: string;
   nodeSize: string;
   nodeCount: number;
+  edge?: FailoverEdge;
   lastSelection?: FailoverSelection;
 }
 
@@ -40,6 +50,7 @@ export interface FailoverDestinationPatch {
   region?: string;
   nodeSize?: string;
   nodeCount?: number;
+  edge?: FailoverEdge;
 }
 
 export type DataPlanKind = "cnpgBarman" | "pgDump" | "pvcTar" | "startEmpty";
@@ -151,5 +162,12 @@ export interface FailoverState {
   failoverCopyOf?: {
     context: string;
     batchId: string;
+  };
+  /** A destination that outlived its restore. It is still billing. */
+  leftBehind?: {
+    clusterId: string;
+    context: string;
+    at: string;
+    error: string;
   };
 }

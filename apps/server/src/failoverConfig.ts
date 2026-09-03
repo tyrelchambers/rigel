@@ -36,6 +36,19 @@ export function failoverPatchFromBody(body: unknown): FailoverDestinationPatch {
   if (typeof o.region === "string") patch.region = o.region;
   if (typeof o.nodeSize === "string") patch.nodeSize = o.nodeSize;
   if (typeof o.nodeCount === "number") patch.nodeCount = o.nodeCount;
+  if (o.edge && typeof o.edge === "object") {
+    const e = o.edge as { host?: unknown; backends?: unknown };
+    const host = typeof e.host === "string" ? e.host.trim() : "";
+    const backends = Array.isArray(e.backends)
+      ? e.backends.flatMap((b) => {
+          const r = (b ?? {}) as { name?: unknown; ip?: unknown };
+          return typeof r.name === "string" && typeof r.ip === "string" && r.name && r.ip
+            ? [{ name: r.name, ip: r.ip }]
+            : [];
+        })
+      : [];
+    if (host) patch.edge = { host, backends };
+  }
   return patch;
 }
 

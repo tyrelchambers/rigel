@@ -24,12 +24,16 @@ export function FailoverTab() {
   const [token, setToken] = useState("");
   const [spacesKey, setSpacesKey] = useState("");
   const [spacesSecret, setSpacesSecret] = useState("");
+  const [edgeHost, setEdgeHost] = useState("");
+  const [edgeBackends, setEdgeBackends] = useState("");
 
   useEffect(() => {
     if (!view) return;
     setRegion(view.region);
     setNodeSize(view.nodeSize);
     setNodeCount(String(view.nodeCount));
+    setEdgeHost(view.edge?.host ?? "");
+    setEdgeBackends((view.edge?.backends ?? []).map((b) => `${b.name} ${b.ip}`).join("\n"));
     setToken("");
     setSpacesKey("");
     setSpacesSecret("");
@@ -45,6 +49,11 @@ export function FailoverTab() {
     if (token.trim()) patch.token = token.trim();
     if (spacesKey.trim()) patch.spacesKey = spacesKey.trim();
     if (spacesSecret.trim()) patch.spacesSecret = spacesSecret.trim();
+    const backends = edgeBackends
+      .split("\n")
+      .map((line) => line.trim().split(/\s+/))
+      .flatMap(([name, ip]) => (name && ip ? [{ name, ip }] : []));
+    if (edgeHost.trim()) patch.edge = { host: edgeHost.trim(), backends };
     save.mutate(patch);
   }
 
@@ -102,6 +111,34 @@ export function FailoverTab() {
             cluster exists.
           </p>
         </div>
+        <label className="flex flex-col gap-1.5 col-span-2">
+          <span className="text-xs text-muted-foreground">Edge host</span>
+          <input
+            className={INPUT_CLASS}
+            value={edgeHost}
+            disabled={locked}
+            onChange={(e) => setEdgeHost(e.target.value)}
+            placeholder="the proxy in front of your cluster, e.g. 203.0.113.9"
+          />
+          <span className="text-2xs leading-snug text-[var(--fg-tertiary)]">
+            Rigel never SSHes here. It only writes the change for you to paste. Leave it empty and a
+            failover just gives you the load balancer address instead.
+          </span>
+        </label>
+        <label className="flex flex-col gap-1.5 col-span-2">
+          <span className="text-xs text-muted-foreground">Edge backend servers</span>
+          <textarea
+            className={`${INPUT_CLASS} h-20 font-mono`}
+            value={edgeBackends}
+            disabled={locked}
+            onChange={(e) => setEdgeBackends(e.target.value)}
+            placeholder={"node1 10.0.0.1\nnode2 10.0.0.2"}
+          />
+          <span className="text-2xs leading-snug text-[var(--fg-tertiary)]">
+            One "name address" per line, matching the server lines in your proxy config. These are
+            what a failover rewrites, and what a restore puts back.
+          </span>
+        </label>
         <label className="flex flex-col gap-1.5 col-span-2">
           <span className="text-xs text-muted-foreground">
             DigitalOcean API token{view?.tokenSet ? " (set)" : ""}

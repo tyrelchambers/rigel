@@ -10,7 +10,7 @@ import {
   planEndpointRewrites,
   type EndpointRewrite,
 } from "@rigel/k8s/src/failover/endpointRewrites";
-import { bothSidesNonZero, localWritesAfterFailover, scaleDownOnReturn } from "@rigel/k8s/src/failover/splitBrain";
+import { localWritesAfterFailover, scaleDownOnReturn } from "@rigel/k8s/src/failover/splitBrain";
 import { parseFailoverState, serializeFailoverState } from "@rigel/k8s/src/failover/state";
 import { serializeFailoverDestination } from "@rigel/k8s/src/failover/destination";
 import type {
@@ -382,7 +382,7 @@ export async function runFailover(
   return {
     context: remoteContext,
     lbAddress,
-    edgeChange: edgeChangeFor(lbAddress || "REPLACE_ME"),
+    edgeChange: edgeChangeFor(lbAddress || "REPLACE_ME", dest.edge),
     batchId: applied.batchId,
     members: plan.members,
     data,
@@ -427,11 +427,18 @@ export async function restoreHome(
     kubectl?: typeof kubectl;
     copyData?: typeof copyDataPlans;
     destroy?: typeof destroyDoks;
+    report?: FailoverReporter;
   } = {},
-): Promise<{ ok: true; data: DataCopyResult } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; data: DataCopyResult; leftBehind?: FailoverState["leftBehind"] }
+  | { ok: false; error: string }
+> {
   const kubectlRun = deps.kubectl ?? kubectl;
   const copyData = deps.copyData ?? copyDataPlans;
   const destroy = deps.destroy ?? destroyDoks;
+  const report: FailoverReporter = deps.report ?? (() => {});
+  const step = (id: string, label: string, status: Parameters<FailoverReporter>[0]["status"], detail?: string, error?: string) =>
+    report({ id, label, status, detail, error });
   const state = await readFailoverLiveState(context);
   if (!state.failedOverTo) return { ok: false, error: "No failover is active" };
   if (localWritesAfterFailover(opts.localWriteAt, state.failedOverTo.at)) {
@@ -439,33 +446,70 @@ export async function restoreHome(
   }
   const remote = state.failedOverTo.context;
   const plans = state.failedOverTo.dataPlans ?? [];
+
+  // Writers stop first. CNPG stays up so it can still be dumped.
+  step("scaleRemote", "Scale remote writers to zero", "running");
   for (const w of state.failedOverTo.scaledToZero) {
     await kubectlRun(remote, ["scale", w.kind.toLowerCase(), w.name, "-n", w.namespace, "--replicas=0"]);
   }
-  if (
-    bothSidesNonZero(
-      state.failedOverTo.scaledToZero.map((s) => ({ name: s.name, replicas: 0 })),
-      [{ name: "remote", replicas: 1 }],
-    )
-  ) {
-    /* remote writers are now zero; CNPG stays up so we can dump it */
-  }
+  step("scaleRemote", "Scale remote writers to zero", "done", `${state.failedOverTo.scaledToZero.length} workloads`);
+
   const dest = await readFailoverDestination(context);
   const data = await copyData({
     fromContext: remote,
     toContext: context,
     plans,
     storageClass: DOKS_PROFILE(dest?.nodeCount ?? 1).defaultStorageClass ?? "do-block-storage",
+    onStep: report,
   });
+
+  step("scaleHome", "Scale home replicas back", "running");
   for (const w of state.failedOverTo.scaledToZero) {
     await kubectlRun(context, ["scale", w.kind.toLowerCase(), w.name, "-n", w.namespace, `--replicas=${w.replicas}`]);
   }
+  step("scaleHome", "Scale home replicas back", "done", `${state.failedOverTo.scaledToZero.length} workloads`);
+
+  // The data is home either way, so a teardown that fails does not fail the
+  // restore. It does get remembered: an undestroyed cluster bills by the hour.
   const clusterId = state.failedOverTo.clusterId;
+  let leftBehind: FailoverState["leftBehind"];
   if (dest && clusterId) {
-    await destroy(dest, clusterId).catch(() => undefined);
+    step("destroy", "Destroy the DOKS cluster", "running", clusterId);
+    try {
+      await destroy(dest, clusterId);
+      step("destroy", "Destroy the DOKS cluster", "done", clusterId);
+    } catch (err) {
+      const error = (err as Error).message;
+      leftBehind = { clusterId, context: remote, at: new Date().toISOString(), error };
+      step("destroy", "Destroy the DOKS cluster", "failed", clusterId, error);
+    }
+  } else {
+    step("destroy", "Destroy the DOKS cluster", "skipped", "no cluster id on record");
+  }
+
+  await writeUserConfig(context, () => ({
+    [FAILOVER_STATE_KEY]: serializeFailoverState(leftBehind ? { leftBehind } : {}),
+  }));
+  return leftBehind ? { ok: true, data, leftBehind } : { ok: true, data };
+}
+
+/** Retries a teardown that failed during a restore, so the bill actually stops. */
+export async function teardownLeftBehind(
+  context: string | null,
+  deps: { destroy?: typeof destroyDoks } = {},
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const destroy = deps.destroy ?? destroyDoks;
+  const state = await readFailoverLiveState(context);
+  if (!state.leftBehind) return { ok: false, error: "No cluster is recorded as left behind" };
+  const dest = await readFailoverDestination(context);
+  if (!dest) return { ok: false, error: "No failover destination is configured" };
+  try {
+    await destroy(dest, state.leftBehind.clusterId);
+  } catch (err) {
+    return { ok: false, error: (err as Error).message };
   }
   await writeUserConfig(context, () => ({ [FAILOVER_STATE_KEY]: "{}" }));
-  return { ok: true, data };
+  return { ok: true };
 }
 
 export function selectionFromBody(body: unknown): FailoverSelection | null {

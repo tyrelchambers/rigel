@@ -64,12 +64,12 @@ import {
   confirmEdge,
   planFailover,
   readFailoverLiveState,
-  restoreHome,
   rewritesFromBody,
   scaleHome,
   selectionFromBody,
+  teardownLeftBehind,
 } from "./failoverRun";
-import { loadFailoverJob, startFailoverJob } from "./failoverJob";
+import { loadFailoverJob, startFailoverJob, startRestoreJob } from "./failoverJob";
 import { readIssueMutes, writeIssueMutes } from "./issuesConfig";
 import { parseIssueMutes } from "@rigel/k8s/src/issues/mutes";
 import { mintVoiceToken, agentConfigResponse, checkWorkerToken, isVoiceWorkerRequest, maskedVoiceConfig, voiceConfigPatch, VOICE_WORKER_HEADER, type VoiceRole } from "./voiceRoutes";
@@ -681,7 +681,18 @@ async function handler(req: Request): Promise<Response> {
     if (url.pathname === "/api/failover/restore" && req.method === "POST") {
       let body: { localWriteAt?: string } = {};
       try { body = (await req.json()) as typeof body; } catch { /* empty body is fine */ }
-      return Response.json(await restoreHome(context, { localWriteAt: body.localWriteAt }));
+      try {
+        return Response.json(startRestoreJob(context, { localWriteAt: body.localWriteAt }), { status: 202 });
+      } catch (err) {
+        const status = (err as { status?: number }).status === 409 ? 409 : 503;
+        return Response.json({ error: errorText(err) }, { status });
+      }
+    }
+    // A teardown that failed during a restore leaves a cluster billing by the
+    // hour. This is the way back to it.
+    if (url.pathname === "/api/failover/teardown" && req.method === "POST") {
+      const out = await teardownLeftBehind(context);
+      return Response.json(out, { status: out.ok ? 200 : 409 });
     }
 
     // GET /api/issues/config: this cluster's issue mutes, keyed by fingerprint.

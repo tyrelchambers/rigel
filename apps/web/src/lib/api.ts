@@ -1659,7 +1659,13 @@ export interface FailoverConfigView {
   region: string;
   nodeSize: string;
   nodeCount: number;
+  edge?: FailoverEdgeView;
   cluster: ClusterConfigStatus;
+}
+
+export interface FailoverEdgeView {
+  host: string;
+  backends: Array<{ name: string; ip: string }>;
 }
 
 export interface FailoverConfigPatch {
@@ -1669,6 +1675,7 @@ export interface FailoverConfigPatch {
   region?: string;
   nodeSize?: string;
   nodeCount?: number;
+  edge?: FailoverEdgeView;
 }
 
 export function useFailoverConfig() {
@@ -1722,6 +1729,13 @@ export interface FailoverStepView {
   error?: string;
 }
 
+export interface FailoverLeftBehind {
+  clusterId: string;
+  context: string;
+  at: string;
+  error: string;
+}
+
 export interface FailoverJobView {
   id?: string;
   startedAt?: string;
@@ -1751,6 +1765,7 @@ export interface FailoverRunView {
 }
 
 export interface FailoverLiveState {
+  leftBehind?: FailoverLeftBehind;
   failedOverTo?: {
     context: string;
     at: string;
@@ -1856,12 +1871,27 @@ export function useFailoverScaleHome() {
 export function useFailoverRestore() {
   const qc = useQueryClient();
   const context = useCluster((s) => s.activeContext);
-  return useMutation({
+  return useMutation<FailoverJobView, Error, void>({
     mutationFn: async () => {
-      const res = await apiFetch("/api/failover/restore", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-      if (!res.ok || json.ok === false) throw new Error(json.error ?? "restore failed");
+      const res = await apiFetch("/api/failover/restore", { method: "POST" });
+      const json = (await res.json().catch(() => ({}))) as FailoverJobView & { error?: string };
+      if (!res.ok) throw new Error(json.error ?? "restore failed");
       return json;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["failover-job", context] }),
+  });
+}
+
+/** Destroys a cluster that outlived its restore and is still billing. */
+export function useFailoverTeardown() {
+  const qc = useQueryClient();
+  const context = useCluster((s) => s.activeContext);
+  return useMutation<{ ok: boolean }, Error, void>({
+    mutationFn: async () => {
+      const res = await apiFetch("/api/failover/teardown", { method: "POST" });
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) throw new Error(json.error ?? "teardown failed");
+      return { ok: true };
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["failover-state", context] }),
   });

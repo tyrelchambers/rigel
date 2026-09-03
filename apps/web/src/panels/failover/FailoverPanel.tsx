@@ -13,6 +13,7 @@ import {
   useFailoverRun,
   useFailoverScaleHome,
   useFailoverState,
+  useFailoverTeardown,
   type FailoverPlanView,
 } from "@/lib/api";
 
@@ -25,6 +26,7 @@ export default function FailoverPanel() {
   const confirm = useFailoverEdgeConfirm();
   const scale = useFailoverScaleHome();
   const restore = useFailoverRestore();
+  const teardown = useFailoverTeardown();
   const [rewrites, setRewrites] = useState<Array<{ rule: string; to: unknown }>>([]);
   const [selection, setSelection] = useState<unknown>(null);
   const plan = planMut.data;
@@ -57,6 +59,24 @@ export default function FailoverPanel() {
     <div className="flex h-full flex-col">
       <PanelHeader title="Failover" subtitle="Storm-time copy on DigitalOcean" count={plan?.members.length} loading={planMut.isPending || runMut.isPending} />
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-auto p-5">
+        {live.data?.leftBehind && (
+          <section className="flex flex-col gap-2 rounded-md border border-[var(--status-failed)] bg-[var(--surface-elevated)] p-3">
+            <h2 className="text-sm font-semibold">A DigitalOcean cluster was left behind</h2>
+            <p className="text-xs text-muted-foreground">
+              Your data is home, but the destination did not tear down and is still billing by the hour.
+            </p>
+            <p className="font-mono text-2xs text-[var(--fg-tertiary)]">
+              {live.data.leftBehind.clusterId} · {live.data.leftBehind.error}
+            </p>
+            <div>
+              <Button size="sm" variant="destructive" disabled={teardown.isPending} onClick={() => teardown.mutate()}>
+                Destroy it now
+              </Button>
+            </div>
+            {teardown.error && <p className="text-xs text-[var(--status-failed)]">{teardown.error.message}</p>}
+          </section>
+        )}
+
         {active && (
           <ActiveFailover
             snippet={job.data?.result?.edgeChange.snippet}
@@ -220,7 +240,7 @@ function ActiveFailover({
     <section className="flex flex-col gap-2 rounded-md border border-[var(--status-pending)] bg-[var(--surface-elevated)] p-3">
       <h2 className="text-sm font-semibold">Failover is active</h2>
       <p className="text-xs text-muted-foreground">
-        v1 does not SSH into haproxy. Paste the cutover on root@159.203.36.138, then confirm.
+        Rigel never SSHes into your edge. Paste the cutover there yourself, then confirm.
       </p>
       {snippet && <pre className="overflow-x-auto rounded-md bg-[var(--surface-sunken)] p-2 font-mono text-2xs">{snippet}</pre>}
       <div className="flex flex-wrap gap-2">
