@@ -683,7 +683,15 @@ async function handler(req: Request): Promise<Response> {
       const selection = selectionFromBody(body);
       if (!selection) return Response.json({ error: "selection required" }, { status: 422 });
       try {
-        const job = startFailoverJob(context, selection, rewritesFromBody(body));
+        const dest = await readFailoverDestination(context);
+        const job = startFailoverJob(
+          context,
+          selection,
+          rewritesFromBody(body),
+          undefined,
+          undefined,
+          !!dest?.objectStore,
+        );
         return Response.json(job, { status: 202 });
       } catch (err) {
         const status = (err as { status?: number }).status === 409 ? 409 : 503;

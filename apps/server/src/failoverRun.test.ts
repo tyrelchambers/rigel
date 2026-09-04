@@ -6,6 +6,8 @@ import { __setClusterConfigIO, __useFakeClusterConfig } from "./clusterConfigSto
 import { writeFailoverPatch } from "./failoverConfig";
 import {
   confirmEdge,
+  slug,
+  stamp,
   planFailover,
   readFailoverLiveState,
   restoreHome,
@@ -438,5 +440,84 @@ describe("a run that dies after provisioning", () => {
       }),
     ).rejects.toThrow();
     expect((await readFailoverLiveState(CTX)).leftBehind).toBeUndefined();
+  });
+});
+
+
+describe("the off-site copy", () => {
+  const accepted = [{ rule: "backupTargetIsInsideSourceCluster", to: "pgDump" }];
+  const store = {
+    endpoint: "https://tor1.digitaloceanspaces.com",
+    region: "us-east-1",
+    bucket: "rigel-failover",
+    accessKey: "KEY",
+    secretKey: "SECRET",
+    addressing: "virtualHost" as const,
+  };
+  const okValidate = {
+    validateApi: async () => ({ api: { ok: true as const, email: "e" } }),
+    validateStore: async () => ({ ok: true as const, bucketExists: true, insideSourceCluster: false }),
+  };
+
+  function run(extra: Record<string, unknown>) {
+    return runFailover(CTX, { kind: "namespace", namespace: "default" }, accepted, {
+      get: getJson,
+      apply: async () => ({ batchId: "b1" }),
+      provision: async () => ({ id: "x", name: "n", context: "do-x" }),
+      stack: async () => {},
+      copyData: async () => ({ steps: [] }),
+      ...extra,
+    } as never);
+  }
+
+  it("uploads the copy directory when a store is configured", async () => {
+    await writeFailoverPatch(CTX, { token: "t", objectStore: store }, okValidate);
+    let seen: { prefix: string; dir: string } | undefined;
+    const out = await run({
+      upload: async (_s: unknown, prefix: string, dir: string) => {
+        seen = { prefix, dir };
+        return { keys: ["a", "b"], bytes: 2048 };
+      },
+    });
+    expect(seen?.prefix).toMatch(/^rigel-failover\/home\/\d{8}T\d{4}Z$/);
+    expect(out.upload).toEqual({ ok: true, keys: 2, bytes: 2048 });
+  });
+
+  it("writes the bundle next to the dumps, so the copy restores by hand", async () => {
+    await writeFailoverPatch(CTX, { token: "t", objectStore: store }, okValidate);
+    let dir = "";
+    await run({ upload: async (_s: unknown, _p: string, d: string) => { dir = d; return { keys: [], bytes: 0 }; } });
+    const { access } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+    // Written before the upload, so whatever the closure exported travels with it.
+    await expect(access(join(dir, "bundle.yaml"))).resolves.toBeUndefined();
+  });
+
+  it("does not upload when no store is configured", async () => {
+    await writeFailoverPatch(CTX, { token: "t" }, okValidate);
+    let called = false;
+    const out = await run({ upload: async () => { called = true; return { keys: [], bytes: 0 }; } });
+    expect(called).toBe(false);
+    expect(out.upload).toBeUndefined();
+  });
+
+  it("keeps the failover when the upload fails, because the data is already on the target", async () => {
+    await writeFailoverPatch(CTX, { token: "t", objectStore: store }, okValidate);
+    const out = await run({
+      upload: async () => { throw new Error("Spaces refused the key"); },
+    });
+    expect(out.upload).toEqual({ ok: false, error: "Spaces refused the key" });
+    expect(out.context).toBe("do-x");
+  });
+});
+
+describe("slug and stamp", () => {
+  it("makes a context name safe to put in a key", () => {
+    expect(slug("do-tor1/rigel failover")).toBe("do-tor1-rigel-failover");
+    expect(slug("///")).toBe("cluster");
+  });
+
+  it("stamps to the minute in UTC", () => {
+    expect(stamp(new Date("2026-09-04T15:30:12Z"))).toBe("20260904T1530Z");
   });
 });

@@ -30,13 +30,16 @@ export function plannedRestoreSteps(): FailoverStep[] {
 }
 
 /** The steps the Running screen shows before anything has reported in. */
-export function plannedSteps(): FailoverStep[] {
+export function plannedSteps(hasObjectStore = false): FailoverStep[] {
   return [
     { id: "provision", label: "Provision DOKS", status: "pending" },
     { id: "stack", label: "Install stack", status: "pending" },
     { id: "rewrite", label: "Rewrite endpoints", status: "pending" },
     { id: "apply", label: "Apply closure", status: "pending" },
     { id: "loadBalancer", label: "Read load balancer", status: "pending" },
+    ...(hasObjectStore
+      ? [{ id: "upload", label: "Upload dumps to object store", status: "pending" as const }]
+      : []),
   ];
 }
 
@@ -94,6 +97,7 @@ export function startFailoverJob(
   acceptedRewrites: Array<{ rule: string; to: unknown }> = [],
   run: typeof runFailover = runFailover,
   save: PersistFn = writeUserConfig,
+  hasObjectStore = false,
 ): FailoverJob {
   if (current?.status === "running") {
     const err = new Error("A failover is already running") as Error & { status: number };
@@ -106,7 +110,7 @@ export function startFailoverJob(
     context,
     startedAt: new Date().toISOString(),
     status: "running",
-    steps: plannedSteps(),
+    steps: plannedSteps(hasObjectStore),
   };
   current = job;
   persist(job, save);

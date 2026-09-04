@@ -1,3 +1,6 @@
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { kubectl, type RunResult } from "@rigel/k8s/src/run";
 import { cleanExportedManifest } from "@rigel/k8s/src/manifestClean";
 import { failoverClosure, type ClosureMember } from "@rigel/k8s/src/failover/closure";
@@ -30,6 +33,7 @@ import { applyManifest } from "./install";
 import { readUserConfig, writeUserConfig } from "./clusterConfigStore";
 import { readFailoverDestination } from "./failoverConfig";
 import { failoverOpsFor, type FailoverProviderOps } from "./failoverProviders";
+import { uploadDir, type UploadResult } from "./objectStore";
 
 type GetJson = (context: string | null, args: string[]) => Promise<unknown>;
 
@@ -231,6 +235,8 @@ function orderIndex(kind: string): number {
 }
 
 export interface FailoverRunResult {
+  /** Present only when the destination has an object store. */
+  upload?: { ok: true; keys: number; bytes: number } | { ok: false; error: string };
   context: string;
   lbAddress: string;
   edgeChange: EdgeChange;
@@ -273,12 +279,18 @@ export async function runFailover(
     provision?: FailoverProviderOps["provision"];
     stack?: FailoverProviderOps["installStack"];
     copyData?: typeof copyDataPlans;
+    upload?: typeof uploadDir;
     report?: FailoverReporter;
   } = {},
 ): Promise<FailoverRunResult> {
   const report: FailoverReporter = deps.report ?? (() => {});
-  const step = (id: string, label: string, status: Parameters<FailoverReporter>[0]["status"], detail?: string) =>
-    report({ id, label, status, detail });
+  const step = (
+    id: string,
+    label: string,
+    status: Parameters<FailoverReporter>[0]["status"],
+    detail?: string,
+    error?: string,
+  ) => report({ id, label, status, detail, error });
   const maybeDest = await readFailoverDestination(sourceContext);
   if (!maybeDest) throw new Error("No failover destination is configured");
   const dest = maybeDest;
@@ -395,15 +407,43 @@ export async function runFailover(
     }),
   }));
 
+  // The copy already writes every artifact into one directory. The off-site
+  // copy is that directory, plus the manifests, so it restores by hand too.
+  const dir = await mkdtemp(join(tmpdir(), "rigel-failover-"));
   const data = await copyData({
     fromContext: sourceContext,
     toContext: remote,
     plans: plan.plans,
     storageClass,
     onStep: report,
+    tmpDir: dir,
   });
 
+  let upload: FailoverRunResult["upload"];
+  if (dest.objectStore) {
+    const store = dest.objectStore;
+    const prefix = `rigel-failover/${slug(sourceContext ?? "home")}/${stamp(new Date())}`;
+    step("upload", "Upload dumps to object store", "running", store.bucket);
+    try {
+      await writeFile(join(dir, "bundle.yaml"), bundle, "utf-8");
+      const out: UploadResult = await (deps.upload ?? uploadDir)(store, prefix, dir);
+      upload = { ok: true, keys: out.keys.length, bytes: out.bytes };
+      step(
+        "upload",
+        "Upload dumps to object store",
+        "done",
+        `${store.bucket} · ${out.keys.length} files · ${Math.round(out.bytes / (1024 * 1024))} MiB`,
+      );
+    } catch (err) {
+      // The failover itself succeeded into the target. A missing off-site copy
+      // is worth reporting, not worth failing the run over.
+      upload = { ok: false, error: (err as Error).message };
+      step("upload", "Upload dumps to object store", "failed", store.bucket, (err as Error).message);
+    }
+  }
+
   return {
+    ...(upload ? { upload } : {}),
     context: remote,
     lbAddress,
     edgeChange: edgeChangeFor(lbAddress || "REPLACE_ME", dest.edge),
@@ -565,4 +605,15 @@ export function rewritesFromBody(body: unknown): Array<{ rule: string; to: unkno
   if (!body || typeof body !== "object") return [];
   const o = body as Record<string, unknown>;
   return Array.isArray(o.acceptedRewrites) ? (o.acceptedRewrites as Array<{ rule: string; to: unknown }>) : [];
+}
+
+
+/** A context name is not a key prefix until the slashes come out. */
+export function slug(context: string): string {
+  return context.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "cluster";
+}
+
+export function stamp(at: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${at.getUTCFullYear()}${pad(at.getUTCMonth() + 1)}${pad(at.getUTCDate())}T${pad(at.getUTCHours())}${pad(at.getUTCMinutes())}Z`;
 }

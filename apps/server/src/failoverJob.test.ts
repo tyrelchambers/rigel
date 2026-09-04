@@ -175,3 +175,11 @@ describe("loadFailoverJob", () => {
     expect((await loadFailoverJob("home"))?.id).toBe(started.id);
   });
 });
+
+
+describe("planned steps", () => {
+  it("includes the upload only when the destination has an object store", () => {
+    expect(plannedSteps().some((s) => s.id === "upload")).toBe(false);
+    expect(plannedSteps(true).some((s) => s.id === "upload")).toBe(true);
+  });
+});
