@@ -5,7 +5,7 @@ import {
   faCodeBranch, faSignsPost, faNetworkWired, faDatabase, faKey, faFileLines,
   faHardDrive, faShieldCheck, faCircleCheck, faBell, faScroll, faSquareDashed,
   faUserLock, faGear, faWindowMaximize, faFilePlus, faFileImport, faBox, faPuzzlePiece,
-  faReceipt, faListCheck, faTriangleExclamation,
+  faReceipt, faListCheck, faBoxArchive, faTriangleExclamation,
 } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { RigelMark } from "@/components/RigelMark";
 
@@ -55,6 +55,7 @@ export const PANEL_META: Record<string, PanelMeta> = {
   plugins:      { route: "/plugins",      title: "Plugins",      subtitle: "Cluster add-ons",       icon: faPuzzlePiece },
   apply:        { route: "/apply",        title: "Apply YAML",   subtitle: "Create from manifest",  icon: faFilePlus },
   compose:      { route: "/compose",      title: "Migrate from Compose", subtitle: "Convert a docker-compose.yml to Kubernetes manifests", icon: faFileImport },
+  failover:     { route: "/failover",     title: "Failover",     subtitle: "Storm-time DigitalOcean copy", icon: faBoxArchive },
   gitops:       { route: "/gitops",       title: "GitOps",       subtitle: "Deploy from Git",       icon: faCodeBranch },
   accounts:     { route: "/accounts",     title: "Accounts",     subtitle: "Registry credentials",  icon: faUserLock },
   settings:     { route: "/settings",     title: "Settings",     subtitle: "Preferences",           icon: faGear },
@@ -74,6 +75,6 @@ export const NAV_GROUPS: NavGroup[] = [
   { title: "Security & Certs", panels: ["certificates", "orders", "challenges"] },
   { title: "Observability", panels: ["events", "logs"] },
   { title: "Self-host", panels: ["catalog", "helm", "plugins"] },
-  { title: "Tools", panels: ["apply", "compose", "gitops"] },
+  { title: "Tools", panels: ["apply", "compose", "failover", "gitops"] },
   { title: "System", panels: ["accounts", "settings"] },
 ];

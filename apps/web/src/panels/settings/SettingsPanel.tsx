@@ -1,9 +1,10 @@
-// Settings page — tabbed shell. Five tabs:
+// Settings page — tabbed shell. Six tabs:
 //   1. Overview — app/version info + software updates.
 //   2. AI agents — connect/configure the AI backend + assistant roles/limits.
 //   3. Channels — Signal bridge + Matrix channel.
 //   4. App defaults — per-cluster self-host install defaults.
-//   5. Keyboard — rebind the command shortcuts.
+//   5. Failover — DigitalOcean destination for storm-time failover.
+//   6. Keyboard — rebind the command shortcuts.
 
 import { useSearchParams } from "react-router";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -14,6 +15,7 @@ import {
   faSliders,
   faSparkles,
   faKeyboard,
+  faBoxArchive,
 } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Button } from "@/components/ui/button";
 import { TabBar, Tab } from "@/components/ui/Tabs";
@@ -22,13 +24,15 @@ import { AiAgentsTab } from "./tabs/AiAgentsTab";
 import { ChannelsTab } from "./tabs/ChannelsTab";
 import { AppDefaultsTab } from "./tabs/AppDefaultsTab";
 import { KeyboardTab } from "./tabs/KeyboardTab";
+import { FailoverTab } from "./tabs/FailoverTab";
 
-type SettingsTab = "overview" | "agents" | "channels" | "defaults" | "keyboard";
+type SettingsTab = "overview" | "agents" | "channels" | "defaults" | "keyboard" | "failover";
 const TABS = [
   { id: "overview", label: "Overview", icon: faTableColumns },
   { id: "agents", label: "AI agents", icon: faRobot },
   { id: "channels", label: "Channels", icon: faRadio },
   { id: "defaults", label: "App defaults", icon: faSliders },
+  { id: "failover", label: "Failover", icon: faBoxArchive },
   { id: "keyboard", label: "Keyboard", icon: faKeyboard },
 ];
 
@@ -38,7 +42,8 @@ function isSettingsTab(value: string | null): value is SettingsTab {
     value === "agents" ||
     value === "channels" ||
     value === "defaults" ||
-    value === "keyboard"
+    value === "keyboard" ||
+    value === "failover"
   );
 }
 
@@ -83,6 +88,7 @@ export default function SettingsPanel() {
       {tab === "agents" && <AiAgentsTab />}
       {tab === "channels" && <ChannelsTab />}
       {tab === "defaults" && <AppDefaultsTab />}
+      {tab === "failover" && <FailoverTab />}
       {tab === "keyboard" && <KeyboardTab />}
     </div>
   );

@@ -32,6 +32,8 @@ import ComposeMigratePanel from "./panels/compose/ComposeMigratePanel";
 import GitOpsPanel from "./panels/gitops/GitOpsPanel";
 import HelmPanel from "./panels/helm/HelmPanel";
 import PluginsPanel from "./panels/plugins/PluginsPanel";
+import FailoverPanel from "./panels/failover/FailoverPanel";
+import { FailoverBanner } from "./shell/FailoverBanner";
 import { TerminalDrawer, TOGGLE_TERMINAL_EVENT } from "@/shell/TerminalDrawer";
 import { ResourceYamlViewer } from "@/components/ResourceYamlViewer";
 import { Toaster } from "@/components/ui/sonner";
@@ -223,6 +225,7 @@ function AppContent({ account }: { account: UseAccountResult }) {
         onOpenSearch={() => setPaletteOpen(true)}
         onOpenAccount={() => setAccountOpen(true)}
       />
+      <FailoverBanner />
 
       {/* ── Body row (below the header): cluster rail + nav + content + chat. ── */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
@@ -280,6 +283,7 @@ function AppContent({ account }: { account: UseAccountResult }) {
               <Route path="/plugins" element={<PluginsPanel />} />
               <Route path="/apply" element={<ApplyYamlPanel />} />
               <Route path="/compose" element={<ComposeMigratePanel />} />
+              <Route path="/failover" element={<FailoverPanel />} />
               <Route path="/gitops" element={<GitOpsPanel />} />
               <Route path="/accounts" element={<Padded><AccountsPanel /></Padded>} />
               <Route path="/settings" element={<Padded><SettingsPanel /></Padded>} />

@@ -35,6 +35,7 @@ const BACKUPS_KIND = "backups.postgresql.cnpg.io";
 const SNAPSHOTS_KIND = "volumesnapshots.snapshot.storage.k8s.io";
 const CLUSTERS_KIND = "clusters.postgresql.cnpg.io";
 const SCHEDULED_KIND = "scheduledbackups.postgresql.cnpg.io";
+const OBJECTSTORES_KIND = "objectstores.barmancloud.cnpg.io";
 
 const chipStyle: React.CSSProperties = {
   fontFamily: "ui-monospace, monospace",
@@ -45,6 +46,18 @@ const chipStyle: React.CSSProperties = {
   border: "1px solid var(--border-subtle)",
   whiteSpace: "nowrap",
 };
+
+function InClusterBackupWarning({ resources }: { resources: Record<string, Record<string, unknown>> }) {
+  const stores = Object.values((resources[OBJECTSTORES_KIND] ?? {}) as Record<string, { metadata?: { name?: string }; spec?: { configuration?: { endpointURL?: string } } }>);
+  const inside = stores.filter((s) => /\.svc\.cluster\.local/i.test(s.spec?.configuration?.endpointURL ?? ""));
+  if (inside.length === 0) return null;
+  return (
+    <div className="mx-4 mt-3 rounded-md border border-[var(--status-pending)] bg-[var(--surface-elevated)] px-3 py-2 text-xs text-[var(--fg-secondary)]">
+      ObjectStore {inside.map((s) => s.metadata?.name).join(", ")} archives inside this cluster.
+      A house outage takes the backups with it. Failover can dump with pg_dump if you accept that rewrite.
+    </div>
+  );
+}
 
 /** CNPG Backup runs in a group (excludes nested/standalone snapshots). */
 function runCount(group: BackupGroup): number {
@@ -72,11 +85,13 @@ export default function BackupsPanel() {
     subscribe(SCHEDULED_KIND, "*");
     subscribe(BACKUPS_KIND, "*");
     subscribe(SNAPSHOTS_KIND, "*");
+    subscribe(OBJECTSTORES_KIND, "*");
     return () => {
       unsubscribe(CLUSTERS_KIND, "*");
       unsubscribe(SCHEDULED_KIND, "*");
       unsubscribe(BACKUPS_KIND, "*");
       unsubscribe(SNAPSHOTS_KIND, "*");
+      unsubscribe(OBJECTSTORES_KIND, "*");
     };
   }, []);
 
@@ -160,6 +175,7 @@ export default function BackupsPanel() {
       </PanelHeader>
 
       <div className="flex-1 overflow-auto">
+        <InClusterBackupWarning resources={resources} />
         {error && (
           <pre className="bg-destructive/10 px-4 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-all">
             {error}

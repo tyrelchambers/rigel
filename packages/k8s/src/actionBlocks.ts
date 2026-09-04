@@ -57,6 +57,8 @@ export interface SuggestedAction {
   /** proposeRepoFix only — the change as an intent, so the server builds the file
    *  instead of the model retyping it. Alternative to filePath + content. */
   edit?: ManifestEdit;
+  /** mergePullRequest only — the pull request to merge. */
+  prUrl?: string;
   /** setImagePullSecrets — the full desired list; an empty array clears it. */
   imagePullSecrets?: string[];
   /** setEnvRef — env vars sourced from a Secret or ConfigMap key. */
@@ -129,6 +131,7 @@ export const ACTION_KINDS = [
   "proposeRepoFix",
   "adoptWorkload",
   "mergePullRequest",
+  "failoverPlan",
 ] as const;
 
 /**

@@ -1,3 +1,7 @@
+import { mkdtemp } from "node:fs/promises";
+import { readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test, expect } from "vitest";
 import { buildKubectlArgs, runProcess, runProcessWithStdin } from "./run";
 
@@ -71,4 +75,24 @@ test("runProcess uses a provided env", async () => {
   );
   expect(r.code).toBe(0);
   expect(r.stdout).toBe("provided");
+});
+
+test("runProcess stdoutFile writes bytes and leaves result.stdout empty", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "rigel-run-"));
+  const out = join(dir, "out.bin");
+  const r = await runProcess(process.execPath, ["-e", "process.stdout.write(Buffer.from([0,255,10]))"], {
+    stdoutFile: out,
+  });
+  expect(r.code).toBe(0);
+  expect(r.stdout).toBe("");
+  expect(readFileSync(out)).toEqual(Buffer.from([0, 255, 10]));
+});
+
+test("runProcess stdinFile feeds the child without collecting those bytes as the command string", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "rigel-run-"));
+  const inp = join(dir, "in.bin");
+  writeFileSync(inp, Buffer.from([1, 2, 3, 4]));
+  const r = await runProcess(process.execPath, ["-e", "process.stdin.pipe(process.stdout)"], { stdinFile: inp });
+  expect(r.code).toBe(0);
+  expect(r.stdout).toBe("\u0001\u0002\u0003\u0004");
 });

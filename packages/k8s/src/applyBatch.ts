@@ -15,12 +15,13 @@ export const LEDGER_DATA_KEY = "batch.json";
 export const LEDGER_NAMESPACE = "default";
 
 /** The Rigel apply surfaces that record a batch. */
-export type ApplySource = "compose-migration" | "catalog-install" | "apply-yaml";
+export type ApplySource = "compose-migration" | "catalog-install" | "apply-yaml" | "failover";
 
 const APPLY_SOURCES: readonly ApplySource[] = [
   "compose-migration",
   "catalog-install",
   "apply-yaml",
+  "failover",
 ];
 
 /** Ledger ConfigMap name for a batch id. */

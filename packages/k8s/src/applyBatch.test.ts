@@ -26,6 +26,7 @@ describe("ledger constants", () => {
     expect(asApplySource("compose-migration")).toBe("compose-migration");
     expect(asApplySource("catalog-install")).toBe("catalog-install");
     expect(asApplySource("apply-yaml")).toBe("apply-yaml");
+    expect(asApplySource("failover")).toBe("failover");
     expect(asApplySource("bogus")).toBeNull();
     expect(asApplySource(undefined)).toBeNull();
   });

@@ -55,7 +55,7 @@ import {
   LABEL,
   CAPTION,
   STEP_TXT,
-} from "./MatrixWizardParts";
+} from "./WizardParts";
 
 type Path = "A" | "B";
 type AuthMode = "token" | "login";

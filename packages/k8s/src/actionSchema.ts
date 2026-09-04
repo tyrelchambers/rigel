@@ -161,6 +161,7 @@ const variants = [
     title: z.string(),
     body: z.string().optional(),
   }),
+  z.object({ ...namespaced, kind: z.literal("failoverPlan"), name: z.string() }),
 ] as const;
 
 /**

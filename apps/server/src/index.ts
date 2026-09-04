@@ -59,6 +59,24 @@ import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusM
 import { handleUpdates, type UpdatesRequest } from "./updates";
 import { chatConfig, setClaudeToken } from "./chatConfig";
 import { voiceStatus, voiceEnabled, setVoiceConfig, voiceConfig, missingVoiceFields } from "./voiceConfig";
+import {
+  deleteFailoverDestination,
+  failoverConfigView,
+  failoverPatchFromBody,
+  readFailoverDestination,
+  validateFailoverPatch,
+  writeFailoverPatch,
+} from "./failoverConfig";
+import {
+  confirmEdge,
+  planFailover,
+  readFailoverLiveState,
+  rewritesFromBody,
+  scaleHome,
+  selectionFromBody,
+  teardownLeftBehind,
+} from "./failoverRun";
+import { loadFailoverJob, startFailoverJob, startRestoreJob } from "./failoverJob";
 import { readIssueMutes, writeIssueMutes } from "./issuesConfig";
 import { parseIssueMutes } from "@rigel/k8s/src/issues/mutes";
 import { mintVoiceToken, agentConfigResponse, checkWorkerToken, isVoiceWorkerRequest, maskedVoiceConfig, voiceConfigPatch, VOICE_WORKER_HEADER, type VoiceRole } from "./voiceRoutes";
@@ -598,6 +616,119 @@ async function handler(req: Request): Promise<Response> {
         return Response.json({ error: errorText(err) }, { status: 503 });
       }
       return Response.json(await maskedVoiceConfig(context));
+    }
+
+    // GET /api/failover/config: destination with secrets as set/unset booleans.
+    // PUT /api/failover/config: patch. Omitted secrets keep the stored value.
+    if (url.pathname === "/api/failover/config" && req.method === "GET") {
+      return Response.json(await failoverConfigView(context));
+    }
+    if (url.pathname === "/api/failover/config" && req.method === "PUT") {
+      let body: unknown;
+      try {
+        body = await req.json();
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      try {
+        return Response.json(await writeFailoverPatch(context, failoverPatchFromBody(body)));
+      } catch (err) {
+        const message = errorText(err);
+        const status = /required/.test(message) ? 422 : 503;
+        return Response.json({ error: message }, { status });
+      }
+    }
+
+    if (url.pathname === "/api/failover/config" && req.method === "DELETE") {
+      try {
+        return Response.json(await deleteFailoverDestination(context));
+      } catch (err) {
+        const status = (err as { status?: number }).status === 409 ? 409 : 503;
+        return Response.json({ error: errorText(err) }, { status });
+      }
+    }
+    // Proves a destination before it is stored, so a bad token is found now
+    // rather than during the storm it was configured for.
+    if (url.pathname === "/api/failover/validate" && req.method === "POST") {
+      let body: unknown;
+      try { body = await req.json(); }
+      catch { return Response.json({ error: "invalid JSON body" }, { status: 400 }); }
+      return Response.json(await validateFailoverPatch(context, failoverPatchFromBody(body)));
+    }
+
+    if (url.pathname === "/api/failover/state" && req.method === "GET") {
+      return Response.json(await readFailoverLiveState(context));
+    }
+    if (url.pathname === "/api/failover/plan" && req.method === "POST") {
+      let body: unknown;
+      try { body = await req.json(); }
+      catch { return Response.json({ error: "invalid JSON body" }, { status: 400 }); }
+      const selection = selectionFromBody(body);
+      if (!selection) return Response.json({ error: "selection required" }, { status: 422 });
+      const dest = await readFailoverDestination(context);
+      try {
+        const plan = await planFailover(context, selection, rewritesFromBody(body), dest?.nodeCount ?? 1);
+        return Response.json(plan);
+      } catch (err) {
+        return Response.json({ error: errorText(err) }, { status: 503 });
+      }
+    }
+    // POST /api/failover/run starts a job and returns at once. Provisioning,
+    // dumping and restoring take many minutes, which is longer than any request
+    // should be held open. Progress is read from /api/failover/run/status.
+    if (url.pathname === "/api/failover/run" && req.method === "POST") {
+      let body: unknown;
+      try { body = await req.json(); }
+      catch { return Response.json({ error: "invalid JSON body" }, { status: 400 }); }
+      const selection = selectionFromBody(body);
+      if (!selection) return Response.json({ error: "selection required" }, { status: 422 });
+      try {
+        const dest = await readFailoverDestination(context);
+        const job = startFailoverJob(
+          context,
+          selection,
+          rewritesFromBody(body),
+          undefined,
+          undefined,
+          !!dest?.objectStore,
+        );
+        return Response.json(job, { status: 202 });
+      } catch (err) {
+        const status = (err as { status?: number }).status === 409 ? 409 : 503;
+        return Response.json({ error: errorText(err) }, { status });
+      }
+    }
+    if (url.pathname === "/api/failover/run/status" && req.method === "GET") {
+      const job = await loadFailoverJob(context);
+      if (!job) return Response.json({ status: "idle", steps: [] });
+      return Response.json(job);
+    }
+    if (url.pathname === "/api/failover/confirm-edge" && req.method === "POST") {
+      try { return Response.json(await confirmEdge(context)); }
+      catch (err) { return Response.json({ error: errorText(err) }, { status: 409 }); }
+    }
+    if (url.pathname === "/api/failover/scale-home" && req.method === "POST") {
+      try { return Response.json(await scaleHome(context)); }
+      catch (err) {
+        const status = (err as { status?: number }).status === 409 ? 409 : 503;
+        return Response.json({ error: errorText(err) }, { status });
+      }
+    }
+    if (url.pathname === "/api/failover/restore" && req.method === "POST") {
+      let body: { localWriteAt?: string } = {};
+      try { body = (await req.json()) as typeof body; } catch { /* empty body is fine */ }
+      try {
+        return Response.json(startRestoreJob(context, { localWriteAt: body.localWriteAt }), { status: 202 });
+      } catch (err) {
+        const status = (err as { status?: number }).status === 409 ? 409 : 503;
+        return Response.json({ error: errorText(err) }, { status });
+      }
+    }
+    // A teardown that failed during a restore leaves a cluster billing by the
+    // hour. This is the way back to it.
+    if (url.pathname === "/api/failover/teardown" && req.method === "POST") {
+      const out = await teardownLeftBehind(context);
+      return Response.json(out, { status: out.ok ? 200 : 409 });
     }
 
     // GET /api/issues/config: this cluster's issue mutes, keyed by fingerprint.

@@ -1,4 +1,5 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, type ChildProcess, type StdioOptions } from "node:child_process";
+import { closeSync, openSync } from "node:fs";
 import { spawnEnv } from "./toolPath.js";
 
 /**
@@ -48,32 +49,65 @@ function collectProcess(proc: ChildProcess): Promise<RunResult> {
   return new Promise((resolve) => {
     const out: Buffer[] = [];
     const err: Buffer[] = [];
-    proc.stdout!.on("data", (d: Buffer) => out.push(d));
-    proc.stderr!.on("data", (d: Buffer) => err.push(d));
+    proc.stdout?.on("data", (d: Buffer) => out.push(d));
+    proc.stderr?.on("data", (d: Buffer) => err.push(d));
     const text = (b: Buffer[]) => Buffer.concat(b).toString("utf8");
     proc.on("error", (e) => resolve({ code: -1, stdout: text(out), stderr: text(err) || e.message }));
     proc.on("close", (code) => resolve({ code: code ?? -1, stdout: text(out), stderr: text(err) }));
   });
 }
 
+export interface RunProcessOpts {
+  env?: NodeJS.ProcessEnv;
+  /** Write stdout bytes to this path instead of collecting them as a string. */
+  stdoutFile?: string;
+  /** Feed this file to stdin. */
+  stdinFile?: string;
+}
+
 /**
  * Run a binary to completion via node:child_process spawn (argv array — no shell).
  * `opts.env` overrides the child's environment (e.g. to set KUBECONFIG); when
  * omitted the child inherits the parent process env.
+ * `stdoutFile` / `stdinFile` stream bytes on disk so dump payloads never sit in
+ * the result string that APIs serialize to the UI.
  */
-export function runProcess(
+export async function runProcess(
   bin: string,
   args: string[],
-  opts?: { env?: NodeJS.ProcessEnv },
+  opts?: RunProcessOpts,
 ): Promise<RunResult> {
   // Base spawnEnv on the caller-provided env (so explicit vars like KUBECONFIG
   // are preserved) or on process.env when none is given. This prepends the
   // gcloud SDK bin to PATH so component-installed tools (gke-gcloud-auth-plugin)
   // are visible to kubectl and cloud-connect checks even with a Homebrew gcloud.
   const env = spawnEnv(opts?.env ?? process.env);
-  return collectProcess(spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"], env })).then((r) =>
-    reportSpawnFailure(bin, r),
-  );
+  const fds: number[] = [];
+  const stdio: StdioOptions = [
+    opts?.stdinFile ? openFd(opts.stdinFile, "r", fds) : "ignore",
+    opts?.stdoutFile ? openFd(opts.stdoutFile, "w", fds) : "pipe",
+    "pipe",
+  ];
+  try {
+    const result = await collectProcess(spawn(bin, args, { stdio, env })).then((r) =>
+      reportSpawnFailure(bin, r),
+    );
+    return result;
+  } finally {
+    for (const fd of fds) {
+      try {
+        closeSync(fd);
+      } catch {
+        /* child already released it */
+      }
+    }
+  }
+}
+
+function openFd(path: string, flags: "r" | "w", fds: number[]): number {
+  const fd = openSync(path, flags);
+  fds.push(fd);
+  return fd;
 }
 
 /**
@@ -90,5 +124,8 @@ export function runProcessWithStdin(bin: string, args: string[], input: string):
   return collectProcess(proc).then((r) => reportSpawnFailure(bin, r));
 }
 
-export const kubectl = (context: string | null, args: string[]) =>
-  runProcess("kubectl", buildKubectlArgs(context, args));
+export const kubectl = (
+  context: string | null,
+  args: string[],
+  opts?: RunProcessOpts,
+): Promise<RunResult> => runProcess("kubectl", buildKubectlArgs(context, args), opts);

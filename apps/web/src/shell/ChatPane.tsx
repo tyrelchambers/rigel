@@ -614,6 +614,10 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
       });
       return;
     }
+    if (block.kind === "failoverPlan") {
+      navigate("/failover");
+      return;
+    }
     setPendingAction(block);
   }
 
