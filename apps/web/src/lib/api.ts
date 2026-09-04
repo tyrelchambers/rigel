@@ -1690,6 +1690,16 @@ export interface FailoverConfigPatch {
   region?: string;
   nodeSize?: string;
   nodeCount?: number;
+  objectStore?:
+    | {
+        endpoint: string;
+        region: string;
+        bucket: string;
+        addressing: "virtualHost" | "path";
+        accessKey?: string;
+        secretKey?: string;
+      }
+    | null;
   edge?: FailoverEdgeView;
 }
 

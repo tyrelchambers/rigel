@@ -1,54 +1,44 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCheck } from "@awesome.me/kit-6050953220/icons/classic/solid";
+import { faTriangleExclamation } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ClusterConfigNote, clusterLocked } from "../ClusterConfigNote";
+import { FailoverDestinationWizard } from "@/panels/failover/destination/FailoverDestinationWizard";
 import {
+  useDeleteFailoverConfig,
   useFailoverConfig,
-  useSaveFailoverConfig,
-  type FailoverConfigPatch,
+  validateFailoverDestination,
+  type FailoverValidationView,
 } from "@/lib/api";
 
-const INPUT_CLASS =
-  "rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-3 py-2 text-sm text-foreground outline-none placeholder:text-[var(--fg-tertiary)] focus:border-primary disabled:cursor-not-allowed disabled:opacity-60";
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] py-2.5 last:border-b-0">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="font-mono text-2xs text-foreground">{value}</span>
+    </div>
+  );
+}
 
 export function FailoverTab() {
   const query = useFailoverConfig();
-  const save = useSaveFailoverConfig();
+  const remove = useDeleteFailoverConfig();
   const view = query.data;
   const locked = clusterLocked(view?.cluster);
+  const [wizard, setWizard] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [tested, setTested] = useState<FailoverValidationView | null>(null);
+  const [testing, setTesting] = useState(false);
 
-  const [region, setRegion] = useState("tor1");
-  const [nodeSize, setNodeSize] = useState("s-4vcpu-8gb");
-  const [nodeCount, setNodeCount] = useState("2");
-  const [token, setToken] = useState("");
-  const [edgeHost, setEdgeHost] = useState("");
-  const [edgeBackends, setEdgeBackends] = useState("");
-
-  useEffect(() => {
-    if (!view) return;
-    setRegion(view.region);
-    setNodeSize(view.nodeSize);
-    setNodeCount(String(view.nodeCount));
-    setEdgeHost(view.edge?.host ?? "");
-    setEdgeBackends((view.edge?.backends ?? []).map((b) => `${b.name} ${b.ip}`).join("\n"));
-    setToken("");
-  }, [view]);
-
-  function submit() {
-    const count = Number(nodeCount);
-    const patch: FailoverConfigPatch = {
-      region: region.trim(),
-      nodeSize: nodeSize.trim(),
-      nodeCount: Number.isInteger(count) && count >= 1 ? count : undefined,
-    };
-    if (token.trim()) patch.token = token.trim();
-    const backends = edgeBackends
-      .split("\n")
-      .map((line) => line.trim().split(/\s+/))
-      .flatMap(([name, ip]) => (name && ip ? [{ name, ip }] : []));
-    if (edgeHost.trim()) patch.edge = { host: edgeHost.trim(), backends };
-    save.mutate(patch);
+  async function test() {
+    setTesting(true);
+    setTested(null);
+    try {
+      setTested(await validateFailoverDestination({}));
+    } finally {
+      setTesting(false);
+    }
   }
 
   return (
@@ -62,108 +52,98 @@ export function FailoverTab() {
           </span>
         )}
       </div>
-      <p className="text-xs leading-snug text-muted-foreground">
-        Configured ahead of time so a storm-time failover is a click. Nothing is created in
-        DigitalOcean until you run one. v1 is DigitalOcean only, region default tor1.
-      </p>
+
       {view?.cluster && <ClusterConfigNote cluster={view.cluster} />}
 
-      <div className="grid grid-cols-2 gap-x-4 gap-y-3.5">
-        <label className="flex flex-col gap-1.5">
-          <span className="text-xs text-muted-foreground">Region</span>
-          <input
-            className={INPUT_CLASS}
-            value={region}
-            disabled={locked}
-            onChange={(e) => setRegion(e.target.value)}
-            placeholder="tor1"
-          />
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-xs text-muted-foreground">Node size</span>
-          <input
-            className={INPUT_CLASS}
-            value={nodeSize}
-            disabled={locked}
-            onChange={(e) => setNodeSize(e.target.value)}
-            placeholder="s-4vcpu-8gb"
-          />
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-xs text-muted-foreground">Node count</span>
-          <input
-            className={INPUT_CLASS}
-            value={nodeCount}
-            disabled={locked}
-            onChange={(e) => setNodeCount(e.target.value)}
-            placeholder="2"
-          />
-        </label>
-        <div className="flex flex-col justify-end">
-          <p className="text-2xs leading-snug text-[var(--fg-tertiary)]">
-            {nodeCount} × {nodeSize} in {region}. Billed by DigitalOcean only while a failover
-            cluster exists.
+      {!locked && !view?.configured && (
+        <>
+          <p className="text-xs leading-snug text-muted-foreground">
+            Set this up ahead of time so a storm-time failover is one click. Nothing is created in DigitalOcean until
+            you run one.
           </p>
-        </div>
-        <label className="flex flex-col gap-1.5 col-span-2">
-          <span className="text-xs text-muted-foreground">Edge host</span>
-          <input
-            className={INPUT_CLASS}
-            value={edgeHost}
-            disabled={locked}
-            onChange={(e) => setEdgeHost(e.target.value)}
-            placeholder="the proxy in front of your cluster, e.g. 203.0.113.9"
-          />
-          <span className="text-2xs leading-snug text-[var(--fg-tertiary)]">
-            Rigel never SSHes here. It only writes the change for you to paste. Leave it empty and a
-            failover just gives you the load balancer address instead.
-          </span>
-        </label>
-        <label className="flex flex-col gap-1.5 col-span-2">
-          <span className="text-xs text-muted-foreground">Edge backend servers</span>
-          <textarea
-            className={`${INPUT_CLASS} h-20 font-mono`}
-            value={edgeBackends}
-            disabled={locked}
-            onChange={(e) => setEdgeBackends(e.target.value)}
-            placeholder={"node1 10.0.0.1\nnode2 10.0.0.2"}
-          />
-          <span className="text-2xs leading-snug text-[var(--fg-tertiary)]">
-            One "name address" per line, matching the server lines in your proxy config. These are
-            what a failover rewrites, and what a restore puts back.
-          </span>
-        </label>
-        <label className="flex flex-col gap-1.5 col-span-2">
-          <span className="text-xs text-muted-foreground">
-            DigitalOcean API token{view?.tokenSet ? " (set)" : ""}
-          </span>
-          <input
-            className={INPUT_CLASS}
-            type="password"
-            autoComplete="off"
-            value={token}
-            disabled={locked}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder={view?.tokenSet ? "Leave blank to keep the stored token" : "dop_v1_..."}
-          />
-        </label>
-      </div>
-
-      {save.error && (
-        <p className="text-xs text-[var(--status-failed)]">{save.error.message}</p>
+          <div>
+            <Button size="sm" onClick={() => setWizard(true)}>
+              Set up a destination
+            </Button>
+          </div>
+        </>
       )}
 
-      <div className="flex items-center gap-2">
-        <Button type="button" size="sm" disabled={locked || save.isPending} onClick={submit}>
-          Save destination
-        </Button>
-        {save.isSuccess && (
-          <span className="flex items-center gap-1 text-xs text-[var(--status-running)]">
-            <FontAwesomeIcon icon={faCheck} className="size-3" />
-            Saved
-          </span>
-        )}
-      </div>
+      {!locked && view?.configured && (
+        <>
+          <div className="flex flex-col">
+            <Row label="Provider" value="DigitalOcean" />
+            <Row label="Region" value={view.region} />
+            <Row label="Cluster" value={`${view.nodeCount} × ${view.nodeSize}`} />
+            <Row
+              label="Object store"
+              value={view.objectStore ? `${view.objectStore.bucket} · ${view.objectStore.endpoint}` : "Not set"}
+            />
+            <Row
+              label="Edge"
+              value={view.edge ? `${view.edge.host} · ${view.edge.backends.length} servers` : "Not set"}
+            />
+            <Row label="API token" value={view.tokenSet ? "stored" : "not set"} />
+          </div>
+
+          {view.objectStore && (
+            <p className="flex items-start gap-2 text-xs text-[var(--status-pending)]">
+              <FontAwesomeIcon icon={faTriangleExclamation} aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+              <span>
+                A store inside the cluster you would be failing away from goes down with the building. Test the
+                connection to check where this one lives.
+              </span>
+            </p>
+          )}
+
+          {tested && (
+            <p className={`text-xs ${tested.ok ? "text-[var(--status-running)]" : "text-[var(--status-failed)]"}`}>
+              {tested.api.ok
+                ? tested.objectStore && !tested.objectStore.ok
+                  ? tested.objectStore.error
+                  : `Signed in as ${tested.api.email || "your account"}.`
+                : tested.api.error}
+            </p>
+          )}
+          {remove.error && <p className="text-xs text-[var(--status-failed)]">{remove.error.message}</p>}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" onClick={() => setWizard(true)}>
+              Edit destination
+            </Button>
+            <Button size="sm" variant="outline" disabled={testing} onClick={test}>
+              {testing ? "Checking…" : "Test connection"}
+            </Button>
+            <Button size="sm" variant="destructive" onClick={() => setConfirmRemove(true)}>
+              Remove destination
+            </Button>
+          </div>
+        </>
+      )}
+
+      <FailoverDestinationWizard open={wizard} onOpenChange={setWizard} view={view} />
+
+      <Dialog open={confirmRemove} onOpenChange={setConfirmRemove}>
+        <DialogContent className="w-[420px] p-5">
+          <DialogTitle className="text-sm font-semibold">Remove this destination?</DialogTitle>
+          <p className="text-xs text-muted-foreground">
+            A failover will have nowhere to go until you set one up again. Nothing in DigitalOcean is touched.
+          </p>
+          <div className="mt-3 flex justify-end gap-2">
+            <Button size="sm" variant="outline" onClick={() => setConfirmRemove(false)}>
+              Keep it
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={remove.isPending}
+              onClick={() => remove.mutate(undefined, { onSuccess: () => setConfirmRemove(false) })}
+            >
+              Remove
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { PanelHeader } from "@/panels/components/PanelHeader";
 import { ClusterConfigNote, clusterLocked } from "@/panels/settings/ClusterConfigNote";
 import { FailoverSelect } from "./FailoverSelect";
 import { FailoverRunning } from "./FailoverRunning";
+import { FailoverDestinationWizard } from "./destination/FailoverDestinationWizard";
 import {
   useFailoverConfig,
   useFailoverEdgeConfirm,
@@ -30,6 +30,7 @@ export default function FailoverPanel() {
   const teardown = useFailoverTeardown();
   const [rewrites, setRewrites] = useState<Array<{ rule: string; to: unknown }>>([]);
   const [selection, setSelection] = useState<unknown>(null);
+  const [wizard, setWizard] = useState(false);
   const plan = planMut.data;
   const active = live.data?.failedOverTo;
 
@@ -58,12 +59,10 @@ export default function FailoverPanel() {
           <p className="text-sm text-muted-foreground">
             Configure a DigitalOcean destination first. Nothing is created until you run a failover.
           </p>
-          <Link
-            to="/settings?tab=failover"
-            className="inline-flex h-7 items-center rounded-md border border-[var(--border-strong)] bg-[var(--surface-elevated)] px-3 text-2xs font-bold"
-          >
-            Open Failover settings
-          </Link>
+          <Button size="sm" onClick={() => setWizard(true)}>
+            Set up a destination
+          </Button>
+          <FailoverDestinationWizard open={wizard} onOpenChange={setWizard} view={dest.data} />
         </div>
       </div>
     );

@@ -34,6 +34,10 @@ vi.mock("@/lib/api", () => ({
   useFailoverScaleHome: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useFailoverRestore: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useFailoverTeardown: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+  useDeleteFailoverConfig: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+  useSaveFailoverConfig: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+  validateFailoverDestination: vi.fn(async () => ({ ok: true, api: { ok: true, email: "me@example.com" } })),
+  cloudCheck: vi.fn(async () => ({ cliInstalled: true, extraBinariesInstalled: true, authenticated: true })),
 }));
 
 function renderPanel() {
@@ -86,10 +90,10 @@ describe("FailoverPanel", () => {
     expect(screen.getByText("Provision DOKS")).toBeInTheDocument();
   });
 
-  it("sends an unconfigured cluster to Settings", () => {
+  it("offers the wizard when no destination is configured", () => {
     renderPanel();
     expect(screen.getByText(/configure a digitalocean destination first/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /open failover settings/i })).toHaveAttribute("href", "/settings?tab=failover");
+    expect(screen.getByRole("button", { name: /set up a destination/i })).toBeInTheDocument();
   });
 
   it("shows the from and to of every connection rewrite", () => {
