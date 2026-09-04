@@ -133,6 +133,8 @@ export function startFailoverJob(
       job.error = (err as Error)?.message ?? String(err);
       const blockers = (err as { blockers?: unknown }).blockers;
       if (blockers) (job as FailoverJob & { blockers?: unknown }).blockers = blockers;
+      const provisioned = (err as { provisioned?: unknown }).provisioned;
+      if (provisioned) (job as FailoverJob & { provisioned?: unknown }).provisioned = provisioned;
       job.steps = job.steps.map((s) =>
         s.status === "running" ? { ...s, status: "failed", error: job.error } : s,
       );

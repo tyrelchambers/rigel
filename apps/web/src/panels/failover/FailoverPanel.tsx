@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { PanelHeader } from "@/panels/components/PanelHeader";
+import { ClusterConfigNote, clusterLocked } from "@/panels/settings/ClusterConfigNote";
 import { FailoverSelect } from "./FailoverSelect";
 import { FailoverRunning } from "./FailoverRunning";
 import {
@@ -34,6 +35,19 @@ export default function FailoverPanel() {
 
   function accept(rule: string, to: unknown) {
     setRewrites((prev) => [...prev.filter((r) => r.rule !== rule), { rule, to }]);
+  }
+
+  // An unreachable cluster is not an unconfigured one. Saying "not configured"
+  // here would invite re-entering credentials that are stored and fine.
+  if (dest.data && clusterLocked(dest.data.cluster)) {
+    return (
+      <div className="flex h-full flex-col">
+        <PanelHeader title="Failover" subtitle="Stand a copy up on DigitalOcean" />
+        <div className="flex flex-1 flex-col items-start gap-3 p-5">
+          <ClusterConfigNote cluster={dest.data.cluster} />
+        </div>
+      </div>
+    );
   }
 
   if (dest.data && !dest.data.configured) {

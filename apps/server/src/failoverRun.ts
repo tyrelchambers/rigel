@@ -279,8 +279,9 @@ export async function runFailover(
   const report: FailoverReporter = deps.report ?? (() => {});
   const step = (id: string, label: string, status: Parameters<FailoverReporter>[0]["status"], detail?: string) =>
     report({ id, label, status, detail });
-  const dest = await readFailoverDestination(sourceContext);
-  if (!dest) throw new Error("No failover destination is configured");
+  const maybeDest = await readFailoverDestination(sourceContext);
+  if (!maybeDest) throw new Error("No failover destination is configured");
+  const dest = maybeDest;
   const plan = await planFailover(sourceContext, selection, acceptedRewrites, dest.nodeCount, deps.get);
   if (plan.blockers.length > 0) {
     const err = new Error("Failover is blocked until findings are accepted") as Error & { blockers: PortabilityFinding[] };
@@ -305,14 +306,39 @@ export async function runFailover(
   } else {
     step("provision", "Provision DOKS", "running", `${dest.region} · ${dest.nodeCount} × ${dest.nodeSize}`);
     const created = await provision(dest);
+    // Recorded before anything else can throw: from here on a failure leaves a
+    // cluster running, and the only way back to it is its id.
     remoteContext = created.context;
     clusterId = created.id;
     step("provision", "Provision DOKS", "done", created.context);
-    step("stack", "Install stack", "running", "cert-manager, cloudnative-pg, traefik");
-    await stack(remoteContext);
-    step("stack", "Install stack", "done", "cert-manager, cloudnative-pg, traefik");
   }
 
+  try {
+    if (!existing.failedOverTo?.context) {
+      step("stack", "Install stack", "running", "cert-manager, cloudnative-pg, traefik");
+      await stack(remoteContext!);
+      step("stack", "Install stack", "done", "cert-manager, cloudnative-pg, traefik");
+    }
+    return await finishRun();
+  } catch (err) {
+    // The cluster exists and is billing. Record it before the error leaves here,
+    // or the only trace of it is a DigitalOcean invoice.
+    if (clusterId && remoteContext) {
+      const at = new Date().toISOString();
+      await writeUserConfig(sourceContext, () => ({
+        [FAILOVER_STATE_KEY]: serializeFailoverState({
+          leftBehind: { clusterId, context: remoteContext!, at, error: (err as Error).message },
+        }),
+      })).catch(() => {
+        /* a run that cannot record its own wreckage still has to report it */
+      });
+      (err as Error & { provisioned?: unknown }).provisioned = { clusterId, context: remoteContext };
+    }
+    throw err;
+  }
+
+  async function finishRun(): Promise<FailoverRunResult> {
+  const remote = remoteContext!;
   const rewriteCount = plan.endpointRewrites.length;
   step(
     "rewrite",
@@ -332,12 +358,12 @@ export async function runFailover(
 
   step("apply", "Apply closure", "running", `${plan.members.length} objects`);
   const bundle = yamls.join("\n---\n");
-  const applied = await apply(remoteContext, bundle, false, "failover");
+  const applied = await apply(remote, bundle, false, "failover");
   step("apply", "Apply closure", "done", `${plan.members.length} objects`);
 
   step("loadBalancer", "Read load balancer", "running");
   let lbAddress = "";
-  const svc = items(await get(remoteContext, ["get", "svc", "-n", "traefik", "-o", "json"]));
+  const svc = items(await get(remote, ["get", "svc", "-n", "traefik", "-o", "json"]));
   for (const s of svc) {
     const ing = (s as { status?: { loadBalancer?: { ingress?: Array<{ ip?: string; hostname?: string }> } } })
       .status?.loadBalancer?.ingress?.[0];
@@ -348,7 +374,7 @@ export async function runFailover(
   const at = new Date().toISOString();
   const state: FailoverState = {
     failedOverTo: {
-      context: remoteContext,
+      context: remote,
       clusterId,
       at,
       batchId: applied.batchId ?? "",
@@ -363,7 +389,7 @@ export async function runFailover(
     [FAILOVER_CONFIG_KEY]: serializeFailoverDestination(dest),
     [FAILOVER_STATE_KEY]: serializeFailoverState(state),
   }));
-  await writeUserConfig(remoteContext, () => ({
+  await writeUserConfig(remote, () => ({
     [FAILOVER_STATE_KEY]: serializeFailoverState({
       failoverCopyOf: { context: sourceContext ?? "", batchId: applied.batchId ?? "" },
     }),
@@ -371,20 +397,21 @@ export async function runFailover(
 
   const data = await copyData({
     fromContext: sourceContext,
-    toContext: remoteContext,
+    toContext: remote,
     plans: plan.plans,
     storageClass,
     onStep: report,
   });
 
   return {
-    context: remoteContext,
+    context: remote,
     lbAddress,
     edgeChange: edgeChangeFor(lbAddress || "REPLACE_ME", dest.edge),
     batchId: applied.batchId,
     members: plan.members,
     data,
   };
+  }
 }
 
 export async function readFailoverLiveState(context: string | null): Promise<FailoverState> {

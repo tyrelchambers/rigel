@@ -1,3 +1,4 @@
+import { detectOS, pkgLabel } from "./installHelp";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -37,28 +38,6 @@ type Phase = "checking" | "needs-cli" | "needs-extra" | "needs-login" | "needs-p
 type ParamField = { spec: ParamSpec; options: string[]; value: string; fromDefault: boolean };
 
 /** Detect the current OS from the user agent. */
-function detectOS(): "macos" | "linux" | "windows" | null {
-  if (typeof navigator === "undefined") return null;
-  const ua = navigator.userAgent;
-  if (/Mac/i.test(ua)) return "macos";
-  if (/Win/i.test(ua)) return "windows";
-  if (/Linux/i.test(ua)) return "linux";
-  return null;
-}
-
-/** Map a command's first token to a human-readable package manager label. */
-function pkgLabel(command: string): string {
-  const first = command.trim().split(/\s+/)[0] ?? "";
-  const map: Record<string, string> = {
-    brew: "Homebrew",
-    snap: "Snap",
-    scoop: "Scoop",
-    apt: "APT",
-    choco: "Chocolatey",
-    winget: "winget",
-  };
-  return map[first] ?? first;
-}
 
 /** Split a command at a `#` into { primary, alt }. */
 function splitCommand(command: string): { primary: string; alt: string | null } {

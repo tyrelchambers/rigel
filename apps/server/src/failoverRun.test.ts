@@ -397,3 +397,46 @@ describe("a cluster read that fails", () => {
     expect(provisioned).toBe(false);
   });
 });
+
+
+describe("a run that dies after provisioning", () => {
+  it("records the cluster it left running and names it on the error", async () => {
+    await writeFailoverPatch(CTX, { token: "t" }, { validateApi: async () => ({ api: { ok: true as const, email: "e" } }) });
+    let err: (Error & { provisioned?: unknown }) | undefined;
+    try {
+      await runFailover(
+        CTX,
+        { kind: "namespace", namespace: "default" },
+        [{ rule: "backupTargetIsInsideSourceCluster", to: "pgDump" }],
+        {
+          get: getJson,
+          provision: async () => ({ id: "abc-123", name: "n", context: "do-tor1-n" }),
+          stack: async () => {
+            throw new Error("helm install timed out");
+          },
+        },
+      );
+    } catch (e) {
+      err = e as Error & { provisioned?: unknown };
+    }
+
+    expect(err?.message).toMatch(/helm install timed out/);
+    expect(err?.provisioned).toEqual({ clusterId: "abc-123", context: "do-tor1-n" });
+
+    const live = await readFailoverLiveState(CTX);
+    expect(live.leftBehind).toMatchObject({ clusterId: "abc-123", error: "helm install timed out" });
+  });
+
+  it("records nothing when it fails before a cluster exists", async () => {
+    await writeFailoverPatch(CTX, { token: "t" }, { validateApi: async () => ({ api: { ok: true as const, email: "e" } }) });
+    await expect(
+      runFailover(CTX, { kind: "namespace", namespace: "default" }, [], {
+        get: getJson,
+        provision: async () => {
+          throw new Error("droplet API refused");
+        },
+      }),
+    ).rejects.toThrow();
+    expect((await readFailoverLiveState(CTX)).leftBehind).toBeUndefined();
+  });
+});
