@@ -1662,6 +1662,15 @@ export interface FailoverConfigView {
   cluster: ClusterConfigStatus;
 }
 
+export interface FailoverValidationView {
+  ok: boolean;
+  api: { ok: true; email: string } | { ok: false; status?: number; error: string };
+  options?: { regions: Array<{ slug: string; name: string }>; sizes: Array<{ slug: string; name: string }> };
+  objectStore?:
+    | { ok: true; bucketExists: boolean; insideSourceCluster: boolean }
+    | { ok: false; code?: string; error: string };
+}
+
 export interface FailoverObjectStoreView {
   endpoint: string;
   region: string;
@@ -1682,6 +1691,35 @@ export interface FailoverConfigPatch {
   nodeSize?: string;
   nodeCount?: number;
   edge?: FailoverEdgeView;
+}
+
+/** Proves a destination without saving it. The wizard owns the result, so this
+ *  is a plain call rather than a query. */
+export async function validateFailoverDestination(
+  patch: FailoverConfigPatch,
+): Promise<FailoverValidationView> {
+  const res = await apiFetch("/api/failover/validate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  const json = (await res.json().catch(() => ({}))) as FailoverValidationView & { error?: string };
+  if (!res.ok) throw new Error(json.error ?? "could not check this destination");
+  return json;
+}
+
+export function useDeleteFailoverConfig() {
+  const qc = useQueryClient();
+  const context = useCluster((s) => s.activeContext);
+  return useMutation<FailoverConfigView, Error, void>({
+    mutationFn: async () => {
+      const res = await apiFetch("/api/failover/config", { method: "DELETE" });
+      const json = (await res.json().catch(() => ({}))) as FailoverConfigView & { error?: string };
+      if (!res.ok) throw new Error(json.error ?? "could not remove this destination");
+      return json;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["failover-config", context] }),
+  });
 }
 
 export function useFailoverConfig() {

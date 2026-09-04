@@ -121,7 +121,7 @@ describe("planFailover endpoint rewrites", () => {
 
 describe("runFailover", () => {
   it("does not provision when blockers remain", async () => {
-    await writeFailoverPatch(CTX, { token: "t", nodeCount: 1 });
+    await writeFailoverPatch(CTX, { token: "t", nodeCount: 1 }, { validateApi: async () => ({ api: { ok: true as const, email: "me@example.com" } }) });
     let provisioned = false;
     await expect(
       runFailover(CTX, { kind: "namespace", namespace: "default" }, [], {
@@ -136,7 +136,7 @@ describe("runFailover", () => {
   });
 
   it("copies planned data after apply and keeps dump bytes out of the result", async () => {
-    await writeFailoverPatch(CTX, { token: "t", nodeCount: 1 });
+    await writeFailoverPatch(CTX, { token: "t", nodeCount: 1 }, { validateApi: async () => ({ api: { ok: true as const, email: "me@example.com" } }) });
     let copiedFrom: string | null | undefined;
     let copiedTo: string | null | undefined;
     const result = await runFailover(
@@ -180,7 +180,7 @@ describe("runFailover", () => {
 
 describe("scaleHome", () => {
   it("rejects until the edge cutover is confirmed", async () => {
-    await writeFailoverPatch(CTX, { token: "t", });
+    await writeFailoverPatch(CTX, { token: "t", }, { validateApi: async () => ({ api: { ok: true as const, email: "me@example.com" } }) });
     const { writeUserConfig } = await import("./clusterConfigStore");
     const { FAILOVER_STATE_KEY } = await import("@rigel/k8s/src/userConfig");
     await writeUserConfig(CTX, () => ({
@@ -219,7 +219,7 @@ describe("restoreHome", () => {
   };
 
   async function seed() {
-    await writeFailoverPatch(CTX, { token: "t", });
+    await writeFailoverPatch(CTX, { token: "t", }, { validateApi: async () => ({ api: { ok: true as const, email: "me@example.com" } }) });
     const { writeUserConfig } = await import("./clusterConfigStore");
     const { FAILOVER_STATE_KEY } = await import("@rigel/k8s/src/userConfig");
     await writeUserConfig(CTX, () => ({ [FAILOVER_STATE_KEY]: JSON.stringify(stateBlob) }));
@@ -291,7 +291,7 @@ describe("restoreHome teardown", () => {
   };
 
   async function seed() {
-    await writeFailoverPatch(CTX, { token: "t", nodeCount: 1 });
+    await writeFailoverPatch(CTX, { token: "t", nodeCount: 1 }, { validateApi: async () => ({ api: { ok: true as const, email: "me@example.com" } }) });
     const { writeUserConfig } = await import("./clusterConfigStore");
     const { FAILOVER_STATE_KEY } = await import("@rigel/k8s/src/userConfig");
     await writeUserConfig(CTX, () => ({ [FAILOVER_STATE_KEY]: JSON.stringify(state) }));
@@ -341,12 +341,12 @@ describe("restoreHome teardown", () => {
 
 describe("teardownLeftBehind", () => {
   it("refuses when nothing was left behind", async () => {
-    await writeFailoverPatch(CTX, { token: "t", nodeCount: 1 });
+    await writeFailoverPatch(CTX, { token: "t", nodeCount: 1 }, { validateApi: async () => ({ api: { ok: true as const, email: "me@example.com" } }) });
     expect(await teardownLeftBehind(CTX)).toEqual({ ok: false, error: "No cluster is recorded as left behind" });
   });
 
   it("destroys the remembered cluster and clears the state", async () => {
-    await writeFailoverPatch(CTX, { token: "t", nodeCount: 1 });
+    await writeFailoverPatch(CTX, { token: "t", nodeCount: 1 }, { validateApi: async () => ({ api: { ok: true as const, email: "me@example.com" } }) });
     const { writeUserConfig } = await import("./clusterConfigStore");
     const { FAILOVER_STATE_KEY } = await import("@rigel/k8s/src/userConfig");
     await writeUserConfig(CTX, () => ({
@@ -360,7 +360,7 @@ describe("teardownLeftBehind", () => {
   });
 
   it("keeps the record when the retry also fails", async () => {
-    await writeFailoverPatch(CTX, { token: "t", nodeCount: 1 });
+    await writeFailoverPatch(CTX, { token: "t", nodeCount: 1 }, { validateApi: async () => ({ api: { ok: true as const, email: "me@example.com" } }) });
     const { writeUserConfig } = await import("./clusterConfigStore");
     const { FAILOVER_STATE_KEY } = await import("@rigel/k8s/src/userConfig");
     await writeUserConfig(CTX, () => ({
@@ -369,5 +369,31 @@ describe("teardownLeftBehind", () => {
     const out = await teardownLeftBehind(CTX, { destroy: async () => { throw new Error("still refusing"); } });
     expect(out).toEqual({ ok: false, error: "still refusing" });
     expect((await readFailoverLiveState(CTX)).leftBehind?.clusterId).toBe("abc-123");
+  });
+});
+
+
+describe("a cluster read that fails", () => {
+  const boom = () => Promise.reject(new Error("Unable to connect to the server: dial tcp: i/o timeout"));
+
+  it("makes the plan fail instead of returning an empty closure with no blockers", async () => {
+    await expect(
+      planFailover(CTX, { kind: "namespace", namespace: "default" }, [], 1, boom),
+    ).rejects.toThrow(/i\/o timeout/);
+  });
+
+  it("stops a run before it provisions anything", async () => {
+    await writeFailoverPatch(CTX, { token: "t" }, { validateApi: async () => ({ api: { ok: true as const, email: "e" } }) });
+    let provisioned = false;
+    await expect(
+      runFailover(CTX, { kind: "namespace", namespace: "default" }, [], {
+        get: boom,
+        provision: async () => {
+          provisioned = true;
+          return { id: "x", name: "n", context: "do-x" };
+        },
+      }),
+    ).rejects.toThrow();
+    expect(provisioned).toBe(false);
   });
 });

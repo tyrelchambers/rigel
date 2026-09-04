@@ -33,13 +33,21 @@ import { failoverOpsFor, type FailoverProviderOps } from "./failoverProviders";
 
 type GetJson = (context: string | null, args: string[]) => Promise<unknown>;
 
+/**
+ * A read that fails is not an empty cluster. Swallowing it planned a closure of
+ * nothing, with no blockers, and left Run enabled: the run would then provision
+ * a cluster and apply an empty bundle to it.
+ */
 const defaultGetJson: GetJson = async (context, args) => {
   const res = await kubectl(context, args);
-  if (res.code !== 0) return { items: [] };
+  if (res.code !== 0) {
+    const what = args.slice(0, 2).join(" ");
+    throw new Error(res.stderr.trim() || `kubectl ${what} failed`);
+  }
   try {
     return JSON.parse(res.stdout);
   } catch {
-    return { items: [] };
+    throw new Error(`kubectl ${args.slice(0, 2).join(" ")} returned output that is not JSON`);
   }
 };
 

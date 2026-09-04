@@ -59,7 +59,14 @@ import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusM
 import { handleUpdates, type UpdatesRequest } from "./updates";
 import { chatConfig, setClaudeToken } from "./chatConfig";
 import { voiceStatus, voiceEnabled, setVoiceConfig, voiceConfig, missingVoiceFields } from "./voiceConfig";
-import { failoverConfigView, failoverPatchFromBody, readFailoverDestination, writeFailoverPatch } from "./failoverConfig";
+import {
+  deleteFailoverDestination,
+  failoverConfigView,
+  failoverPatchFromBody,
+  readFailoverDestination,
+  validateFailoverPatch,
+  writeFailoverPatch,
+} from "./failoverConfig";
 import {
   confirmEdge,
   planFailover,
@@ -632,6 +639,23 @@ async function handler(req: Request): Promise<Response> {
       }
     }
 
+    if (url.pathname === "/api/failover/config" && req.method === "DELETE") {
+      try {
+        return Response.json(await deleteFailoverDestination(context));
+      } catch (err) {
+        const status = (err as { status?: number }).status === 409 ? 409 : 503;
+        return Response.json({ error: errorText(err) }, { status });
+      }
+    }
+    // Proves a destination before it is stored, so a bad token is found now
+    // rather than during the storm it was configured for.
+    if (url.pathname === "/api/failover/validate" && req.method === "POST") {
+      let body: unknown;
+      try { body = await req.json(); }
+      catch { return Response.json({ error: "invalid JSON body" }, { status: 400 }); }
+      return Response.json(await validateFailoverPatch(context, failoverPatchFromBody(body)));
+    }
+
     if (url.pathname === "/api/failover/state" && req.method === "GET") {
       return Response.json(await readFailoverLiveState(context));
     }
@@ -642,8 +666,12 @@ async function handler(req: Request): Promise<Response> {
       const selection = selectionFromBody(body);
       if (!selection) return Response.json({ error: "selection required" }, { status: 422 });
       const dest = await readFailoverDestination(context);
-      const plan = await planFailover(context, selection, rewritesFromBody(body), dest?.nodeCount ?? 1);
-      return Response.json(plan);
+      try {
+        const plan = await planFailover(context, selection, rewritesFromBody(body), dest?.nodeCount ?? 1);
+        return Response.json(plan);
+      } catch (err) {
+        return Response.json({ error: errorText(err) }, { status: 503 });
+      }
     }
     // POST /api/failover/run starts a job and returns at once. Provisioning,
     // dumping and restoring take many minutes, which is longer than any request
