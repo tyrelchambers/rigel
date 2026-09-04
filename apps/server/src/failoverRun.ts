@@ -29,18 +29,7 @@ import { FAILOVER_CONFIG_KEY, FAILOVER_STATE_KEY } from "@rigel/k8s/src/userConf
 import { applyManifest } from "./install";
 import { readUserConfig, writeUserConfig } from "./clusterConfigStore";
 import { readFailoverDestination } from "./failoverConfig";
-import { destroyDoks, installFailoverStack, provisionDoks } from "./failoverProvision";
-
-export const DOKS_PROFILE = (nodeCount: number): TargetProfile => ({
-  storageClasses: ["do-block-storage"],
-  defaultStorageClass: "do-block-storage",
-  ingressClasses: ["traefik"],
-  loadBalancerKind: "LoadBalancer",
-  hasCertManager: true,
-  hasCnpg: true,
-  hasTraefikCrds: true,
-  nodeCount,
-});
+import { failoverOpsFor, type FailoverProviderOps } from "./failoverProviders";
 
 type GetJson = (context: string | null, args: string[]) => Promise<unknown>;
 
@@ -153,7 +142,7 @@ export async function planFailover(
   };
   const members = failoverClosure(workloads, services, ingresses, extra);
   const objects: ClusterObject[] = [...workloads, ...services, ...ingresses];
-  const findings = auditPortability(objects, DOKS_PROFILE(nodeCount));
+  const findings = auditPortability(objects, failoverOpsFor("digitalocean").profile(nodeCount));
   const clusters = await listKind(get, context, "clusters.postgresql.cnpg.io", "*");
   const objectStores = await listKind(get, context, "objectstores.barmancloud.cnpg.io", "*");
   const pvcs = await listKind(get, context, "pvc", "*");
@@ -273,8 +262,8 @@ export async function runFailover(
   deps: {
     get?: GetJson;
     apply?: typeof applyManifest;
-    provision?: typeof provisionDoks;
-    stack?: typeof installFailoverStack;
+    provision?: FailoverProviderOps["provision"];
+    stack?: FailoverProviderOps["installStack"];
     copyData?: typeof copyDataPlans;
     report?: FailoverReporter;
   } = {},
@@ -293,10 +282,11 @@ export async function runFailover(
 
   const get = deps.get ?? defaultGetJson;
   const apply = deps.apply ?? applyManifest;
-  const provision = deps.provision ?? provisionDoks;
-  const stack = deps.stack ?? installFailoverStack;
+  const ops = failoverOpsFor(dest.provider);
+  const provision = deps.provision ?? ops.provision;
+  const stack = deps.stack ?? ops.installStack;
   const copyData = deps.copyData ?? copyDataPlans;
-  const storageClass = DOKS_PROFILE(dest.nodeCount).defaultStorageClass ?? "do-block-storage";
+  const storageClass = failoverOpsFor(dest.provider).profile(dest.nodeCount).defaultStorageClass ?? "do-block-storage";
 
   const existing = parseFailoverState((await readUserConfig(sourceContext)).data[FAILOVER_STATE_KEY] ?? "");
   let remoteContext = existing.failedOverTo?.context;
@@ -426,7 +416,7 @@ export async function restoreHome(
   deps: {
     kubectl?: typeof kubectl;
     copyData?: typeof copyDataPlans;
-    destroy?: typeof destroyDoks;
+    destroy?: FailoverProviderOps["destroy"];
     report?: FailoverReporter;
   } = {},
 ): Promise<
@@ -435,7 +425,7 @@ export async function restoreHome(
 > {
   const kubectlRun = deps.kubectl ?? kubectl;
   const copyData = deps.copyData ?? copyDataPlans;
-  const destroy = deps.destroy ?? destroyDoks;
+  const destroy = deps.destroy ?? ((d, id) => failoverOpsFor(d.provider).destroy(d, id));
   const report: FailoverReporter = deps.report ?? (() => {});
   const step = (id: string, label: string, status: Parameters<FailoverReporter>[0]["status"], detail?: string, error?: string) =>
     report({ id, label, status, detail, error });
@@ -459,7 +449,7 @@ export async function restoreHome(
     fromContext: remote,
     toContext: context,
     plans,
-    storageClass: DOKS_PROFILE(dest?.nodeCount ?? 1).defaultStorageClass ?? "do-block-storage",
+    storageClass: failoverOpsFor(dest?.provider ?? "digitalocean").profile(dest?.nodeCount ?? 1).defaultStorageClass ?? "do-block-storage",
     onStep: report,
   });
 
@@ -496,9 +486,9 @@ export async function restoreHome(
 /** Retries a teardown that failed during a restore, so the bill actually stops. */
 export async function teardownLeftBehind(
   context: string | null,
-  deps: { destroy?: typeof destroyDoks } = {},
+  deps: { destroy?: FailoverProviderOps["destroy"] } = {},
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const destroy = deps.destroy ?? destroyDoks;
+  const destroy = deps.destroy ?? ((d, id) => failoverOpsFor(d.provider).destroy(d, id));
   const state = await readFailoverLiveState(context);
   if (!state.leftBehind) return { ok: false, error: "No cluster is recorded as left behind" };
   const dest = await readFailoverDestination(context);

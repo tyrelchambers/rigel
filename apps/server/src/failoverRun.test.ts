@@ -354,7 +354,7 @@ describe("teardownLeftBehind", () => {
     }));
 
     let destroyed = "";
-    expect(await teardownLeftBehind(CTX, { destroy: async (_d, id) => { destroyed = id; } })).toEqual({ ok: true });
+    expect(await teardownLeftBehind(CTX, { destroy: async (_d: unknown, id: string) => { destroyed = id; } })).toEqual({ ok: true });
     expect(destroyed).toBe("abc-123");
     expect((await readFailoverLiveState(CTX)).leftBehind).toBeUndefined();
   });

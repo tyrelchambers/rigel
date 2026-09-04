@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FailoverDestination } from "@rigel/k8s/src/failover/destination";
-import { createClusterArgs, failoverClusterName, provisionDoks, type Run } from "./failoverProvision";
+import { createClusterArgs, failoverClusterName, provisionDoks, type Run } from "./digitalocean";
 
 const dest: FailoverDestination = {
   provider: "digitalocean",

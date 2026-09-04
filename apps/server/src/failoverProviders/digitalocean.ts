@@ -1,6 +1,7 @@
 import { runProcess, type RunResult } from "@rigel/k8s/src/run";
-import { installHelm } from "./install";
-import type { FailoverDestination } from "@rigel/k8s/src/failover/destination";
+import { installHelm } from "../install";
+import type { FailoverDestination, TargetProfile } from "@rigel/k8s/src/failover/types";
+import type { FailoverValidation } from "@rigel/k8s/src/failover/validation";
 
 export type Run = (bin: string, args: string[], opts?: { env?: NodeJS.ProcessEnv }) => Promise<RunResult>;
 
@@ -109,3 +110,65 @@ export async function destroyDoks(
   });
   if (res.code !== 0) throw new Error(res.stderr.trim() || "doctl kubernetes cluster delete failed");
 }
+
+
+const API = "https://api.digitalocean.com/v2";
+const TIMEOUT_MS = 10_000;
+
+export type FetchFn = typeof fetch;
+
+/** The shape DOKS accepts for this account, straight from the API. A static
+ *  list would go stale and fail at `doctl create` time instead of here. */
+export async function validateDigitalOcean(
+  dest: Pick<FailoverDestination, "token">,
+  deps: { fetch?: FetchFn } = {},
+): Promise<Pick<FailoverValidation, "api" | "options">> {
+  const call = deps.fetch ?? fetch;
+  const headers = { Authorization: `Bearer ${dest.token}` };
+
+  let account: Response;
+  try {
+    account = await call(`${API}/account`, { headers, signal: AbortSignal.timeout(TIMEOUT_MS) });
+  } catch (err) {
+    return { api: { ok: false, error: `Could not reach api.digitalocean.com: ${(err as Error).message}` } };
+  }
+  if (!account.ok) {
+    return {
+      api: {
+        ok: false,
+        status: account.status,
+        error:
+          account.status === 401
+            ? "DigitalOcean rejected this token. Create a token with read, create and delete access to Kubernetes and try again."
+            : `DigitalOcean answered ${account.status}.`,
+      },
+    };
+  }
+  const email = ((await account.json().catch(() => ({}))) as { account?: { email?: string } }).account?.email ?? "";
+
+  let options: FailoverValidation["options"];
+  try {
+    const res = await call(`${API}/kubernetes/options`, { headers, signal: AbortSignal.timeout(TIMEOUT_MS) });
+    if (res.ok) {
+      const body = (await res.json()) as {
+        options?: { regions?: Array<{ slug: string; name: string }>; sizes?: Array<{ slug: string; name: string }> };
+      };
+      options = { regions: body.options?.regions ?? [], sizes: body.options?.sizes ?? [] };
+    }
+  } catch {
+    /* the token is good; a missing catalogue only leaves the dropdowns empty */
+  }
+
+  return { api: { ok: true, email }, ...(options ? { options } : {}) };
+}
+
+export const DOKS_PROFILE = (nodeCount: number): TargetProfile => ({
+  storageClasses: ["do-block-storage"],
+  defaultStorageClass: "do-block-storage",
+  ingressClasses: ["traefik"],
+  loadBalancerKind: "LoadBalancer",
+  hasCertManager: true,
+  hasCnpg: true,
+  hasTraefikCrds: true,
+  nodeCount,
+});

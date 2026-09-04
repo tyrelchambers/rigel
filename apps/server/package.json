@@ -5,11 +5,13 @@
   "scripts": {
     "postinstall": "node scripts/fix-node-pty.mjs",
     "dev": "tsx watch src/index.ts",
-    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --external:node-pty --outfile=dist/server.mjs",
+    "build": "tsc --noEmit && esbuild src/index.ts --bundle --platform=node --format=esm --external:node-pty --outfile=dist/server.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1126.0",
+    "@aws-sdk/lib-storage": "^3.1126.0",
     "@hono/node-server": "latest",
     "@rigel/catalog": "workspace:*",
     "@rigel/cloud-connect": "workspace:*",
