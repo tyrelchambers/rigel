@@ -33,14 +33,12 @@ describe("failoverConfig", () => {
   it("round-trips a destination and never returns secret values", async () => {
     const view = await writeFailoverPatch(CTX, {
       token: "dop_v1_abc",
-      spacesKey: "KEY",
-      spacesSecret: "SECRET",
       region: "tor1",
       nodeCount: 2,
     });
     expect(view.configured).toBe(true);
     expect(view.tokenSet).toBe(true);
-    expect(view.spacesKeySet).toBe(true);
+    expect(view.tokenSet).toBe(true);
     expect(view.region).toBe("tor1");
     expect(JSON.stringify(view)).not.toContain("dop_v1_abc");
     expect(JSON.stringify(view)).not.toContain("SECRET");
@@ -49,8 +47,6 @@ describe("failoverConfig", () => {
   it("keeps stored secrets when a later patch omits them", async () => {
     await writeFailoverPatch(CTX, {
       token: "dop_v1_abc",
-      spacesKey: "KEY",
-      spacesSecret: "SECRET",
     });
     const view = await writeFailoverPatch(CTX, { region: "nyc3", nodeCount: 3 });
     expect(view.region).toBe("nyc3");
@@ -61,15 +57,17 @@ describe("failoverConfig", () => {
   it("keeps one cluster's destination out of another", async () => {
     await writeFailoverPatch(CTX, {
       token: "dop_v1_abc",
-      spacesKey: "KEY",
-      spacesSecret: "SECRET",
     });
     expect((await failoverConfigView("other-cluster")).configured).toBe(false);
   });
 
-  it("rejects a first save that is missing the Spaces pair", async () => {
-    await expect(writeFailoverPatch(CTX, { token: "dop_v1_abc", region: "tor1" })).rejects.toThrow(
-      /token and Spaces key pair are required/,
-    );
+  it("saves with a token alone, because the object store is optional", async () => {
+    const view = await writeFailoverPatch(CTX, { token: "dop_v1_abc", region: "tor1" });
+    expect(view).toMatchObject({ configured: true, tokenSet: true, region: "tor1" });
+    expect(view.objectStore).toBeUndefined();
+  });
+
+  it("rejects a first save with no token at all", async () => {
+    await expect(writeFailoverPatch(CTX, { region: "tor1" })).rejects.toThrow(/required/);
   });
 });

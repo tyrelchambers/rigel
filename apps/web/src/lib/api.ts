@@ -1654,13 +1654,21 @@ export interface FailoverConfigView {
   configured: boolean;
   provider: "digitalocean";
   tokenSet: boolean;
-  spacesKeySet: boolean;
-  spacesSecretSet: boolean;
   region: string;
   nodeSize: string;
   nodeCount: number;
+  objectStore?: FailoverObjectStoreView;
   edge?: FailoverEdgeView;
   cluster: ClusterConfigStatus;
+}
+
+export interface FailoverObjectStoreView {
+  endpoint: string;
+  region: string;
+  bucket: string;
+  addressing: "virtualHost" | "path";
+  accessKeySet: boolean;
+  secretKeySet: boolean;
 }
 
 export interface FailoverEdgeView {
@@ -1670,8 +1678,6 @@ export interface FailoverEdgeView {
 
 export interface FailoverConfigPatch {
   token?: string;
-  spacesKey?: string;
-  spacesSecret?: string;
   region?: string;
   nodeSize?: string;
   nodeCount?: number;

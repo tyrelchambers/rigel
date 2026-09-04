@@ -5,6 +5,7 @@ import {
   type FailoverDestination,
   type FailoverDestinationPatch,
   type FailoverDestinationView,
+  type FailoverObjectStore,
   type FailoverSelection,
 } from "./types";
 
@@ -15,12 +16,33 @@ export {
   type FailoverDestination,
   type FailoverDestinationPatch,
   type FailoverDestinationView,
+  type FailoverObjectStore,
+  type FailoverObjectStoreView,
   type FailoverProvider,
   type FailoverSelection,
 } from "./types";
 
 function text(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+const STORE_FIELDS = ["endpoint", "region", "bucket", "accessKey", "secretKey"] as const;
+const ADDRESSING = ["virtualHost", "path"] as const;
+
+/** Every field or nothing. A half-filled store cannot be used, so it is not kept. */
+function parseObjectStore(value: unknown): FailoverObjectStore | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const o = value as Record<string, unknown>;
+  const out = {} as FailoverObjectStore;
+  for (const field of STORE_FIELDS) {
+    const v = text(o[field]);
+    if (!v) return undefined;
+    out[field] = v;
+  }
+  const addressing = text(o.addressing);
+  if (!addressing || !ADDRESSING.includes(addressing as (typeof ADDRESSING)[number])) return undefined;
+  out.addressing = addressing as FailoverObjectStore["addressing"];
+  return out;
 }
 
 function parseEdge(value: unknown): import("./types").FailoverEdge | undefined {
@@ -80,9 +102,7 @@ export function parseFailoverDestination(blob: string): FailoverDestination | nu
   const o = parsed as Record<string, unknown>;
   if (o.provider !== "digitalocean") return null;
   const token = text(o.token);
-  const spacesKey = text(o.spacesKey);
-  const spacesSecret = text(o.spacesSecret);
-  if (!token || !spacesKey || !spacesSecret) return null;
+  if (!token) return null;
   const nodeCountRaw = o.nodeCount;
   const nodeCount =
     typeof nodeCountRaw === "number" && Number.isInteger(nodeCountRaw) && nodeCountRaw >= 1
@@ -91,12 +111,12 @@ export function parseFailoverDestination(blob: string): FailoverDestination | nu
   const dest: FailoverDestination = {
     provider: "digitalocean",
     token,
-    spacesKey,
-    spacesSecret,
     region: text(o.region) ?? DEFAULT_FAILOVER_REGION,
     nodeSize: text(o.nodeSize) ?? DEFAULT_FAILOVER_NODE_SIZE,
     nodeCount,
   };
+  const objectStore = parseObjectStore(o.objectStore);
+  if (objectStore) dest.objectStore = objectStore;
   const edge = parseEdge(o.edge);
   if (edge) dest.edge = edge;
   const lastSelection = parseSelection(o.lastSelection);
@@ -114,8 +134,6 @@ export function maskFailoverDestination(dest: FailoverDestination | null): Failo
       configured: false,
       provider: "digitalocean",
       tokenSet: false,
-      spacesKeySet: false,
-      spacesSecretSet: false,
       region: DEFAULT_FAILOVER_REGION,
       nodeSize: DEFAULT_FAILOVER_NODE_SIZE,
       nodeCount: DEFAULT_FAILOVER_NODE_COUNT,
@@ -125,11 +143,21 @@ export function maskFailoverDestination(dest: FailoverDestination | null): Failo
     configured: true,
     provider: dest.provider,
     tokenSet: true,
-    spacesKeySet: true,
-    spacesSecretSet: true,
     region: dest.region,
     nodeSize: dest.nodeSize,
     nodeCount: dest.nodeCount,
+    ...(dest.objectStore
+      ? {
+          objectStore: {
+            endpoint: dest.objectStore.endpoint,
+            region: dest.objectStore.region,
+            bucket: dest.objectStore.bucket,
+            addressing: dest.objectStore.addressing,
+            accessKeySet: true,
+            secretKeySet: true,
+          },
+        }
+      : {}),
     ...(dest.edge ? { edge: dest.edge } : {}),
     ...(dest.lastSelection ? { lastSelection: dest.lastSelection } : {}),
   };
@@ -142,9 +170,13 @@ export function applyFailoverPatch(
   patch: FailoverDestinationPatch,
 ): FailoverDestination | null {
   const token = text(patch.token) ?? current?.token;
-  const spacesKey = text(patch.spacesKey) ?? current?.spacesKey;
-  const spacesSecret = text(patch.spacesSecret) ?? current?.spacesSecret;
-  if (!token || !spacesKey || !spacesSecret) return null;
+  if (!token) return null;
+  const objectStore =
+    patch.objectStore === null
+      ? undefined
+      : patch.objectStore
+        ? parseObjectStore({ ...current?.objectStore, ...patch.objectStore })
+        : current?.objectStore;
   const nodeCount =
     typeof patch.nodeCount === "number" && Number.isInteger(patch.nodeCount) && patch.nodeCount >= 1
       ? patch.nodeCount
@@ -152,11 +184,10 @@ export function applyFailoverPatch(
   return {
     provider: "digitalocean",
     token,
-    spacesKey,
-    spacesSecret,
     region: text(patch.region) ?? current?.region ?? DEFAULT_FAILOVER_REGION,
     nodeSize: text(patch.nodeSize) ?? current?.nodeSize ?? DEFAULT_FAILOVER_NODE_SIZE,
     nodeCount,
+    ...(objectStore ? { objectStore } : {}),
     ...(patch.edge ?? current?.edge ? { edge: patch.edge ?? current?.edge } : {}),
     ...(current?.lastSelection ? { lastSelection: current.lastSelection } : {}),
   };

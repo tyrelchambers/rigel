@@ -121,7 +121,7 @@ describe("planFailover endpoint rewrites", () => {
 
 describe("runFailover", () => {
   it("does not provision when blockers remain", async () => {
-    await writeFailoverPatch(CTX, { token: "t", spacesKey: "k", spacesSecret: "s", nodeCount: 1 });
+    await writeFailoverPatch(CTX, { token: "t", nodeCount: 1 });
     let provisioned = false;
     await expect(
       runFailover(CTX, { kind: "namespace", namespace: "default" }, [], {
@@ -136,7 +136,7 @@ describe("runFailover", () => {
   });
 
   it("copies planned data after apply and keeps dump bytes out of the result", async () => {
-    await writeFailoverPatch(CTX, { token: "t", spacesKey: "k", spacesSecret: "s", nodeCount: 1 });
+    await writeFailoverPatch(CTX, { token: "t", nodeCount: 1 });
     let copiedFrom: string | null | undefined;
     let copiedTo: string | null | undefined;
     const result = await runFailover(
@@ -180,7 +180,7 @@ describe("runFailover", () => {
 
 describe("scaleHome", () => {
   it("rejects until the edge cutover is confirmed", async () => {
-    await writeFailoverPatch(CTX, { token: "t", spacesKey: "k", spacesSecret: "s" });
+    await writeFailoverPatch(CTX, { token: "t", });
     const { writeUserConfig } = await import("./clusterConfigStore");
     const { FAILOVER_STATE_KEY } = await import("@rigel/k8s/src/userConfig");
     await writeUserConfig(CTX, () => ({
@@ -219,7 +219,7 @@ describe("restoreHome", () => {
   };
 
   async function seed() {
-    await writeFailoverPatch(CTX, { token: "t", spacesKey: "k", spacesSecret: "s" });
+    await writeFailoverPatch(CTX, { token: "t", });
     const { writeUserConfig } = await import("./clusterConfigStore");
     const { FAILOVER_STATE_KEY } = await import("@rigel/k8s/src/userConfig");
     await writeUserConfig(CTX, () => ({ [FAILOVER_STATE_KEY]: JSON.stringify(stateBlob) }));
@@ -291,7 +291,7 @@ describe("restoreHome teardown", () => {
   };
 
   async function seed() {
-    await writeFailoverPatch(CTX, { token: "t", spacesKey: "k", spacesSecret: "s", nodeCount: 1 });
+    await writeFailoverPatch(CTX, { token: "t", nodeCount: 1 });
     const { writeUserConfig } = await import("./clusterConfigStore");
     const { FAILOVER_STATE_KEY } = await import("@rigel/k8s/src/userConfig");
     await writeUserConfig(CTX, () => ({ [FAILOVER_STATE_KEY]: JSON.stringify(state) }));
@@ -341,12 +341,12 @@ describe("restoreHome teardown", () => {
 
 describe("teardownLeftBehind", () => {
   it("refuses when nothing was left behind", async () => {
-    await writeFailoverPatch(CTX, { token: "t", spacesKey: "k", spacesSecret: "s", nodeCount: 1 });
+    await writeFailoverPatch(CTX, { token: "t", nodeCount: 1 });
     expect(await teardownLeftBehind(CTX)).toEqual({ ok: false, error: "No cluster is recorded as left behind" });
   });
 
   it("destroys the remembered cluster and clears the state", async () => {
-    await writeFailoverPatch(CTX, { token: "t", spacesKey: "k", spacesSecret: "s", nodeCount: 1 });
+    await writeFailoverPatch(CTX, { token: "t", nodeCount: 1 });
     const { writeUserConfig } = await import("./clusterConfigStore");
     const { FAILOVER_STATE_KEY } = await import("@rigel/k8s/src/userConfig");
     await writeUserConfig(CTX, () => ({
@@ -360,7 +360,7 @@ describe("teardownLeftBehind", () => {
   });
 
   it("keeps the record when the retry also fails", async () => {
-    await writeFailoverPatch(CTX, { token: "t", spacesKey: "k", spacesSecret: "s", nodeCount: 1 });
+    await writeFailoverPatch(CTX, { token: "t", nodeCount: 1 });
     const { writeUserConfig } = await import("./clusterConfigStore");
     const { FAILOVER_STATE_KEY } = await import("@rigel/k8s/src/userConfig");
     await writeUserConfig(CTX, () => ({

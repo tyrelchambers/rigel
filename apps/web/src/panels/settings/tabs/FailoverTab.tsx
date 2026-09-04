@@ -22,8 +22,6 @@ export function FailoverTab() {
   const [nodeSize, setNodeSize] = useState("s-4vcpu-8gb");
   const [nodeCount, setNodeCount] = useState("2");
   const [token, setToken] = useState("");
-  const [spacesKey, setSpacesKey] = useState("");
-  const [spacesSecret, setSpacesSecret] = useState("");
   const [edgeHost, setEdgeHost] = useState("");
   const [edgeBackends, setEdgeBackends] = useState("");
 
@@ -35,8 +33,6 @@ export function FailoverTab() {
     setEdgeHost(view.edge?.host ?? "");
     setEdgeBackends((view.edge?.backends ?? []).map((b) => `${b.name} ${b.ip}`).join("\n"));
     setToken("");
-    setSpacesKey("");
-    setSpacesSecret("");
   }, [view]);
 
   function submit() {
@@ -47,8 +43,6 @@ export function FailoverTab() {
       nodeCount: Number.isInteger(count) && count >= 1 ? count : undefined,
     };
     if (token.trim()) patch.token = token.trim();
-    if (spacesKey.trim()) patch.spacesKey = spacesKey.trim();
-    if (spacesSecret.trim()) patch.spacesSecret = spacesSecret.trim();
     const backends = edgeBackends
       .split("\n")
       .map((line) => line.trim().split(/\s+/))
@@ -151,34 +145,6 @@ export function FailoverTab() {
             disabled={locked}
             onChange={(e) => setToken(e.target.value)}
             placeholder={view?.tokenSet ? "Leave blank to keep the stored token" : "dop_v1_..."}
-          />
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-xs text-muted-foreground">
-            Spaces access key{view?.spacesKeySet ? " (set)" : ""}
-          </span>
-          <input
-            className={INPUT_CLASS}
-            type="password"
-            autoComplete="off"
-            value={spacesKey}
-            disabled={locked}
-            onChange={(e) => setSpacesKey(e.target.value)}
-            placeholder={view?.spacesKeySet ? "Leave blank to keep" : ""}
-          />
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-xs text-muted-foreground">
-            Spaces secret{view?.spacesSecretSet ? " (set)" : ""}
-          </span>
-          <input
-            className={INPUT_CLASS}
-            type="password"
-            autoComplete="off"
-            value={spacesSecret}
-            disabled={locked}
-            onChange={(e) => setSpacesSecret(e.target.value)}
-            placeholder={view?.spacesSecretSet ? "Leave blank to keep" : ""}
           />
         </label>
       </div>

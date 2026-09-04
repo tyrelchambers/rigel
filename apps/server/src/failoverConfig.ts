@@ -31,8 +31,16 @@ export function failoverPatchFromBody(body: unknown): FailoverDestinationPatch {
   const o = body as Record<string, unknown>;
   const patch: FailoverDestinationPatch = {};
   if (typeof o.token === "string") patch.token = o.token;
-  if (typeof o.spacesKey === "string") patch.spacesKey = o.spacesKey;
-  if (typeof o.spacesSecret === "string") patch.spacesSecret = o.spacesSecret;
+  if (o.objectStore === null) patch.objectStore = null;
+  else if (o.objectStore && typeof o.objectStore === "object") {
+    const r = o.objectStore as Record<string, unknown>;
+    const store: NonNullable<FailoverDestinationPatch["objectStore"]> = {};
+    for (const field of ["endpoint", "region", "bucket", "accessKey", "secretKey"] as const) {
+      if (typeof r[field] === "string") store[field] = r[field] as string;
+    }
+    if (r.addressing === "virtualHost" || r.addressing === "path") store.addressing = r.addressing;
+    patch.objectStore = store;
+  }
   if (typeof o.region === "string") patch.region = o.region;
   if (typeof o.nodeSize === "string") patch.nodeSize = o.nodeSize;
   if (typeof o.nodeCount === "number") patch.nodeCount = o.nodeCount;

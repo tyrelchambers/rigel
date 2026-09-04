@@ -5,8 +5,6 @@ import { createClusterArgs, failoverClusterName, provisionDoks, type Run } from 
 const dest: FailoverDestination = {
   provider: "digitalocean",
   token: "dop_v1_abc",
-  spacesKey: "KEY",
-  spacesSecret: "SECRET",
   region: "tor1",
   nodeSize: "s-4vcpu-8gb",
   nodeCount: 1,

@@ -8,17 +8,26 @@ import {
   parseFailoverDestination,
   serializeFailoverDestination,
 } from "./destination";
-import type { FailoverDestination } from "./types";
+import type { FailoverDestination, FailoverObjectStore } from "./types";
+
+const store: FailoverObjectStore = {
+  endpoint: "https://tor1.digitaloceanspaces.com",
+  region: "us-east-1",
+  bucket: "rigel-failover",
+  accessKey: "KEY",
+  secretKey: "SECRET",
+  addressing: "virtualHost",
+};
 
 const valid: FailoverDestination = {
   provider: "digitalocean",
   token: "dop_v1_abc",
-  spacesKey: "KEY",
-  spacesSecret: "SECRET",
   region: "tor1",
   nodeSize: "s-4vcpu-8gb",
   nodeCount: 2,
 };
+
+const withStore: FailoverDestination = { ...valid, objectStore: store };
 
 describe("parseFailoverDestination", () => {
   it("reads a blank blob as not configured", () => {
@@ -35,27 +44,46 @@ describe("parseFailoverDestination", () => {
   it("rejects an unknown provider and a missing token", () => {
     expect(parseFailoverDestination(JSON.stringify({ ...valid, provider: "aws" }))).toBeNull();
     expect(parseFailoverDestination(JSON.stringify({ ...valid, token: "" }))).toBeNull();
-    expect(parseFailoverDestination(JSON.stringify({ ...valid, spacesKey: "  " }))).toBeNull();
   });
 
-  it("round-trips a complete destination", () => {
+  it("is configured with a token alone; the object store is optional", () => {
     expect(parseFailoverDestination(serializeFailoverDestination(valid))).toEqual(valid);
   });
 
+  it("round-trips an object store", () => {
+    expect(parseFailoverDestination(serializeFailoverDestination(withStore))).toEqual(withStore);
+  });
+
+  it("drops a half-filled object store rather than storing something unusable", () => {
+    for (const missing of ["endpoint", "region", "bucket", "accessKey", "secretKey", "addressing"] as const) {
+      const partial = { ...store, [missing]: "" };
+      const parsed = parseFailoverDestination(JSON.stringify({ ...valid, objectStore: partial }));
+      expect(parsed).toEqual(valid);
+    }
+  });
+
+  it("drops an object store whose addressing is not one of the two styles", () => {
+    const bad = { ...store, addressing: "sideways" };
+    expect(parseFailoverDestination(JSON.stringify({ ...valid, objectStore: bad }))).toEqual(valid);
+  });
+
+  it("still reads a blob written by the old form, ignoring its unused Spaces keys", () => {
+    const old = JSON.stringify({
+      provider: "digitalocean",
+      token: "dop_v1_abc",
+      spacesKey: "KEY",
+      spacesSecret: "SECRET",
+      region: "tor1",
+      nodeSize: "s-4vcpu-8gb",
+      nodeCount: 2,
+    });
+    expect(parseFailoverDestination(old)).toEqual(valid);
+  });
+
   it("fills region, size and count from the documented defaults", () => {
-    const parsed = parseFailoverDestination(
-      JSON.stringify({
-        provider: "digitalocean",
-        token: "t",
-        spacesKey: "k",
-        spacesSecret: "s",
-      }),
-    );
-    expect(parsed).toEqual({
+    expect(parseFailoverDestination(JSON.stringify({ provider: "digitalocean", token: "t" }))).toEqual({
       provider: "digitalocean",
       token: "t",
-      spacesKey: "k",
-      spacesSecret: "s",
       region: DEFAULT_FAILOVER_REGION,
       nodeSize: DEFAULT_FAILOVER_NODE_SIZE,
       nodeCount: DEFAULT_FAILOVER_NODE_COUNT,
@@ -76,19 +104,31 @@ describe("parseFailoverDestination", () => {
 
 describe("maskFailoverDestination", () => {
   it("never includes secret values", () => {
-    const view = maskFailoverDestination(valid);
+    const view = maskFailoverDestination(withStore);
     expect(view).toEqual({
       configured: true,
       provider: "digitalocean",
       tokenSet: true,
-      spacesKeySet: true,
-      spacesSecretSet: true,
       region: "tor1",
       nodeSize: "s-4vcpu-8gb",
       nodeCount: 2,
+      objectStore: {
+        endpoint: "https://tor1.digitaloceanspaces.com",
+        region: "us-east-1",
+        bucket: "rigel-failover",
+        addressing: "virtualHost",
+        accessKeySet: true,
+        secretKeySet: true,
+      },
     });
-    expect(JSON.stringify(view)).not.toContain("dop_v1_abc");
-    expect(JSON.stringify(view)).not.toContain("SECRET");
+    const json = JSON.stringify(view);
+    expect(json).not.toContain("dop_v1_abc");
+    expect(json).not.toContain("SECRET");
+    expect(json).not.toContain("KEY");
+  });
+
+  it("omits the object store entirely when there is none", () => {
+    expect(maskFailoverDestination(valid).objectStore).toBeUndefined();
   });
 
   it("exposes the form defaults when nothing is stored", () => {
@@ -102,19 +142,44 @@ describe("maskFailoverDestination", () => {
 });
 
 describe("applyFailoverPatch", () => {
-  it("cannot create a destination without all three secrets", () => {
-    expect(applyFailoverPatch(null, { token: "t", region: "tor1" })).toBeNull();
-    expect(applyFailoverPatch(null, { token: "t", spacesKey: "k", spacesSecret: "s" })).toMatchObject({
+  it("needs only a token to create a destination", () => {
+    expect(applyFailoverPatch(null, { region: "tor1" })).toBeNull();
+    expect(applyFailoverPatch(null, { token: "t" })).toMatchObject({
       token: "t",
       region: DEFAULT_FAILOVER_REGION,
     });
   });
 
-  it("keeps stored secrets when the patch omits them", () => {
+  it("keeps the stored token when the patch omits it", () => {
     expect(applyFailoverPatch(valid, { region: "nyc3", nodeCount: 3 })).toEqual({
       ...valid,
       region: "nyc3",
       nodeCount: 3,
     });
+  });
+
+  it("keeps stored object store secrets when the patch omits them", () => {
+    const patched = applyFailoverPatch(withStore, {
+      objectStore: { endpoint: store.endpoint, region: store.region, bucket: "moved" },
+    });
+    expect(patched?.objectStore).toEqual({ ...store, bucket: "moved" });
+  });
+
+  it("adds an object store to a destination that had none", () => {
+    expect(applyFailoverPatch(valid, { objectStore: store })?.objectStore).toEqual(store);
+  });
+
+  it("removes the object store when the patch sends null", () => {
+    expect(applyFailoverPatch(withStore, { objectStore: null })?.objectStore).toBeUndefined();
+  });
+
+  it("drops an object store patch that leaves it half-filled", () => {
+    expect(applyFailoverPatch(valid, { objectStore: { endpoint: "https://s3.example.net" } })?.objectStore)
+      .toBeUndefined();
+  });
+
+  it("carries the last selection over", () => {
+    const withSel = { ...valid, lastSelection: { kind: "namespace" as const, namespace: "default" } };
+    expect(applyFailoverPatch(withSel, { nodeCount: 4 })?.lastSelection).toEqual(withSel.lastSelection);
   });
 });

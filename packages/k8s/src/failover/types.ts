@@ -17,14 +17,27 @@ export interface FailoverEdge {
   backends: Array<{ name: string; ip: string }>;
 }
 
+export type ObjectStoreAddressing = "virtualHost" | "path";
+
+/** Any S3-compatible store: Spaces, Garage, MinIO, AWS. */
+export interface FailoverObjectStore {
+  endpoint: string;
+  /** The SigV4 signing region the endpoint expects. */
+  region: string;
+  bucket: string;
+  accessKey: string;
+  secretKey: string;
+  /** `bucket.host` for AWS and Spaces, `host/bucket` for Garage and MinIO. */
+  addressing: ObjectStoreAddressing;
+}
+
 export interface FailoverDestination {
   provider: FailoverProvider;
   token: string;
-  spacesKey: string;
-  spacesSecret: string;
   region: string;
   nodeSize: string;
   nodeCount: number;
+  objectStore?: FailoverObjectStore;
   edge?: FailoverEdge;
   lastSelection?: FailoverSelection;
 }
@@ -34,19 +47,28 @@ export interface FailoverDestinationView {
   configured: boolean;
   provider: FailoverProvider;
   tokenSet: boolean;
-  spacesKeySet: boolean;
-  spacesSecretSet: boolean;
   region: string;
   nodeSize: string;
   nodeCount: number;
+  objectStore?: FailoverObjectStoreView;
   edge?: FailoverEdge;
   lastSelection?: FailoverSelection;
 }
 
+/** What Settings is allowed to see of a store. Key values never appear. */
+export interface FailoverObjectStoreView {
+  endpoint: string;
+  region: string;
+  bucket: string;
+  addressing: ObjectStoreAddressing;
+  accessKeySet: boolean;
+  secretKeySet: boolean;
+}
+
 export interface FailoverDestinationPatch {
   token?: string;
-  spacesKey?: string;
-  spacesSecret?: string;
+  /** null removes the store; omitted secrets keep the stored ones. */
+  objectStore?: Partial<FailoverObjectStore> | null;
   region?: string;
   nodeSize?: string;
   nodeCount?: number;
