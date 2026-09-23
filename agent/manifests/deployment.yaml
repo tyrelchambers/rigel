@@ -63,7 +63,7 @@ spec:
             - name: RIGEL_ENTITLEMENT_ENDPOINT
               value: https://api.rigel.run
             - name: WORKER_MODEL
-              value: claude-sonnet-4-6
+              value: claude-sonnet-5
             - name: SUPERVISOR_MODEL
               value: claude-opus-5
             - name: POLL_INTERVAL_MS

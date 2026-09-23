@@ -82,7 +82,7 @@ test("buildInstallConfig carries the role selections + limits onto the install c
 test("buildInstallConfig falls back to legacy model knobs + defaults when no selection/limits given", () => {
   const cfg = buildInstallConfig({ action: "install" });
   expect(cfg.installNamespace).toBe("default");
-  expect(cfg.workerModel).toBe("claude-sonnet-4-6");
+  expect(cfg.workerModel).toBe("claude-sonnet-5");
   expect(cfg.supervisorModel).toBe("claude-opus-5");
   expect(cfg.pollIntervalMs).toBe(30000);
   expect(cfg.worker).toBeUndefined();

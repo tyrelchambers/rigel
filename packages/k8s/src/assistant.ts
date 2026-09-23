@@ -53,7 +53,7 @@ export const DEFAULT_INSTALL_CONFIG: AssistantInstallConfig = {
   image: "ghcr.io/tyrelchambers/rigel-assistant:latest",
   installNamespace: "default",
   namespaces: "",
-  workerModel: "claude-sonnet-4-6",
+  workerModel: "claude-sonnet-5",
   supervisorModel: "claude-opus-5",
   pollIntervalMs: 30000,
   maxPerResourcePerHour: 3,
