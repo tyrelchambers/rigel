@@ -14,6 +14,7 @@ import {
   resolveFixAudit,
   resolveIncident,
   touchIncident,
+  writeState,
   type AssistantState,
   type AuditEntry,
   type PullRequestRecord,
@@ -366,5 +367,23 @@ describe("readState", () => {
   it("THROWS (does not reset to empty) when state.json is corrupt", async () => {
     vi.mocked(kubectl).mockResolvedValue(res({ stdout: JSON.stringify({ data: { "state.json": "{not valid json" } }) }));
     await expect(readState("assistant-state", "ns")).rejects.toThrow(/parsing/);
+  });
+});
+
+describe("writeState", () => {
+  const res = (over: Partial<KubectlResult>): KubectlResult => ({ stdout: "", stderr: "", code: 0, ...over });
+  beforeEach(() => vi.mocked(kubectl).mockReset());
+
+  it("server-side applies so a large state never lands in the 256KiB last-applied annotation", async () => {
+    vi.mocked(kubectl).mockResolvedValue(res({}));
+    await writeState("assistant-state", "ns", emptyState());
+    const [args, stdin] = vi.mocked(kubectl).mock.calls[0]!;
+    expect(args).toEqual(["apply", "--server-side", "--force-conflicts", "--field-manager=rigel-assistant", "-f", "-"]);
+    expect(JSON.parse(stdin!).data["state.json"]).toBe(JSON.stringify(emptyState()));
+  });
+
+  it("THROWS when the apply is rejected, so a failed write is never silent", async () => {
+    vi.mocked(kubectl).mockResolvedValue(res({ code: 1, stderr: "metadata.annotations: Too long: may not be more than 262144 bytes" }));
+    await expect(writeState("assistant-state", "ns", emptyState())).rejects.toThrow(/Too long/);
   });
 });
