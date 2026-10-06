@@ -1,4 +1,4 @@
-import { kubectl, kubectlApply } from "./kubectl.js";
+import { kubectl, type KubectlResult } from "./kubectl.js";
 import type { SuggestedAction } from "./action.js";
 import { emptyAlertState, type AlertState } from "./alerts.js";
 
@@ -431,14 +431,22 @@ export async function readState(name: string, namespace: string): Promise<Assist
   }
 }
 
-export async function writeState(name: string, namespace: string, state: AssistantState): Promise<void> {
+async function applyConfigMap(name: string, namespace: string, data: Record<string, string>): Promise<KubectlResult> {
   const manifest = {
     apiVersion: "v1",
     kind: "ConfigMap",
     metadata: { name, namespace, labels: { "app.kubernetes.io/managed-by": "rigel-assistant" } },
-    data: { [STATE_KEY]: JSON.stringify(state) },
+    data,
   };
-  await kubectlApply(JSON.stringify(manifest));
+  return kubectl(
+    ["apply", "--server-side", "--force-conflicts", "--field-manager=rigel-assistant", "-f", "-"],
+    JSON.stringify(manifest),
+  );
+}
+
+export async function writeState(name: string, namespace: string, state: AssistantState): Promise<void> {
+  const res = await applyConfigMap(name, namespace, { [STATE_KEY]: JSON.stringify(state) });
+  if (res.code !== 0) throw new Error(`writeState: kubectl apply configmap ${name} failed (code ${res.code}): ${res.stderr.trim()}`);
 }
 
 /** Append a pre-mutation backup snapshot to the backups ConfigMap (read-modify-
@@ -460,12 +468,6 @@ export async function storeBackup(
     }
   }
   data[key] = yaml;
-  const manifest = {
-    apiVersion: "v1",
-    kind: "ConfigMap",
-    metadata: { name, namespace, labels: { "app.kubernetes.io/managed-by": "rigel-assistant" } },
-    data: capBackups(data, maxBackups),
-  };
-  await kubectlApply(JSON.stringify(manifest));
+  await applyConfigMap(name, namespace, capBackups(data, maxBackups));
   return key;
 }

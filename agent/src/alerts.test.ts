@@ -5,7 +5,7 @@ const T0 = Date.parse("2026-06-15T00:00:00Z");
 const min = (n: number) => n * 60_000;
 
 function pod(ns: string, name: string, opts: {
-  restarts?: number; waiting?: string; oom?: boolean; phase?: string; startedMinAgo?: number; readyFalseMinAgo?: number; labels?: Record<string, string>;
+  restarts?: number; waiting?: string; oomMinAgo?: number; phase?: string; startedMinAgo?: number; readyFalseMinAgo?: number; labels?: Record<string, string>;
 } = {}) {
   const startTime = opts.startedMinAgo != null ? new Date(T0 - min(opts.startedMinAgo)).toISOString() : undefined;
   return {
@@ -19,7 +19,7 @@ function pod(ns: string, name: string, opts: {
       containerStatuses: [{
         restartCount: opts.restarts ?? 0,
         state: opts.waiting ? { waiting: { reason: opts.waiting } } : {},
-        lastState: opts.oom ? { terminated: { reason: "OOMKilled" } } : {},
+        lastState: opts.oomMinAgo != null ? { terminated: { reason: "OOMKilled", finishedAt: new Date(T0 - min(opts.oomMinAgo)).toISOString() } } : {},
       }],
     },
   };
@@ -92,7 +92,24 @@ describe("podRestarts tumbling window", () => {
 
 describe("duration conditions", () => {
   it("oomKilled fires on a terminated OOM", () => {
-    expect(evaluateAlertRules([rule({ condition: { type: "oomKilled" } })], [pod("prod", "db", { oom: true })], [], emptyAlertState(), T0).events).toHaveLength(1);
+    expect(evaluateAlertRules([rule({ condition: { type: "oomKilled" } })], [pod("prod", "db", { oomMinAgo: 1 })], [], emptyAlertState(), T0).events).toHaveLength(1);
+  });
+  it("oomKilled fires once per OOM, not every cooldown while lastState still says OOMKilled", () => {
+    const r = rule({ condition: { type: "oomKilled" } });
+    const s0 = evaluateAlertRules([r], [pod("prod", "db", { oomMinAgo: 1 })], [], emptyAlertState(), T0);
+    expect(s0.events).toHaveLength(1);
+    const later = evaluateAlertRules([r], [pod("prod", "db", { oomMinAgo: 1 })], [], s0.alertState, T0 + min(30));
+    expect(later.events).toHaveLength(0);
+  });
+  it("oomKilled fires again for a new OOM after the last alert", () => {
+    const r = rule({ condition: { type: "oomKilled" } });
+    const s0 = evaluateAlertRules([r], [pod("prod", "db", { oomMinAgo: 1 })], [], emptyAlertState(), T0);
+    const next = evaluateAlertRules([r], [pod("prod", "db", { oomMinAgo: -20 })], [], s0.alertState, T0 + min(30));
+    expect(next.events).toHaveLength(1);
+  });
+  it("oomKilled ignores an OOM that finished before the rule was created", () => {
+    const r = rule({ condition: { type: "oomKilled" }, createdAt: new Date(T0 - min(10)).toISOString() });
+    expect(evaluateAlertRules([r], [pod("prod", "db", { oomMinAgo: 60 })], [], emptyAlertState(), T0).events).toHaveLength(0);
   });
   it("pendingTooLong only fires past the threshold", () => {
     const r = rule({ condition: { type: "pendingTooLong", minutes: 10 } });
