@@ -72,10 +72,10 @@ describe("onActionEvent / routing", () => {
     const received: ActionEvent[] = [];
     const unsub = onActionEvent("run-1", (e) => received.push(e));
 
-    mockWs.onmessage!({ data: JSON.stringify({ type: "action.progress", id: "run-1", line: "hello" }) });
+    mockWs.onmessage!({ data: JSON.stringify({ type: "action.progress", id: "run-1", line: "hello", stream: "stdout" }) });
 
     expect(received).toHaveLength(1);
-    expect(received[0]).toEqual({ type: "action.progress", id: "run-1", line: "hello" });
+    expect(received[0]).toEqual({ type: "action.progress", id: "run-1", line: "hello", stream: "stdout" });
     unsub();
   });
 

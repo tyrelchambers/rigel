@@ -116,7 +116,7 @@ export function onClusterEvent(cb: ClusterCallback): () => void {
 
 /** A streamed action-run event from the server. */
 export type ActionEvent =
-  | { type: "action.progress"; id: string; line: string }
+  | { type: "action.progress"; id: string; line: string; stream: "stdout" | "stderr" }
   | { type: "action.done"; id: string; code: number }
   | { type: "action.error"; id: string; message: string };
 type ActionCallback = (e: ActionEvent) => void;

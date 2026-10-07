@@ -33,6 +33,9 @@ export interface RunBackgroundActionOptions {
  */
 const REST_ONLY_KINDS = new Set(["purge", "applyManifest", "proposeRepoFix"]);
 
+/** Head of each stream kept for the chat result; the feedback clips tighter still. */
+const OUTPUT_KEEP_MAX = 8000;
+
 /**
  * Run a confirmed cluster mutation in the background, surfacing progress in a
  * toast instead of holding a blocking confirm modal open. The caller closes the
@@ -46,8 +49,8 @@ const REST_ONLY_KINDS = new Set(["purge", "applyManifest", "proposeRepoFix"]);
  * executeAction + toast.loading/success/error flow, unchanged from before.
  *
  * The chat "close the loop" behaviour (parity with Swift executeWorkload) is
- * preserved: when `fromChat` is set, `onResult` fires with the result and the
- * exact command on both success and failure.
+ * preserved: when `fromChat` is set, `onResult` fires with the result (including
+ * the streamed stdout/stderr) and the exact command on both success and failure.
  */
 export function runActionInBackground(opts: RunBackgroundActionOptions): void {
   const { action, label, commandString, fromChat, onResult } = opts;
@@ -61,13 +64,18 @@ export function runActionInBackground(opts: RunBackgroundActionOptions): void {
     // Wire up the result/error handling BEFORE sending the run frame so we
     // never miss an early event.
     let toastId: string | number | undefined;
+    const output = { stdout: "", stderr: "" };
 
     // Subscribe once to close the chat loop and drive toast dismissal.
     const unsub = onActionEvent(runId, (e) => {
-      if (e.type === "action.done") {
+      if (e.type === "action.progress") {
+        if (output[e.stream].length < OUTPUT_KEEP_MAX) {
+          output[e.stream] = `${output[e.stream]}${e.line}\n`.slice(0, OUTPUT_KEEP_MAX);
+        }
+      } else if (e.type === "action.done") {
         unsub();
         const code = e.code;
-        const result: ActionResult = { code, stdout: "", stderr: "" };
+        const result: ActionResult = { code, ...output };
         if (fromChat) onResult?.({ action, result, commandString });
         if (code === 0 && toastId !== undefined) {
           // Hand the timer back to sonner: re-render the same toast with a finite

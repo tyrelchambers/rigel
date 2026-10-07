@@ -79,6 +79,7 @@ test("stdout lines are emitted as action.progress frames with the correct id", a
 
   const frames = ws.sent.filter((m) => m.type === "action.progress" && m.id === "p1");
   expect(frames.map((f: any) => f.line)).toEqual(["line one", "line two"]);
+  expect(frames.map((f: any) => f.stream)).toEqual(["stdout", "stdout"]);
 });
 
 test("stderr lines are also emitted as action.progress frames", async () => {
@@ -90,7 +91,9 @@ test("stderr lines are also emitted as action.progress frames", async () => {
   proc.stderr.write("Warning: something\n");
   await new Promise((r) => setImmediate(r));
 
-  expect(ws.sent.find((m: any) => m.type === "action.progress" && m.line === "Warning: something")).toBeTruthy();
+  expect(ws.sent.find((m: any) => m.type === "action.progress" && m.line === "Warning: something")).toMatchObject({
+    stream: "stderr",
+  });
 });
 
 test("partial lines are buffered until a newline arrives", async () => {
@@ -240,7 +243,7 @@ test("a final line with no trailing newline is flushed on stream end", async () 
 
   expect(
     ws.sent.find((m: any) => m.type === "action.progress" && m.id === "flush" && m.line === "deployment.apps/app paused"),
-  ).toBeTruthy();
+  ).toMatchObject({ stream: "stdout" });
 });
 
 test("a duplicate in-flight id is rejected without killing or overwriting the first run", () => {

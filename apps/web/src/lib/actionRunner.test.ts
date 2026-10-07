@@ -132,6 +132,51 @@ describe("runActionInBackground — streaming path", () => {
     );
   });
 
+  it("passes the streamed stdout and stderr lines to onResult on action.done (fromChat)", () => {
+    const onResult = vi.fn();
+    runActionInBackground({
+      action: streamingAction,
+      label: "Run command",
+      commandString: "kubectl ...",
+      fromChat: true,
+      onResult,
+    });
+
+    const runId = mockRunAction.mock.calls[0]![0] as string;
+    const cb = actionEventCallbacks.get(runId)!;
+    cb({ type: "action.progress", id: runId, line: "Reading package lists...", stream: "stdout" });
+    cb({ type: "action.progress", id: runId, line: "W: something odd", stream: "stderr" });
+    cb({ type: "action.progress", id: runId, line: "Done", stream: "stdout" });
+    cb({ type: "action.done", id: runId, code: 0 });
+
+    expect(onResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        result: { code: 0, stdout: "Reading package lists...\nDone\n", stderr: "W: something odd\n" },
+      }),
+    );
+  });
+
+  it("caps the collected output so a chatty run can't grow without bound", () => {
+    const onResult = vi.fn();
+    runActionInBackground({
+      action: streamingAction,
+      label: "Run command",
+      commandString: "kubectl ...",
+      fromChat: true,
+      onResult,
+    });
+
+    const runId = mockRunAction.mock.calls[0]![0] as string;
+    const cb = actionEventCallbacks.get(runId)!;
+    const line = "x".repeat(1000);
+    for (let i = 0; i < 50; i++) cb({ type: "action.progress", id: runId, line, stream: "stdout" });
+    cb({ type: "action.done", id: runId, code: 0 });
+
+    const { result } = onResult.mock.calls[0]![0] as { result: { stdout: string } };
+    expect(result.stdout.length).toBeGreaterThanOrEqual(4000);
+    expect(result.stdout.length).toBeLessThanOrEqual(8000);
+  });
+
   it("fires onResult with code 1 when action.done fires with non-zero code (fromChat)", () => {
     const onResult = vi.fn();
     runActionInBackground({

@@ -50,7 +50,7 @@ interface InFlightRun {
  * AI-action ledger (HELM-18), best-effort.
  *
  * Frame types emitted:
- *   { type: "action.progress", id, line }   — one stdout/stderr line
+ *   { type: "action.progress", id, line, stream } — one stdout/stderr line
  *   { type: "action.done",     id, code }   — process exited
  *   { type: "action.error",    id, message} — invalid action or spawn failure
  */
@@ -206,14 +206,14 @@ export class ActionRunManager {
         const line = buf.slice(0, nl);
         buf = buf.slice(nl + 1);
         capture(`${line}\n`);
-        if (line.length > 0) this.ws.send(JSON.stringify({ type: "action.progress", id, line }));
+        if (line.length > 0) this.ws.send(JSON.stringify({ type: "action.progress", id, line, stream: channel }));
       }
     });
     // Flush a final line with no trailing newline (e.g. `rollout pause` output).
     stream.on("end", () => {
       if (buf.length > 0) {
         capture(buf);
-        this.ws.send(JSON.stringify({ type: "action.progress", id, line: buf }));
+        this.ws.send(JSON.stringify({ type: "action.progress", id, line: buf, stream: channel }));
         buf = "";
       }
     });
