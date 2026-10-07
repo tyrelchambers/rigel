@@ -82,6 +82,8 @@ export interface ActionBlock {
   host?: string;
   /** sshCommand only: the exact remote command. */
   command?: string;
+  /** sshCommand only: run `command` as root via `sudo -S`; it must not start with sudo itself. */
+  sudo?: boolean;
   /** `command` only: Claude's destructiveness hint. */
   destructive?: boolean;
   /** applyManifest only — manifest YAML, applied via /api/apply. */

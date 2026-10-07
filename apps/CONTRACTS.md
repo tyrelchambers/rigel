@@ -41,6 +41,10 @@ Action JSON (`SuggestedAction`):
     Settings > AI agents > SSH hosts.
   - `command` (string) — `sshCommand` only: the exact remote command. It may not
     start with `-`.
+  - `sudo` (bool) — `sshCommand` only: run `command` as root. With `sudo: true`
+    the `command` must NOT start with `sudo ` (the app adds it); the user types
+    their sudo password in the confirm dialog. The model never supplies a
+    password.
 
 Special kinds:
 - `purge` — full app removal. Emit `{"kind":"purge","name":<root-deployment>,"namespace":<ns>}`.
@@ -80,11 +84,18 @@ is keyed on the ACTION, not on what it hears:
 
 Additional kinds:
 - `sshCommand` — run one command on an enabled SSH host. Fields `host`,
-  `command`, optional `destructive`. The app runs
+  `command`, optional `destructive`, optional `sudo`. The app runs
   `ssh -T -o BatchMode=yes -- <host> <command>` after the confirm sheet and
   records it (with the exit code) in the AI action ledger. Never
   auto-runnable: it is not in `AUTO_RUNNABLE_KINDS`, so voice always surfaces
   it for approval.
+  With `sudo: true` the remote command becomes
+  `sudo -S -p '<marker>' -- sh -c 'exec </dev/null; <command>'`. The password
+  travels only in the `action.run` WS frame's separate `secret` field (never in
+  the action, the ledger, progress frames or chat feedback) and is written to
+  ssh's stdin once sudo prompts. So a sudo action runs only from the chat
+  confirm dialog: REST `/api/action` (and so voice) refuses to execute it, and
+  batch runs skip it.
 - `applyManifest` — install/self-host a new app. The `action` block is
   IMMEDIATELY followed by a ` ```yaml ` block; the parser attaches it as
   `manifest` and the app applies it via `kubectl apply -f -`.

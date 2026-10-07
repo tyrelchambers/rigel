@@ -341,5 +341,7 @@ describe("what the voice agent may run itself", () => {
 it("sshCommand is a known kind and never auto-runnable", () => {
   expect(ACTION_KINDS).toContain("sshCommand");
   expect(isAutoRunnable({ kind: "sshCommand" })).toBe(false);
+  const sudo = { kind: "sshCommand", sudo: true };
+  expect(isAutoRunnable(sudo)).toBe(false);
   expect(isDestructiveAction({ kind: "sshCommand", destructive: true })).toBe(true);
 });

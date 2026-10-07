@@ -44,6 +44,8 @@ export interface SuggestedAction {
   host?: string;
   /** sshCommand — the exact remote command. */
   command?: string;
+  /** sshCommand — runs `command` as root; the user types their sudo password at confirm time. */
+  sudo?: boolean;
   /** command — Claude's destructive hint (app takes the stricter of this and inference). */
   destructive?: boolean;
   /** applyManifest only — the paired yaml content, attached by the parser (not in the model's JSON). */
