@@ -1,4 +1,11 @@
-import { classifyTier, findVerb, KUBECTL_READONLY_SUBCOMMANDS, printsSecretValues } from "./kubectlPolicy";
+import {
+  classifyTier,
+  findVerb,
+  KUBECTL_GLOBAL_BOOLEANS,
+  KUBECTL_READONLY_SUBCOMMANDS,
+  printsSecretValues,
+  type StrictFlags,
+} from "./kubectlPolicy";
 import { ASSIGNMENT, flagValues, parseShell, splitHead, type ParsedShell, type ShellSegment } from "./shellWords";
 
 export type SshDecision = "read" | "approve" | "deny";
@@ -145,7 +152,7 @@ const KUBECTL_REMOTE_GROUP_READS: Record<string, Set<string>> = {
   ...KUBECTL_READONLY_SUBCOMMANDS,
   config: new Set(["view", "get-contexts", "current-context"]),
 };
-const KUBECTL_GLOBAL_BOOLEANS = new Set(["--insecure-skip-tls-verify", "--match-server-version", "--warnings-as-errors"]);
+const REMOTE_KUBECTL_FLAGS: StrictFlags = { booleans: KUBECTL_GLOBAL_BOOLEANS, anyAssignment: false };
 
 function dockerRead(args: readonly string[]): boolean {
   const verb = leadingVerb(args, DOCKER_READS, DOCKER_GROUP_READS);
@@ -162,7 +169,7 @@ function crictlRead(args: readonly string[]): boolean {
 }
 
 function kubectlRead(args: readonly string[]): boolean {
-  const { verb, sub } = findVerb(args, KUBECTL_GLOBAL_BOOLEANS);
+  const { verb, sub } = findVerb(args, REMOTE_KUBECTL_FLAGS);
   if (verb === null) return false;
   const group = lookup(KUBECTL_REMOTE_GROUP_READS, verb);
   if (group ? sub === null || !group.has(sub) : !KUBECTL_REMOTE_READS.has(verb)) return false;

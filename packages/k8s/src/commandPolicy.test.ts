@@ -191,3 +191,32 @@ describe("classifyCommand ssh routing and command heads", () => {
     },
   );
 });
+
+describe("unknown flag before a kubectl or helm verb", () => {
+  test.each([
+    "kubectl get pods -A",
+    "kubectl --context ctx get pods",
+    "kubectl -n x get pods -o wide",
+    "kubectl get pods --all-namespaces",
+    "kubectl --insecure-skip-tls-verify get nodes",
+    "kubectl --request-timeout=5s get pods",
+    "helm list -A",
+    "helm --kube-context ctx status x",
+  ])("%s stays a read", (cmd) => {
+    expect(classifyCommand(cmd, "ctx").decision).toBe("allow");
+  });
+
+  test.each([
+    "kubectl --field-selector get delete pod x",
+    "kubectl --foo get delete pod x",
+    "helm --foo list uninstall app",
+  ])("%s needs approval", (cmd) => {
+    const v = classifyCommand(cmd, "ctx");
+    expect(v.decision).toBe("deny");
+    expect(v.reason).toContain("can't run unattended");
+  });
+
+  test("tiers as destructive so tier-based callers never auto-run it", () => {
+    expect(classifyTier("kubectl --field-selector get delete pod x").tier).toBe("destructive");
+  });
+});

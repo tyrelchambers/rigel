@@ -56,6 +56,19 @@ const VALUE_FLAGS = new Set([
   "-v", "--v", "--vmodule",
 ]);
 
+export const KUBECTL_GLOBAL_BOOLEANS: ReadonlySet<string> = new Set([
+  "--insecure-skip-tls-verify", "--match-server-version", "--warnings-as-errors", "--disable-compression", "-h", "--help",
+]);
+const HELM_GLOBAL_BOOLEANS: ReadonlySet<string> = new Set(["--debug", "-h", "--help"]);
+
+export interface StrictFlags {
+  booleans: ReadonlySet<string>;
+  anyAssignment: boolean;
+}
+
+const LOCAL_KUBECTL_FLAGS: StrictFlags = { booleans: KUBECTL_GLOBAL_BOOLEANS, anyAssignment: true };
+const LOCAL_HELM_FLAGS: StrictFlags = { booleans: HELM_GLOBAL_BOOLEANS, anyAssignment: true };
+
 export type Tier = "read" | "reversible" | "destructive" | "blocked";
 
 export interface TierVerdict {
@@ -77,7 +90,15 @@ function unquote(t: string): string {
   return t.replace(/^['"]+/, "").replace(/['"]+$/, "");
 }
 
-function nextWord(tokens: readonly string[], from: number, knownBooleans?: ReadonlySet<string>): number {
+const UNKNOWN_FLAG = -2;
+
+function knownFlag(t: string, strict: StrictFlags): boolean {
+  if (strict.booleans.has(t)) return true;
+  const eq = t.indexOf("=");
+  return eq > 0 && (strict.anyAssignment || VALUE_FLAGS.has(t.slice(0, eq)));
+}
+
+function nextWord(tokens: readonly string[], from: number, strict?: StrictFlags): number {
   for (let i = from; i < tokens.length; i++) {
     const t = tokens[i]!;
     if (!t.startsWith("-")) return i;
@@ -85,30 +106,31 @@ function nextWord(tokens: readonly string[], from: number, knownBooleans?: Reado
       i++;
       continue;
     }
-    if (knownBooleans && !knownBooleans.has(t) && !VALUE_FLAGS.has(t.split("=", 1)[0]!)) return -1;
+    if (strict && !knownFlag(t, strict)) return UNKNOWN_FLAG;
   }
   return -1;
 }
 
 /**
  * The verb and first subcommand of one kubectl/helm invocation (tokens after the
- * binary). With `knownBooleans`, it fails closed: a flag before the verb or
- * subcommand that is neither a value flag nor a known boolean ends the search,
- * because cobra reads an unknown `--flag` as consuming the next token.
+ * binary). With `strict`, it fails closed: a flag before the verb or subcommand
+ * that is neither a value flag nor a known boolean ends the search and sets
+ * `unknownFlag`, because cobra reads an unknown `--flag` as consuming the next token.
  */
 export function findVerb(
   tokens: readonly string[],
-  knownBooleans?: ReadonlySet<string>,
-): { verb: string | null; sub: string | null } {
-  const vi = nextWord(tokens, 0, knownBooleans);
-  if (vi < 0) return { verb: null, sub: null };
-  const si = nextWord(tokens, vi + 1, knownBooleans);
-  return { verb: tokens[vi]!, sub: si < 0 ? null : tokens[si]! };
+  strict?: StrictFlags,
+): { verb: string | null; sub: string | null; unknownFlag: boolean } {
+  const vi = nextWord(tokens, 0, strict);
+  if (vi < 0) return { verb: null, sub: null, unknownFlag: vi === UNKNOWN_FLAG };
+  const si = nextWord(tokens, vi + 1, strict);
+  return { verb: tokens[vi]!, sub: si < 0 ? null : tokens[si]!, unknownFlag: false };
 }
 
 /** Tier of one kubectl invocation (tokens after the binary). null = read. */
 function kubectlTier(rest: string[]): Tier | null {
-  const { verb, sub } = findVerb(rest);
+  const { verb, sub, unknownFlag } = findVerb(rest, LOCAL_KUBECTL_FLAGS);
+  if (unknownFlag) return "destructive";
   if (!verb) return null;
   if (KUBECTL_BLOCKED.has(verb)) return "blocked";
   if (KUBECTL_READ_PARENTS.has(verb)) {
@@ -126,7 +148,8 @@ function kubectlTier(rest: string[]): Tier | null {
 }
 
 function helmTier(rest: string[]): Tier | null {
-  const { verb } = findVerb(rest);
+  const { verb, unknownFlag } = findVerb(rest, LOCAL_HELM_FLAGS);
+  if (unknownFlag) return "destructive";
   if (!verb) return null;
   if (HELM_DESTRUCTIVE.has(verb)) return "destructive";
   if (HELM_REVERSIBLE.has(verb)) return "reversible";
