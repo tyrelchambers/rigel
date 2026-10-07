@@ -43,15 +43,19 @@ export async function listenForJobs(
   wait: (ms: number) => Promise<void> = sleep,
 ): Promise<never> {
   let backoff = MIN_BACKOFF_MS;
+  let lastFailure: string | null = null;
   for (;;) {
     try {
       const jobs = await server.jobs();
       backoff = MIN_BACKOFF_MS;
+      lastFailure = null;
       console.log("waiting for voice jobs");
       for await (const job of jobs) onJob(job);
       console.log("dispatch stream ended");
     } catch (err) {
-      console.error(`dispatch stream failed: ${err instanceof Error ? err.message : String(err)}`);
+      const failure = err instanceof Error ? err.message : String(err);
+      if (failure !== lastFailure) console.error(`dispatch stream failed: ${failure}`);
+      lastFailure = failure;
     }
     await wait(backoff);
     backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);

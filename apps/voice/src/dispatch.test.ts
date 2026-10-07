@@ -104,4 +104,32 @@ describe("listenForJobs", () => {
     error.mockRestore();
     expect(jobs).toHaveBeenCalledTimes(2);
   });
+  test("a failure that repeats is logged once per streak, and again after a connect", async () => {
+    const outcomes: (string | null)[] = [
+      "dispatch failed: 404",
+      "dispatch failed: 404",
+      "dispatch failed: 404",
+      "ECONNREFUSED",
+      "ECONNREFUSED",
+      null,
+      "dispatch failed: 404",
+    ];
+    const jobs = vi.fn(async () => {
+      const failure = outcomes.shift();
+      if (failure) throw new Error(failure);
+      return streamOf([]);
+    });
+    const wait = vi.fn(async () => {
+      if (outcomes.length === 0) throw new Stop();
+    });
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(listenForJobs({ jobs }, () => {}, wait)).rejects.toBeInstanceOf(Stop);
+    const logged = error.mock.calls.map((c) => String(c[0]));
+    error.mockRestore();
+    expect(logged).toEqual([
+      "dispatch stream failed: dispatch failed: 404",
+      "dispatch stream failed: ECONNREFUSED",
+      "dispatch stream failed: dispatch failed: 404",
+    ]);
+  });
 });
