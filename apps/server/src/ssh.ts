@@ -17,6 +17,7 @@ export interface SshHost {
 const SSH_DIR = join(homedir(), ".ssh");
 export const SSH_ACTION_TIMEOUT_MS = 30 * 60_000;
 export const SUDO_PROMPT_MARKER = "[rigel-sudo-prompt]";
+export const SUDO_OK_MARKER = "[rigel-sudo-ok]";
 const ACTION_MAX_OUTPUT = 10 * 1024 * 1024;
 
 function enabledFile(): string {
@@ -102,7 +103,9 @@ export async function listSshHosts(): Promise<SshHost[]> {
 
 export function sshActionArgv(host: string, command: string, sudo = false): string[] {
   const remote = sudo
-    ? `sudo -S -p ${shellQuote(SUDO_PROMPT_MARKER)} -- sh -c ${shellQuote(`exec </dev/null; ${command}`)}`
+    ? `sh -c ${shellQuote(
+        `sudo -S -p ${shellQuote(SUDO_PROMPT_MARKER)} -v && printf %s ${shellQuote(SUDO_OK_MARKER)} >&2 && exec </dev/null && sudo -n -- sh -c ${shellQuote(command)}`,
+      )}`
     : command;
   return ["ssh", ...SSH_BATCH_ARGS, "--", host, remote];
 }

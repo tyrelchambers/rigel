@@ -509,7 +509,8 @@ test.each([
 });
 
 // ---------------------------------------------------------------------------
-// sudo sshCommand: the password rides beside the action and reaches only stdin.
+// sudo sshCommand: the password rides beside the action and reaches only stdin,
+// and only while sudo -v is the one asking.
 // ---------------------------------------------------------------------------
 
 const SECRET = "hunter2-Sup3r";
@@ -530,19 +531,21 @@ function sudoHarness() {
   return { ...h, stdin, written };
 }
 
-test("a sudo sshCommand pipes stdin and writes the secret only once sudo prompts", async () => {
+async function finish(proc: ReturnType<typeof fakeProc>, code: number) {
+  proc.stdout.end();
+  proc.stderr.end();
+  await settle();
+  proc.emit("close", code);
+  await settle();
+}
+
+test("a sudo sshCommand writes the secret once when sudo's prompt comes first, even split across chunks", async () => {
   const { spawns, proc, ws, mgr, stdin, written } = sudoHarness();
   mgr.run({ id: "su1", action: sudoAction, secret: SECRET });
   await settle();
 
   expect(spawns[0]!.opts.stdio).toEqual(["pipe", "pipe", "pipe"]);
-  expect(spawns[0]!.args.at(-1)).toBe(
-    "sudo -S -p '[rigel-sudo-prompt]' -- sh -c 'exec </dev/null; apt-get upgrade -y'",
-  );
-  proc.stdout.write("Reading package lists...\n");
-  await settle();
-  expect(written).toEqual([]);
-
+  expect(spawns[0]!.args.at(-1)).toContain("sudo -S -p");
   proc.stderr.write("[rigel-sudo");
   await settle();
   expect(written).toEqual([]);
@@ -551,67 +554,104 @@ test("a sudo sshCommand pipes stdin and writes the secret only once sudo prompts
   expect(written).toEqual([`${SECRET}\n`]);
   expect(stdin.writableEnded).toBe(true);
 
-  proc.stderr.write("[rigel-sudo-prompt]W: some warning\n");
-  proc.stderr.end();
-  await settle();
+  proc.stderr.write("[rigel-sudo-prompt]sudo: 1 incorrect password attempt\n");
+  await finish(proc, 1);
   expect(written).toEqual([`${SECRET}\n`]);
-  proc.emit("close", 0);
-  await settle();
-
-  const progress = ws.sent.filter((m) => m.type === "action.progress" && m.id === "su1");
-  expect(progress).toContainEqual({ type: "action.progress", id: "su1", line: "W: some warning", stream: "stderr" });
-  expect(JSON.stringify(ws.sent)).not.toContain("rigel-sudo-prompt");
+  expect(ws.sent).toContainEqual({
+    type: "action.progress", id: "su1", line: "sudo: 1 incorrect password attempt", stream: "stderr",
+  });
+  expect(JSON.stringify(ws.sent)).not.toContain("rigel-sudo");
 });
 
-test("a sudo sshCommand with no prompt (cached or passwordless sudo) writes nothing and ends stdin on exit", async () => {
-  const { proc, mgr, stdin, written } = sudoHarness();
+test("text sudo prints before its prompt (the lecture) does not disarm it", async () => {
+  const { proc, mgr, written } = sudoHarness();
   mgr.run({ id: "su2", action: sudoAction, secret: SECRET });
   await settle();
 
-  proc.stdout.end("0 upgraded\n");
-  proc.stderr.end();
+  proc.stderr.write("We trust you have received the usual lecture.\n\n[rigel-sudo-prompt]");
   await settle();
-  proc.emit("close", 0);
+  expect(written).toEqual([`${SECRET}\n`]);
+  await finish(proc, 0);
+});
+
+test("once sudo -v has passed, a marker the command prints is ignored", async () => {
+  const { proc, ws, mgr, stdin, written } = sudoHarness();
+  mgr.run({ id: "su3", action: sudoAction, secret: SECRET });
   await settle();
 
+  proc.stderr.write("[rigel-sudo-ok]");
+  await settle();
+  expect(stdin.writableEnded).toBe(true);
+  proc.stderr.write("[rigel-sudo-prompt]");
+  await settle();
+  await finish(proc, 0);
+
+  expect(written).toEqual([]);
+  expect(JSON.stringify(ws.sent)).not.toContain("rigel-sudo");
+});
+
+test("any stdout before the prompt disarms it, so a late marker writes nothing", async () => {
+  const { proc, mgr, stdin, written } = sudoHarness();
+  mgr.run({ id: "su4", action: sudoAction, secret: SECRET });
+  await settle();
+
+  proc.stdout.write("Reading package lists...\n");
+  await settle();
+  expect(stdin.writableEnded).toBe(true);
+  proc.stderr.write("[rigel-sudo-prompt]");
+  await settle();
+  await finish(proc, 0);
+
+  expect(written).toEqual([]);
+});
+
+test("a sudo sshCommand with no password ends stdin at the prompt so sudo fails on its own", async () => {
+  const { spawns, proc, mgr, stdin, written } = sudoHarness();
+  mgr.run({ id: "su5", action: sudoAction });
+  await settle();
+
+  expect(spawns).toHaveLength(1);
+  expect(stdin.writableEnded).toBe(false);
+  proc.stderr.write("[rigel-sudo-prompt]");
+  await settle();
+  expect(stdin.writableEnded).toBe(true);
+  await finish(proc, 1);
+  expect(written).toEqual([]);
+});
+
+test("a sudo sshCommand that never prompts (NOPASSWD or cached) writes nothing and ends stdin on exit", async () => {
+  const { proc, mgr, stdin, written } = sudoHarness();
+  mgr.run({ id: "su6", action: sudoAction, secret: SECRET });
+  await settle();
+
+  await finish(proc, 0);
   expect(written).toEqual([]);
   expect(stdin.writableEnded).toBe(true);
 });
 
-test("a sudo sshCommand without a secret is refused without spawning", async () => {
-  const { spawns, ws, mgr } = sudoHarness();
-  mgr.run({ id: "su3", action: sudoAction });
-  await settle();
-
-  expect(spawns).toHaveLength(0);
-  expect(ws.sent).toContainEqual({ type: "action.error", id: "su3", message: "This action needs your sudo password" });
-});
-
 test("a sudo sshCommand whose command starts with sudo is refused without spawning", async () => {
   const { spawns, ws, mgr } = sudoHarness();
-  mgr.run({ id: "su4", action: { ...sudoAction, command: "sudo apt-get upgrade -y" }, secret: SECRET });
+  mgr.run({ id: "su7", action: { ...sudoAction, command: "sudo apt-get upgrade -y" }, secret: SECRET });
   await settle();
 
   expect(spawns).toHaveLength(0);
-  expect(ws.sent.find((m) => m.type === "action.error" && m.id === "su4")?.message).toContain("without the sudo prefix");
+  expect(ws.sent.find((m) => m.type === "action.error" && m.id === "su7")?.message).toContain("without the sudo prefix");
 });
 
 test("the secret never reaches the spawn args, frames, or ledger entry", async () => {
   const { recorded, spawns, proc, ws, mgr } = sudoHarness();
-  mgr.run({ id: "su5", action: sudoAction, secret: SECRET });
+  mgr.run({ id: "su8", action: sudoAction, secret: SECRET });
   await settle();
   proc.stderr.write("[rigel-sudo-prompt]");
   await settle();
-  proc.stderr.end("sudo: 1 incorrect password attempt\n");
-  await settle();
-  proc.emit("close", 1);
-  await settle();
+  proc.stderr.write("sudo: 1 incorrect password attempt\n");
+  await finish(proc, 1);
 
   expect(JSON.stringify(spawns)).not.toContain(SECRET);
   expect(JSON.stringify(ws.sent)).not.toContain(SECRET);
   expect(JSON.stringify(recorded)).not.toContain(SECRET);
   expect(recorded[0]!.entry).toMatchObject({
-    command: "ssh -T -o BatchMode=yes -- k8s-truenas sudo -S -p '[rigel-sudo-prompt]' -- sh -c 'exec </dev/null; apt-get upgrade -y'",
+    command: `ssh -T -o BatchMode=yes -- k8s-truenas ${spawns[0]!.args.at(-1)}`,
     outcome: "failure",
     detail: "exit 1: sudo: 1 incorrect password attempt",
   });

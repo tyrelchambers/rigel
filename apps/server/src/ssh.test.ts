@@ -1,8 +1,8 @@
-import { execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
   listSshConfigAliases,
   parseSshConfig,
@@ -10,6 +10,7 @@ import {
   setEnabledSshHosts,
   sshActionArgv,
   sshActionResponse,
+  SUDO_OK_MARKER,
   SUDO_PROMPT_MARKER,
   validateSshAction,
 } from "./ssh";
@@ -73,18 +74,61 @@ describe("sshActionArgv", () => {
     ]);
   });
 
-  it("wraps a sudo command so sudo reads the password from stdin behind a marker prompt", () => {
+  it("authenticates sudo first, then detaches stdin before the command runs, inside one sh -c word", () => {
+    expect(SUDO_PROMPT_MARKER).toBe("[rigel-sudo-prompt]");
+    expect(SUDO_OK_MARKER).toBe("[rigel-sudo-ok]");
     expect(sshActionArgv("web-1", "apt-get upgrade -y", true)).toEqual([
       "ssh", "-T", "-o", "BatchMode=yes", "--", "web-1",
-      `sudo -S -p '${SUDO_PROMPT_MARKER}' -- sh -c 'exec </dev/null; apt-get upgrade -y'`,
+      "sh -c 'sudo -S -p '\\''[rigel-sudo-prompt]'\\'' -v && printf %s '\\''[rigel-sudo-ok]'\\'' >&2 && exec </dev/null && sudo -n -- sh -c '\\''apt-get upgrade -y'\\'''",
     ]);
   });
 
-  it("quotes a sudo command containing single quotes so the remote shell runs it unchanged", () => {
-    const remote = sshActionArgv("web-1", `echo 'a b' "c'd" && cat`, true).at(-1)!;
-    const fakeSudo = 'sudo() { [ "$1 $2 $3 $4" = "-S -p [rigel-sudo-prompt] --" ] || exit 9; shift 4; "$@"; }';
-    const out = execFileSync("/bin/sh", ["-c", `${fakeSudo}; ${remote}`], { input: "hunter2\n" }).toString();
-    expect(out).toBe("a b c'd\n");
+  describe("run through a stub sudo", () => {
+    let bin: string;
+    beforeAll(async () => {
+      bin = await mkdtemp(join(tmpdir(), "rigel-sudo-"));
+      await writeFile(
+        join(bin, "sudo"),
+        [
+          "#!/bin/sh",
+          'if [ "$1 $2 $3 $4" = "-S -p [rigel-sudo-prompt] -v" ]; then',
+          '  printf "%s" "$3" >&2',
+          "  IFS= read -r pw || exit 1",
+          '  [ "$pw" = "hunter2" ] || exit 1',
+          "  exit 0",
+          "fi",
+          'if [ "$1 $2" = "-n --" ]; then shift 2; exec "$@"; fi',
+          "exit 8",
+        ].join("\n"),
+        { mode: 0o755 },
+      );
+    });
+
+    const runRemote = (command: string, input: string) =>
+      spawnSync("/bin/sh", ["-c", sshActionArgv("web-1", command, true).at(-1)!], {
+        input,
+        env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+      });
+
+    it("keeps single quotes, double quotes and newlines intact through both shell levels", () => {
+      const r = runRemote(`printf '%s|' 'a b' "c'd"\necho "$((1 + 1))"`, "hunter2\n");
+      expect(r.stderr.toString()).toBe("[rigel-sudo-prompt][rigel-sudo-ok]");
+      expect(r.stdout.toString()).toBe("a b|c'd|2\n");
+      expect(r.status).toBe(0);
+    });
+
+    it("gives the command /dev/null, never the password pipe", () => {
+      const r = runRemote("cat; echo done", "hunter2\nleftover\n");
+      expect(r.stdout.toString()).toBe("done\n");
+      expect(r.status).toBe(0);
+    });
+
+    it("never runs the command, or says sudo passed, when sudo rejects the password", () => {
+      const r = runRemote("echo ran", "wrong\n");
+      expect(r.stdout.toString()).toBe("");
+      expect(r.stderr.toString()).toBe("[rigel-sudo-prompt]");
+      expect(r.status).not.toBe(0);
+    });
   });
 });
 

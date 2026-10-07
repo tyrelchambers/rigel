@@ -13,11 +13,17 @@ import {
   SSH_ACTION_TIMEOUT_MS,
   sshActionArgv,
   sshActionDetail,
+  SUDO_OK_MARKER,
   SUDO_PROMPT_MARKER,
   validateSshAction,
 } from "./ssh";
 
 interface JsonSink { send(data: string): unknown }
+
+interface SudoGate {
+  prompt(): void;
+  disarm(): void;
+}
 
 /** Enough of each stream to summarize the run in the ledger; not a log store. */
 const OUTPUT_CAPTURE_MAX = 2000;
@@ -59,7 +65,8 @@ interface InFlightRun {
  * all guards), or for `sshCommand` the same validated ssh argv the REST route
  * runs, spawns it, and streams output line-by-line as
  * `action.progress` frames. A `sudo` sshCommand also gets a piped stdin that
- * receives the request's `secret` once, when sudo's marker prompt appears.
+ * receives the request's `secret` once, when sudo's marker prompt appears
+ * before any sign the command has started.
  * Multiple concurrent runs are allowed (each identified by the caller's `id`).
  * Every completed run is appended to the AI-action ledger (HELM-18), best-effort.
  *
@@ -137,7 +144,6 @@ export class ActionRunManager {
     }
     const valid = validateSshAction(action, enabled);
     if ("error" in valid) return this.error(id, valid.error);
-    if (valid.sudo && !secret) return this.error(id, "This action needs your sudo password");
     if (this.runs.has(id)) return this.error(id, `action run '${id}' is already in progress`);
     const [bin, ...args] = sshActionArgv(valid.host, valid.command, valid.sudo);
     this.start(
@@ -147,7 +153,7 @@ export class ActionRunManager {
       bin!,
       args,
       { timeout: SSH_ACTION_TIMEOUT_MS },
-      valid.sudo ? secret : undefined,
+      valid.sudo ? { secret: secret || null } : undefined,
     );
   }
 
@@ -158,13 +164,14 @@ export class ActionRunManager {
     bin: string,
     args: string[],
     opts: { timeout?: number },
-    sudoSecret?: string,
+    sudo?: { secret: string | null },
   ): void {
     let proc: ChildProcess;
-    let pendingSecret = sudoSecret ?? null;
+    let armed = sudo !== undefined;
+    let pendingSecret = sudo?.secret ?? null;
     try {
       proc = this.spawnFn(bin, args, {
-        stdio: [pendingSecret === null ? "ignore" : "pipe", "pipe", "pipe"],
+        stdio: [sudo ? "pipe" : "ignore", "pipe", "pipe"],
         env: spawnEnv(),
         ...opts,
       });
@@ -183,17 +190,23 @@ export class ActionRunManager {
 
     proc.stdin?.on("error", () => {});
     const finishStdin = () => {
+      armed = false;
       pendingSecret = null;
       proc.stdin?.end();
     };
-    const onSudoPrompt = () => {
-      if (pendingSecret === null) return;
-      proc.stdin?.write(`${pendingSecret}\n`);
-      finishStdin();
+    const gate: SudoGate | undefined = sudo && {
+      prompt: () => {
+        if (!armed) return;
+        if (pendingSecret !== null) proc.stdin?.write(`${pendingSecret}\n`);
+        finishStdin();
+      },
+      disarm: () => {
+        if (armed) finishStdin();
+      },
     };
 
-    this.pump(id, proc.stdout, "stdout");
-    this.pump(id, proc.stderr, "stderr", sudoSecret === undefined ? undefined : onSudoPrompt);
+    this.pump(id, proc.stdout, "stdout", gate);
+    this.pump(id, proc.stderr, "stderr", gate);
     proc.on("error", (err: Error) => {
       finishStdin();
       this.runs.delete(id);
@@ -229,15 +242,16 @@ export class ActionRunManager {
   }
 
   /**
-   * Forward a stream's lines as action.progress frames. With `onSudoPrompt`,
-   * every SUDO_PROMPT_MARKER is cut from the text before it is forwarded or
-   * captured, and each sighting calls `onSudoPrompt`.
+   * Forward a stream's lines as action.progress frames. With a sudo `gate`, any
+   * stdout disarms it, and on stderr each SUDO_PROMPT_MARKER (prompt) and
+   * SUDO_OK_MARKER (disarm) is acted on in order and cut from the text before it
+   * is forwarded or captured.
    */
   private pump(
     id: string,
     stream: NodeJS.ReadableStream | null,
     channel: "stdout" | "stderr",
-    onSudoPrompt?: () => void,
+    gate?: SudoGate,
   ): void {
     if (!stream) return;
     let buf = "";
@@ -248,9 +262,18 @@ export class ActionRunManager {
     };
     stream.on("data", (chunk: Buffer) => {
       buf += chunk.toString("utf8");
-      if (onSudoPrompt && buf.includes(SUDO_PROMPT_MARKER)) {
-        buf = buf.split(SUDO_PROMPT_MARKER).join("");
-        onSudoPrompt();
+      if (gate && channel === "stdout" && chunk.length > 0) gate.disarm();
+      while (gate && channel === "stderr") {
+        const prompt = buf.indexOf(SUDO_PROMPT_MARKER);
+        const ok = buf.indexOf(SUDO_OK_MARKER);
+        if (prompt < 0 && ok < 0) break;
+        if (ok >= 0 && (prompt < 0 || ok < prompt)) {
+          buf = buf.slice(0, ok) + buf.slice(ok + SUDO_OK_MARKER.length);
+          gate.disarm();
+        } else {
+          buf = buf.slice(0, prompt) + buf.slice(prompt + SUDO_PROMPT_MARKER.length);
+          gate.prompt();
+        }
       }
       let nl: number;
       while ((nl = buf.indexOf("\n")) >= 0) {
