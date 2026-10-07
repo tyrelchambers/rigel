@@ -148,7 +148,13 @@ export function makeWsHandlers(
       actionRunners.get(ws)?.stop();
     },
     message(ws: WebSocket, raw: string | Buffer) {
-      const m = JSON.parse(String(raw));
+      let m;
+      try {
+        m = JSON.parse(String(raw));
+      } catch {
+        return;
+      }
+      if (!m || typeof m !== "object") return;
       const map = unsubs.get(ws)!;
       if (m.type === "subscribe") {
         const { subCtx, key } = resolveSub(m);

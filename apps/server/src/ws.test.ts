@@ -326,6 +326,28 @@ test("action.run without a context falls back to the connection's boot context",
   runSpy.mockRestore();
 });
 
+test("a malformed frame is ignored without throwing or logging its text", async () => {
+  const runSpy = vi.spyOn(ActionRunManager.prototype, "run").mockImplementation(() => {});
+  const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+  const handlers = makeWsHandlers(fakeMgr() as any, "boot-ctx");
+  const ws = fakeWs();
+  handlers.open(ws);
+
+  expect(() => handlers.message(ws, '{"type":"action.run","secret":"hunter2"')).not.toThrow();
+  expect(() => handlers.message(ws, "null")).not.toThrow();
+  await flush();
+
+  expect(runSpy).not.toHaveBeenCalled();
+  const logged = JSON.stringify([...errorSpy.mock.calls, ...warnSpy.mock.calls, ...logSpy.mock.calls]);
+  expect(logged).not.toContain("hunter2");
+  runSpy.mockRestore();
+  errorSpy.mockRestore();
+  warnSpy.mockRestore();
+  logSpy.mockRestore();
+});
+
 test("action.run hands a sudo secret to the manager beside the action, never inside it", async () => {
   const runSpy = vi.spyOn(ActionRunManager.prototype, "run").mockImplementation(() => {});
   const mgr = fakeMgr();
