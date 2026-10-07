@@ -80,6 +80,7 @@ export function superviseSession(
     return ended;
   };
   const awaitClient = (ms: number, why: string) => {
+    if (ending) return;
     clearTimeout(clientTimer);
     clientTimer = setTimeout(() => {
       console.log(`${job.room}: ${job.clientIdentity} ${why}`);

@@ -226,6 +226,14 @@ describe("superviseSession", () => {
     expect(session.close).toHaveBeenCalledTimes(1);
   });
 
+  test("a drop after teardown began arms no grace timer", async () => {
+    vi.useFakeTimers();
+    const { room, teardown } = supervised();
+    void teardown();
+    room.drop(JOB.clientIdentity, DisconnectReason.SIGNAL_CLOSE);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   test("someone else joining during the grace does not cancel it", async () => {
     vi.useFakeTimers();
     const { room, session } = supervised();
