@@ -4,6 +4,7 @@
 export * from "./alerts";
 export * from "./digest";
 export * from "./commandPolicy";
+export * from "./sshPolicy";
 export * from "./rbacPolicy";
 
 export {
