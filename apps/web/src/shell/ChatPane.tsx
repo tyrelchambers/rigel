@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
+  faCheck,
   faCopy,
   faPenToSquare,
   faClock,
@@ -60,6 +61,7 @@ import {
   type ChatHandoffOpts,
 } from "@/lib/chatHandoff";
 import { useCommand } from "@/lib/shortcuts/useCommand";
+import { useCopyToClipboard } from "@/lib/useCopyToClipboard";
 import { useCluster } from "@/store/cluster";
 import { MessageBubble } from "@/panels/chat/MessageBubble";
 import { ThinkingPane } from "@/panels/chat/ThinkingPane";
@@ -590,14 +592,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     if (e.id === conversationId) startNewChat();
   }
 
-  async function copyConversation() {
-    const text = transcript(messages, stripActionBlocks);
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      /* clipboard unavailable */
-    }
-  }
+  const { copied: conversationCopied, copy: copyText } = useCopyToClipboard();
 
   // ── Action blocks → ConfirmSheet / PurgeSheet ─────────────────────────────
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
@@ -788,13 +783,13 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
 
           {/* Copy conversation */}
           <button
-            onClick={copyConversation}
+            onClick={() => copyText(transcript(messages, stripActionBlocks))}
             disabled={messages.length === 0}
-            title="Copy conversation"
+            title={conversationCopied ? "Copied" : "Copy conversation"}
             style={headerBtnStyle}
-            aria-label="Copy conversation"
+            aria-label={conversationCopied ? "Copied" : "Copy conversation"}
           >
-            <FontAwesomeIcon icon={faCopy} className="size-[11px]" />
+            <FontAwesomeIcon icon={conversationCopied ? faCheck : faCopy} className="size-[11px]" />
           </button>
 
           {/* New chat */}

@@ -308,3 +308,25 @@ describe("ChatPane per-agent session ids (no cross-agent resume)", () => {
     expect(lastSessionId()).toBe("claude-ses-1");
   });
 });
+
+describe("ChatPane copy conversation", () => {
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+    useCluster.setState({ connected: true, resources: {} });
+    localStorage.clear();
+    sendChat.mockClear();
+  });
+
+  it("copies the transcript and flips the button to Copied", async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    renderPane({ activeAgentId: "claude", agents: [claudeConnected, codex] }, { claude: CLAUDE_MODELS });
+    act(() => handoffToChat("check the ingress"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy conversation" }));
+
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("check the ingress"));
+    const copied = await screen.findByRole("button", { name: "Copied" });
+    expect(copied).toHaveAttribute("title", "Copied");
+  });
+});
