@@ -147,7 +147,7 @@ describe("ConfirmSheet — sudo sshCommand", () => {
     command: "apt-get upgrade -y",
     sudo: true,
   };
-  const wrapped = "sudo -S -p '[rigel-sudo-prompt]' -- sh -c 'exec </dev/null; apt-get upgrade -y'";
+  const wrapped = "sh -c 'sudo -S -p ... -v && ... && sudo -n -- sh -c apt-get upgrade -y'";
 
   beforeEach(async () => {
     const { fetchPreviewCommand } = await import("@/lib/api");
@@ -160,6 +160,8 @@ describe("ConfirmSheet — sudo sshCommand", () => {
     return button;
   }
 
+  const field = () => screen.getByLabelText("Sudo password for web-1");
+
   it("shows the sudo treatment: pill, target host, and a focused password field with its hint", async () => {
     wrap(<ConfirmSheet action={sudo} open={true} onClose={vi.fn()} fromChat />);
     await runAsRoot();
@@ -167,11 +169,23 @@ describe("ConfirmSheet — sudo sshCommand", () => {
     expect(screen.getByText("Needs sudo").getAttribute("style")).toContain("var(--accent-sudo)");
     expect(screen.queryByText("Remote")).not.toBeInTheDocument();
     expect(screen.getByText("Runs on")).toBeInTheDocument();
-    const field = screen.getByLabelText("Sudo password for web-1");
-    expect(field).toHaveAttribute("type", "password");
-    expect(field).toHaveAttribute("autocomplete", "off");
-    expect(field).toHaveFocus();
-    expect(screen.getByText("Sent once over the encrypted SSH connection. Not stored, logged, or shown to the assistant.")).toBeInTheDocument();
+    expect(field()).toHaveAttribute("type", "password");
+    expect(field()).toHaveFocus();
+    expect(
+      screen.getByText(
+        "Sent once over the encrypted SSH connection. Not stored, logged, or shown to the assistant. Leave empty if sudo doesn't ask for a password on this host.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the field out of autofill, spellcheck and autocorrect", async () => {
+    wrap(<ConfirmSheet action={sudo} open={true} onClose={vi.fn()} fromChat />);
+    await runAsRoot();
+
+    expect(field()).toHaveAttribute("autocomplete", "new-password");
+    expect(field()).toHaveAttribute("spellcheck", "false");
+    expect(field()).toHaveAttribute("autocapitalize", "none");
+    expect(field()).toHaveAttribute("autocorrect", "off");
   });
 
   it("names the ssh user in the target when the host's config is known", async () => {
@@ -184,21 +198,21 @@ describe("ConfirmSheet — sudo sshCommand", () => {
     expect(await screen.findByText("tyrel@web-1")).toBeInTheDocument();
   });
 
-  it("keeps Run as root disabled until a password is typed", async () => {
+  it("runs with no password for a host where sudo doesn't ask for one", async () => {
     wrap(<ConfirmSheet action={sudo} open={true} onClose={vi.fn()} fromChat />);
     const button = await runAsRoot();
-    expect(button).toBeDisabled();
+    await waitFor(() => expect(button).not.toBeDisabled());
+    await userEvent.click(button);
 
-    await userEvent.type(screen.getByLabelText("Sudo password for web-1"), "hunter2");
-    expect(button).not.toBeDisabled();
+    expect(runActionInBackground).toHaveBeenCalledTimes(1);
+    expect((runActionInBackground.mock.calls[0]![0] as { secret?: string }).secret).toBeUndefined();
   });
 
   it("hands the password to the runner beside the action and clears the field", async () => {
     const onClose = vi.fn();
     wrap(<ConfirmSheet action={sudo} open={true} onClose={onClose} fromChat />);
     const button = await runAsRoot();
-    const field = screen.getByLabelText("Sudo password for web-1");
-    await userEvent.type(field, "hunter2");
+    await userEvent.type(field(), "hunter2");
     await userEvent.click(button);
 
     expect(runActionInBackground).toHaveBeenCalledTimes(1);
@@ -208,35 +222,43 @@ describe("ConfirmSheet — sudo sshCommand", () => {
     expect(JSON.stringify(opts.action)).not.toContain("hunter2");
     expect(opts.commandString).not.toContain("hunter2");
     expect(onClose).toHaveBeenCalledTimes(1);
-    expect(field).toHaveValue("");
+    expect(field()).toHaveValue("");
   });
 
-  it("submits when Enter is pressed in the password field", async () => {
+  it("submits when Enter is pressed in the password field, empty or not", async () => {
     wrap(<ConfirmSheet action={sudo} open={true} onClose={vi.fn()} fromChat />);
     await runAsRoot();
-    await userEvent.type(screen.getByLabelText("Sudo password for web-1"), "hunter2{Enter}");
+    await userEvent.type(field(), "hunter2{Enter}");
+    await userEvent.type(field(), "{Enter}");
 
-    expect(runActionInBackground).toHaveBeenCalledTimes(1);
+    expect(runActionInBackground).toHaveBeenCalledTimes(2);
     expect((runActionInBackground.mock.calls[0]![0] as { secret?: string }).secret).toBe("hunter2");
-  });
-
-  it("does not submit on Enter while the field is empty", async () => {
-    wrap(<ConfirmSheet action={sudo} open={true} onClose={vi.fn()} fromChat />);
-    await runAsRoot();
-    await userEvent.type(screen.getByLabelText("Sudo password for web-1"), "{Enter}");
-
-    expect(runActionInBackground).not.toHaveBeenCalled();
+    expect((runActionInBackground.mock.calls[1]![0] as { secret?: string }).secret).toBeUndefined();
   });
 
   it("clears the password on cancel", async () => {
     wrap(<ConfirmSheet action={sudo} open={true} onClose={vi.fn()} fromChat />);
     await runAsRoot();
-    const field = screen.getByLabelText("Sudo password for web-1");
-    await userEvent.type(field, "hunter2");
+    await userEvent.type(field(), "hunter2");
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
-    expect(field).toHaveValue("");
+    expect(field()).toHaveValue("");
     expect(runActionInBackground).not.toHaveBeenCalled();
+  });
+
+  it("clears the password when the action changes while the dialog stays open", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const ui = (action: ActionBlock) => (
+      <QueryClientProvider client={qc}>
+        <ConfirmSheet action={action} open={true} onClose={vi.fn()} fromChat />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(ui(sudo));
+    await runAsRoot();
+    await userEvent.type(field(), "hunter2");
+
+    rerender(ui({ ...sudo, label: "Upgrade packages again" }));
+    await waitFor(() => expect(field()).toHaveValue(""));
   });
 
   it("asks for no password on a plain ssh action", async () => {

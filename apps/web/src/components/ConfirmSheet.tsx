@@ -85,9 +85,10 @@ function tint(color: string, percent: number): string {
  * ConfirmSheet — shows the EXACT kubectl command that will be executed before
  * running it. Mirrors the Swift `WorkloadConfirmSheet` confirm gate.
  *
- * A `sudo` sshCommand also asks for the sudo password. It lives only in this
- * component's state, is handed to the runner beside the action (never in it),
- * and is cleared on submit and on close.
+ * A `sudo` sshCommand also asks for the sudo password, which may be left empty
+ * where sudo doesn't prompt. It lives only in this component's state, is handed
+ * to the runner beside the action (never in it), and is cleared on submit, on
+ * close, and whenever the action changes.
  *
  * Usage:
  *   <ConfirmSheet action={pendingAction} open={!!pendingAction} onClose={() => setPendingAction(null)} />
@@ -143,10 +144,10 @@ export function ConfirmSheet({
 
   // Fetch the preview command whenever the action changes
   useEffect(() => {
+    setSudoPassword("");
     if (!action || !open) {
       setPreviewCommand(null);
       setPreviewError(null);
-      setSudoPassword("");
       setApplyState({ pending: false });
       reset();
       return;
@@ -274,7 +275,7 @@ export function ConfirmSheet({
     // immediately so the UI isn't locked behind a blocking dialog, and surface
     // progress in a toast. The chat result loop (parity with Swift
     // executeWorkload) is preserved via onResult inside the runner.
-    const secret = isSudo ? sudoPassword : undefined;
+    const secret = isSudo && sudoPassword !== "" ? sudoPassword : undefined;
     handleClose();
     runActionInBackground({
       action: act,
@@ -305,7 +306,7 @@ export function ConfirmSheet({
   // opens a PR (nothing applied), so it is NOT destructive either.
   const isDestructive = action ? isDestructiveAction(action) : false;
   const commandString = previewCommand ? previewCommand.join(" ") : null;
-  const canRunAsRoot = !!commandString && sudoPassword !== "" && !isPending;
+  const canRunAsRoot = !!commandString && !isPending;
 
   function handleCopy() {
     if (!commandString) return;
@@ -618,7 +619,10 @@ export function ConfirmSheet({
               <input
                 id={sudoPasswordId}
                 type="password"
-                autoComplete="off"
+                autoComplete="new-password"
+                spellCheck={false}
+                autoCapitalize="none"
+                autoCorrect="off"
                 autoFocus
                 value={sudoPassword}
                 onChange={(e) => setSudoPassword(e.target.value)}
@@ -631,6 +635,7 @@ export function ConfirmSheet({
               />
               <p className="text-2xs text-[var(--fg-tertiary)]">
                 Sent once over the encrypted SSH connection. Not stored, logged, or shown to the assistant.
+                Leave empty if sudo doesn't ask for a password on this host.
               </p>
             </div>
           )}
