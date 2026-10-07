@@ -205,6 +205,27 @@ describe("superviseSession", () => {
     expect(room.disconnect).not.toHaveBeenCalled();
   });
 
+  test("the old connection kicked for a duplicate identity after the rejoin keeps the session", async () => {
+    vi.useFakeTimers();
+    const { room, session } = supervised();
+    room.join(JOB.clientIdentity);
+    room.drop(JOB.clientIdentity, DisconnectReason.DUPLICATE_IDENTITY);
+    await vi.advanceTimersByTimeAsync(CLIENT_REJOIN_GRACE_MS + CLIENT_JOIN_TIMEOUT_MS);
+    expect(session.close).not.toHaveBeenCalled();
+    expect(room.disconnect).not.toHaveBeenCalled();
+  });
+
+  test("a duplicate-identity kick during a grace leaves that grace running", async () => {
+    vi.useFakeTimers();
+    const { room, session } = supervised();
+    room.drop(JOB.clientIdentity, DisconnectReason.SIGNAL_CLOSE);
+    room.drop(JOB.clientIdentity, DisconnectReason.DUPLICATE_IDENTITY);
+    await vi.advanceTimersByTimeAsync(CLIENT_REJOIN_GRACE_MS - 1);
+    expect(session.close).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(session.close).toHaveBeenCalledTimes(1);
+  });
+
   test("someone else joining during the grace does not cancel it", async () => {
     vi.useFakeTimers();
     const { room, session } = supervised();

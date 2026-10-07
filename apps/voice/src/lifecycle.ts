@@ -93,6 +93,7 @@ export function superviseSession(
   });
   room.on("participantDisconnected", (participant) => {
     if (participant.identity !== job.clientIdentity) return;
+    if (participant.disconnectReason === DisconnectReason.DUPLICATE_IDENTITY) return;
     if (participant.disconnectReason === DisconnectReason.CLIENT_INITIATED) {
       console.log(`${job.room}: ${job.clientIdentity} left`);
       void teardown();
