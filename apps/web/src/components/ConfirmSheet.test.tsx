@@ -22,8 +22,10 @@ vi.mock("@/store/cluster", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/store/cluster")>();
   return {
     ...actual,
-    useCluster: (selector: (s: { activeContext: string | null }) => unknown) =>
-      selector({ activeContext: mockActiveContext }),
+    useCluster: Object.assign(
+      (selector: (s: { activeContext: string | null }) => unknown) => selector({ activeContext: mockActiveContext }),
+      { getState: () => ({ activeContext: mockActiveContext }) },
+    ),
   };
 });
 
@@ -134,5 +136,116 @@ describe("ConfirmSheet — sshCommand risk pill", () => {
     wrap(<ConfirmSheet action={ssh} open={true} onClose={vi.fn()} />);
     expect(await screen.findByText("Destructive")).toBeInTheDocument();
     expect(screen.queryByText("Remote")).not.toBeInTheDocument();
+  });
+});
+
+describe("ConfirmSheet — sudo sshCommand", () => {
+  const sudo: ActionBlock = {
+    kind: "sshCommand",
+    label: "Upgrade packages",
+    host: "web-1",
+    command: "apt-get upgrade -y",
+    sudo: true,
+  };
+  const wrapped = "sudo -S -p '[rigel-sudo-prompt]' -- sh -c 'exec </dev/null; apt-get upgrade -y'";
+
+  beforeEach(async () => {
+    const { fetchPreviewCommand } = await import("@/lib/api");
+    vi.mocked(fetchPreviewCommand).mockResolvedValue(["ssh", "-T", "-o", "BatchMode=yes", "--", "web-1", wrapped]);
+  });
+
+  async function runAsRoot() {
+    const button = await screen.findByRole("button", { name: /run as root/i });
+    await waitFor(() => expect(screen.getByText((_, el) => el?.tagName === "PRE" && !!el.textContent?.includes(wrapped))).toBeInTheDocument());
+    return button;
+  }
+
+  it("shows the sudo treatment: pill, target host, and a focused password field with its hint", async () => {
+    wrap(<ConfirmSheet action={sudo} open={true} onClose={vi.fn()} fromChat />);
+    await runAsRoot();
+
+    expect(screen.getByText("Needs sudo").getAttribute("style")).toContain("var(--accent-sudo)");
+    expect(screen.queryByText("Remote")).not.toBeInTheDocument();
+    expect(screen.getByText("Runs on")).toBeInTheDocument();
+    const field = screen.getByLabelText("Sudo password for web-1");
+    expect(field).toHaveAttribute("type", "password");
+    expect(field).toHaveAttribute("autocomplete", "off");
+    expect(field).toHaveFocus();
+    expect(screen.getByText("Sent once over the encrypted SSH connection. Not stored, logged, or shown to the assistant.")).toBeInTheDocument();
+  });
+
+  it("names the ssh user in the target when the host's config is known", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ hosts: [{ alias: "web-1", hostName: "10.0.0.5", user: "tyrel", port: "22", enabled: true }] }),
+    })));
+    wrap(<ConfirmSheet action={sudo} open={true} onClose={vi.fn()} fromChat />);
+
+    expect(await screen.findByText("tyrel@web-1")).toBeInTheDocument();
+  });
+
+  it("keeps Run as root disabled until a password is typed", async () => {
+    wrap(<ConfirmSheet action={sudo} open={true} onClose={vi.fn()} fromChat />);
+    const button = await runAsRoot();
+    expect(button).toBeDisabled();
+
+    await userEvent.type(screen.getByLabelText("Sudo password for web-1"), "hunter2");
+    expect(button).not.toBeDisabled();
+  });
+
+  it("hands the password to the runner beside the action and clears the field", async () => {
+    const onClose = vi.fn();
+    wrap(<ConfirmSheet action={sudo} open={true} onClose={onClose} fromChat />);
+    const button = await runAsRoot();
+    const field = screen.getByLabelText("Sudo password for web-1");
+    await userEvent.type(field, "hunter2");
+    await userEvent.click(button);
+
+    expect(runActionInBackground).toHaveBeenCalledTimes(1);
+    const opts = runActionInBackground.mock.calls[0]![0] as { action: ActionBlock; secret?: string; commandString: string };
+    expect(opts.secret).toBe("hunter2");
+    expect(opts.action).toBe(sudo);
+    expect(JSON.stringify(opts.action)).not.toContain("hunter2");
+    expect(opts.commandString).not.toContain("hunter2");
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(field).toHaveValue("");
+  });
+
+  it("submits when Enter is pressed in the password field", async () => {
+    wrap(<ConfirmSheet action={sudo} open={true} onClose={vi.fn()} fromChat />);
+    await runAsRoot();
+    await userEvent.type(screen.getByLabelText("Sudo password for web-1"), "hunter2{Enter}");
+
+    expect(runActionInBackground).toHaveBeenCalledTimes(1);
+    expect((runActionInBackground.mock.calls[0]![0] as { secret?: string }).secret).toBe("hunter2");
+  });
+
+  it("does not submit on Enter while the field is empty", async () => {
+    wrap(<ConfirmSheet action={sudo} open={true} onClose={vi.fn()} fromChat />);
+    await runAsRoot();
+    await userEvent.type(screen.getByLabelText("Sudo password for web-1"), "{Enter}");
+
+    expect(runActionInBackground).not.toHaveBeenCalled();
+  });
+
+  it("clears the password on cancel", async () => {
+    wrap(<ConfirmSheet action={sudo} open={true} onClose={vi.fn()} fromChat />);
+    await runAsRoot();
+    const field = screen.getByLabelText("Sudo password for web-1");
+    await userEvent.type(field, "hunter2");
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(field).toHaveValue("");
+    expect(runActionInBackground).not.toHaveBeenCalled();
+  });
+
+  it("asks for no password on a plain ssh action", async () => {
+    const { fetchPreviewCommand } = await import("@/lib/api");
+    vi.mocked(fetchPreviewCommand).mockResolvedValue(["ssh", "-T", "-o", "BatchMode=yes", "--", "web-1", "uptime"]);
+    wrap(<ConfirmSheet action={{ kind: "sshCommand", host: "web-1", command: "uptime" }} open={true} onClose={vi.fn()} />);
+
+    expect(await screen.findByRole("button", { name: /execute/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/sudo password/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Needs sudo")).not.toBeInTheDocument();
   });
 });

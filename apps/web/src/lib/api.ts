@@ -1664,9 +1664,10 @@ export interface SshHostView {
   enabled: boolean;
 }
 
-export function useSshHosts() {
+export function useSshHosts({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery<SshHostView[], Error>({
     queryKey: ["ssh-hosts"] as const,
+    enabled,
     queryFn: async () => {
       const res = await apiFetch("/api/ssh/hosts");
       if (!res.ok) throw new Error(`ssh hosts failed: ${res.status}`);

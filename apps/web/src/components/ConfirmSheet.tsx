@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -21,6 +21,7 @@ import {
   faCircleCheck,
   faCodePullRequest,
   faArrowUpRightFromSquare,
+  faLock,
 } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import {
   fetchPreviewCommand,
@@ -28,6 +29,7 @@ import {
   applyManifestYaml,
   proposeRepoFix,
   useContexts,
+  useSshHosts,
   type ActionBlock,
   type ActionResult,
   type PurgeResult,
@@ -75,9 +77,17 @@ interface ConfirmSheetProps {
   }) => void;
 }
 
+function tint(color: string, percent: number): string {
+  return `color-mix(in oklab, ${color} ${percent}%, transparent)`;
+}
+
 /**
  * ConfirmSheet — shows the EXACT kubectl command that will be executed before
  * running it. Mirrors the Swift `WorkloadConfirmSheet` confirm gate.
+ *
+ * A `sudo` sshCommand also asks for the sudo password. It lives only in this
+ * component's state, is handed to the runner beside the action (never in it),
+ * and is cleared on submit and on close.
  *
  * Usage:
  *   <ConfirmSheet action={pendingAction} open={!!pendingAction} onClose={() => setPendingAction(null)} />
@@ -94,6 +104,12 @@ export function ConfirmSheet({
   const [previewCommand, setPreviewCommand] = useState<string[] | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [sudoPassword, setSudoPassword] = useState("");
+  const sudoPasswordId = useId();
+  const sshHost = action?.kind === "sshCommand" ? (action.host ?? "") : null;
+  const isSudo = sshHost !== null && action?.sudo === true;
+  const { data: sshHosts } = useSshHosts({ enabled: isSudo });
+  const sshUser = sshHosts?.find((h) => h.alias === sshHost)?.user;
   const [applyState, setApplyState] = useState<{
     pending: boolean;
     result?: ActionResult;
@@ -130,6 +146,7 @@ export function ConfirmSheet({
     if (!action || !open) {
       setPreviewCommand(null);
       setPreviewError(null);
+      setSudoPassword("");
       setApplyState({ pending: false });
       reset();
       return;
@@ -257,6 +274,7 @@ export function ConfirmSheet({
     // immediately so the UI isn't locked behind a blocking dialog, and surface
     // progress in a toast. The chat result loop (parity with Swift
     // executeWorkload) is preserved via onResult inside the runner.
+    const secret = isSudo ? sudoPassword : undefined;
     handleClose();
     runActionInBackground({
       action: act,
@@ -264,10 +282,12 @@ export function ConfirmSheet({
       commandString: cmd,
       fromChat,
       onResult,
+      secret,
     });
   }
 
   function handleClose() {
+    setSudoPassword("");
     reset();
     setApplyState({ pending: false });
     setFix({ phase: "diffing" });
@@ -277,7 +297,6 @@ export function ConfirmSheet({
   const isPurge = action?.kind === "purge";
   const isApply = action?.kind === "applyManifest";
   const isFix = action?.kind === "proposeRepoFix";
-  const sshHost = action?.kind === "sshCommand" ? (action.host ?? "") : null;
   // Destructive treatment is reserved for actions that REMOVE or evict a
   // resource: the delete/drain/purge family, or anything the model explicitly
   // flags `destructive` (e.g. a scale-down). Additive applies (install/create)
@@ -286,6 +305,7 @@ export function ConfirmSheet({
   // opens a PR (nothing applied), so it is NOT destructive either.
   const isDestructive = action ? isDestructiveAction(action) : false;
   const commandString = previewCommand ? previewCommand.join(" ") : null;
+  const canRunAsRoot = !!commandString && sudoPassword !== "" && !isPending;
 
   function handleCopy() {
     if (!commandString) return;
@@ -307,29 +327,37 @@ export function ConfirmSheet({
     }
   }, [isSuccess, data, reset, onClose]);
 
-  // Accent follows risk: destructive actions go red, everything else the
-  // brand purple. Header tint, icon chip, command prompt, and the primary
-  // button all key off this single color.
+  // Accent follows risk: destructive actions go red, a sudo action fuchsia,
+  // everything else the brand accent. Header tint, icon chip, command prompt,
+  // and the primary button all key off this single color.
   const accentColor = isDestructive
     ? "var(--status-failed)"
-    : "var(--accent-primary)";
+    : isSudo
+      ? "var(--accent-sudo)"
+      : "var(--accent-primary)";
   const HeaderIcon = isFix
     ? faCodePullRequest
     : isApply
       ? faLayerGroup
       : isDestructive
         ? faTriangleExclamation
-        : faTerminal;
+        : isSudo
+          ? faLock
+          : faTerminal;
   const riskLabel = isDestructive
     ? "Destructive"
     : isApply
       ? "Apply"
       : isFix
         ? "Pull request"
-        : sshHost !== null
-          ? "Remote"
-          : "Safe";
-  const neutralPill = !isDestructive && sshHost !== null;
+        : isSudo
+          ? "Needs sudo"
+          : sshHost !== null
+            ? "Remote"
+            : "Safe";
+  const neutralPill = !isDestructive && !isSudo && sshHost !== null;
+  const runsOn =
+    sshHost === null ? activeContext : isSudo ? (sshUser ? `${sshUser}@${sshHost}` : sshHost) : null;
 
   const title = isPurge
     ? "Remove application"
@@ -360,7 +388,7 @@ export function ConfirmSheet({
       <DialogContent
         className="max-w-3xl"
         style={{
-          border: `1px solid ${accentColor}40`,
+          border: `1px solid ${tint(accentColor, 25)}`,
           boxShadow:
             "0 24px 60px -20px rgba(0,0,0,0.7), 0 8px 24px rgba(0,0,0,0.6)",
         }}
@@ -372,15 +400,15 @@ export function ConfirmSheet({
           showClose={false}
           className="items-start gap-3.5 px-5 pb-4 pt-5"
           style={{
-            background: `linear-gradient(180deg, ${accentColor}1A 0%, transparent 100%)`,
-            borderBottom: `1px solid ${accentColor}24`,
+            background: `linear-gradient(180deg, ${tint(accentColor, 10)} 0%, transparent 100%)`,
+            borderBottom: `1px solid ${tint(accentColor, 14)}`,
           }}
         >
           <div
             className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg"
             style={{
-              background: `${accentColor}22`,
-              border: `1px solid ${accentColor}45`,
+              background: tint(accentColor, 13),
+              border: `1px solid ${tint(accentColor, 27)}`,
             }}
           >
             <FontAwesomeIcon
@@ -400,9 +428,9 @@ export function ConfirmSheet({
               neutralPill
                 ? undefined
                 : {
-                    background: `${accentColor}1F`,
+                    background: tint(accentColor, 12),
                     color: accentColor,
-                    border: `1px solid ${accentColor}3D`,
+                    border: `1px solid ${tint(accentColor, 24)}`,
                   }
             }
           >
@@ -425,17 +453,17 @@ export function ConfirmSheet({
             </p>
           )}
 
-          {/* Target cluster — the active rail context, which REST actually
-              executes against via X-Rigel-Context. */}
-          {activeContext && sshHost === null && (
+          {/* Target — the active rail context, which REST actually executes
+              against via X-Rigel-Context, or the host a sudo action runs on. */}
+          {runsOn && (
             <div className="flex items-center gap-2">
               <span className="text-2xs text-muted-foreground">Runs on</span>
               <span
-                className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-foreground/90"
+                className={`flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-foreground/90 ${sshHost === null ? "" : "font-mono"}`}
                 style={{ background: "#08080A", border: "1px solid #26272B" }}
               >
-                <ClusterIcon id={clusterIconId} className="size-[13px]" />
-                {activeContext}
+                {sshHost === null && <ClusterIcon id={clusterIconId} className="size-[13px]" />}
+                {runsOn}
               </span>
             </div>
           )}
@@ -582,6 +610,31 @@ export function ConfirmSheet({
               </div>
             ))}
 
+          {isSudo && (
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor={sudoPasswordId} className="text-xs font-medium text-foreground">
+                Sudo password for {sshHost}
+              </label>
+              <input
+                id={sudoPasswordId}
+                type="password"
+                autoComplete="off"
+                autoFocus
+                value={sudoPassword}
+                onChange={(e) => setSudoPassword(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  e.preventDefault();
+                  if (canRunAsRoot) handleExecute();
+                }}
+                className="w-full rounded-lg border border-[var(--border-strong)] bg-[var(--surface-sunken)] px-3 py-2 font-mono text-sm text-foreground outline-none transition-colors focus:border-sudo focus:ring-3 focus:ring-sudo/20"
+              />
+              <p className="text-2xs text-[var(--fg-tertiary)]">
+                Sent once over the encrypted SSH connection. Not stored, logged, or shown to the assistant.
+              </p>
+            </div>
+          )}
+
           {/* Result feedback */}
           {isSuccess &&
             data &&
@@ -617,7 +670,11 @@ export function ConfirmSheet({
           {!(isFix && fix.phase === "done") && (
             <Button
               variant={isDestructive ? "destructive" : "default"}
-              className="transition-transform active:scale-[0.98]"
+              className={`transition-transform active:scale-[0.98] ${
+                isSudo && !isDestructive
+                  ? "bg-sudo text-[var(--fg-inverse)] hover:bg-sudo/90 focus-visible:ring-sudo/50"
+                  : ""
+              }`}
               onClick={
                 isFix ? handlePropose : isApply ? handleApply : handleExecute
               }
@@ -626,7 +683,9 @@ export function ConfirmSheet({
                   ? fix.phase !== "preview" || !!fix.error
                   : isApply
                     ? applyState.pending
-                    : isPending || (!isPurge && !commandString && !previewError)
+                    : isSudo
+                      ? !canRunAsRoot
+                      : isPending || (!isPurge && !commandString && !previewError)
               }
             >
               {isFix ? (
@@ -650,6 +709,10 @@ export function ConfirmSheet({
               ) : isPurge ? (
                 <>
                   Continue to removal <FontAwesomeIcon icon={faArrowRight} className="size-3.5" />
+                </>
+              ) : isSudo ? (
+                <>
+                  <FontAwesomeIcon icon={faLock} className="size-3.5" /> Run as root
                 </>
               ) : (
                 <>
