@@ -2,6 +2,7 @@ import { glob, mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import { SSH_BATCH_ARGS } from "@rigel/k8s";
+import { summarizeActionDetail } from "@rigel/k8s/src/aiActionLedger";
 import { runProcess, type RunResult } from "@rigel/k8s/src/run";
 
 export interface SshHost {
@@ -13,7 +14,7 @@ export interface SshHost {
 }
 
 const SSH_DIR = join(homedir(), ".ssh");
-const ACTION_TIMEOUT_MS = 120_000;
+export const SSH_ACTION_TIMEOUT_MS = 120_000;
 const ACTION_MAX_OUTPUT = 10 * 1024 * 1024;
 
 function enabledFile(): string {
@@ -115,5 +116,10 @@ export function validateSshAction(
 
 export function runSshAction(host: string, command: string): Promise<RunResult> {
   const [bin, ...args] = sshActionArgv(host, command);
-  return runProcess(bin!, args, { timeout: ACTION_TIMEOUT_MS, maxOutput: ACTION_MAX_OUTPUT });
+  return runProcess(bin!, args, { timeout: SSH_ACTION_TIMEOUT_MS, maxOutput: ACTION_MAX_OUTPUT });
+}
+
+export function sshActionDetail(code: number, stdout: string, stderr: string): string {
+  const outcome = code === 0 ? "success" : "failure";
+  return [`exit ${code}`, summarizeActionDetail(outcome, stdout, stderr)].filter(Boolean).join(": ");
 }

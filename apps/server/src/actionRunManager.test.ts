@@ -434,3 +434,73 @@ test("concurrent runs on one connection each get their own entry", async () => {
     "deployment.apps/web scaled",
   ]);
 });
+
+// ---------------------------------------------------------------------------
+// sshCommand runs over the stream too (the chat ConfirmSheet's execute path).
+// ---------------------------------------------------------------------------
+
+function sshHarness(enabled: string[]) {
+  const recorded: Array<{ context: string | null; entry: AiActionEntry }> = [];
+  const spawns: Array<{ bin: string; args: string[]; opts: any }> = [];
+  const proc = fakeProc();
+  const ws = fakeWs();
+  const mgr = new ActionRunManager(
+    ws as any,
+    "prod-cluster",
+    ((bin: string, args: string[], opts: any) => {
+      spawns.push({ bin, args, opts });
+      return proc;
+    }) as any,
+    (ctx, entry) => recorded.push({ context: ctx, entry }),
+    async () => enabled,
+  );
+  return { recorded, spawns, proc, ws, mgr };
+}
+
+test("an sshCommand runs ssh in batch mode against the enabled host and is recorded", async () => {
+  const { recorded, spawns, proc, ws, mgr } = sshHarness(["k8s-truenas"]);
+  const action: ActionBlock = {
+    kind: "sshCommand",
+    label: "List upgradable packages",
+    host: "k8s-truenas",
+    command: "apt list --upgradable",
+  };
+  mgr.run({ id: "s1", action });
+  await settle();
+
+  expect(spawns).toHaveLength(1);
+  expect(spawns[0]!.bin).toBe("ssh");
+  expect(spawns[0]!.args).toEqual(["-T", "-o", "BatchMode=yes", "--", "k8s-truenas", "apt list --upgradable"]);
+  expect(spawns[0]!.opts.stdio[0]).toBe("ignore");
+  expect(spawns[0]!.opts.timeout).toBeGreaterThan(0);
+
+  proc.stdout.end("curl/questing-updates 8.14.1 amd64\n");
+  await settle();
+  proc.emit("close", 0);
+  await settle();
+
+  expect(ws.sent.some((m) => m.type === "action.progress" && m.id === "s1")).toBe(true);
+  expect(ws.sent).toContainEqual({ type: "action.done", id: "s1", code: 0 });
+  expect(recorded[0]!.entry).toMatchObject({
+    source: "chat",
+    kind: "Ran on host",
+    target: { kind: "Host", name: "k8s-truenas", namespace: "" },
+    command: "ssh -T -o BatchMode=yes -- k8s-truenas apt list --upgradable",
+    outcome: "success",
+    detail: "exit 0: curl/questing-updates 8.14.1 amd64",
+  });
+});
+
+test.each([
+  [{ host: "prod-db", command: "uptime" }, "isn't enabled"],
+  [{ host: "k8s-truenas", command: "-oProxyCommand=id uptime" }, "can't start with -"],
+  [{ host: "k8s-truenas" }, "needs host and command"],
+])("an invalid sshCommand %j is refused without spawning", async (fields, message) => {
+  const { spawns, ws, mgr } = sshHarness(["k8s-truenas"]);
+  mgr.run({ id: "s2", action: { kind: "sshCommand", ...fields } as ActionBlock });
+  await settle();
+
+  expect(spawns).toHaveLength(0);
+  const err = ws.sent.find((m) => m.type === "action.error" && m.id === "s2");
+  expect(err?.message).toContain(message);
+});

@@ -8,6 +8,7 @@ import {
 } from "@rigel/k8s/src/aiActionLedger";
 import { recordAiAction } from "./aiActionLedger";
 import { buildCommand, PurgeActionError, type ActionBlock } from "./actions";
+import { enabledSshHosts, SSH_ACTION_TIMEOUT_MS, sshActionArgv, sshActionDetail, validateSshAction } from "./ssh";
 
 interface JsonSink { send(data: string): unknown }
 
@@ -42,7 +43,8 @@ interface InFlightRun {
  * Per-connection action-run manager. Mirrors ClusterCreateManager but for
  * chat action-block execution: receives an `action.run` WS message, builds
  * the kubectl argv via the same `buildCommand` the REST route uses (preserving
- * all guards), spawns kubectl, and streams output line-by-line as
+ * all guards), or for `sshCommand` the same validated ssh argv the REST route
+ * runs, spawns it, and streams output line-by-line as
  * `action.progress` frames. Multiple concurrent runs are allowed (each
  * identified by the caller's `id`). Every completed run is appended to the
  * AI-action ledger (HELM-18), best-effort.
@@ -60,6 +62,7 @@ export class ActionRunManager {
     private context: string | null,
     private spawnFn: typeof spawn = spawn,
     private record: AiActionRecorder = defaultRecorder,
+    private sshHosts: () => Promise<string[]> = enabledSshHosts,
   ) {}
 
   run(req: ActionRunRequest): void {
@@ -75,6 +78,11 @@ export class ActionRunManager {
     // overwrote it — reject the duplicate instead.
     if (this.runs.has(id)) {
       return this.error(id, `action run '${id}' is already in progress`);
+    }
+
+    if (action.kind === "sshCommand") {
+      void this.runSsh(id, action, req.context ?? this.context);
+      return;
     }
 
     // Guard: purge is a client-side flow — never reaches kubectl.
@@ -103,13 +111,37 @@ export class ActionRunManager {
 
     // Prepend --context exactly as the REST route does (via buildKubectlArgs).
     const context = req.context ?? this.context;
-    const fullArgv = buildKubectlArgs(context, argv);
+    this.start(id, action, context, "kubectl", buildKubectlArgs(context, argv), {});
+  }
 
+  private async runSsh(id: string, action: ActionBlock, context: string | null): Promise<void> {
+    let enabled: string[];
+    try {
+      enabled = await this.sshHosts();
+    } catch (err) {
+      return this.error(id, err instanceof Error ? err.message : String(err));
+    }
+    const valid = validateSshAction(action, enabled);
+    if ("error" in valid) return this.error(id, valid.error);
+    if (this.runs.has(id)) return this.error(id, `action run '${id}' is already in progress`);
+    const [bin, ...args] = sshActionArgv(valid.host, valid.command);
+    this.start(id, { ...action, host: valid.host }, context, bin!, args, { timeout: SSH_ACTION_TIMEOUT_MS });
+  }
+
+  private start(
+    id: string,
+    action: ActionBlock,
+    context: string | null,
+    bin: string,
+    args: string[],
+    opts: { timeout?: number },
+  ): void {
     let proc: ChildProcess;
     try {
-      proc = this.spawnFn("kubectl", fullArgv, {
+      proc = this.spawnFn(bin, args, {
         stdio: ["ignore", "pipe", "pipe"],
         env: spawnEnv(),
+        ...opts,
       });
     } catch (err) {
       return this.error(id, err instanceof Error ? err.message : String(err));
@@ -117,7 +149,7 @@ export class ActionRunManager {
     const inFlight: InFlightRun = {
       proc,
       action,
-      command: ["kubectl", ...fullArgv].join(" "),
+      command: [bin, ...args].join(" "),
       context,
       stdout: "",
       stderr: "",
@@ -151,7 +183,9 @@ export class ActionRunManager {
         source: "chat",
         command: run.command,
         outcome,
-        detail: summarizeActionDetail(outcome, run.stdout, run.stderr),
+        detail: run.action.kind === "sshCommand"
+          ? sshActionDetail(code, run.stdout, run.stderr)
+          : summarizeActionDetail(outcome, run.stdout, run.stderr),
       }),
     );
   }

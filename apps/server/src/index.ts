@@ -70,6 +70,7 @@ import {
   runSshAction,
   setEnabledSshHosts,
   sshActionArgv,
+  sshActionDetail,
   validateSshAction,
 } from "./ssh";
 import { buildAiActionEntry, summarizeActionDetail } from "@rigel/k8s/src/aiActionLedger";
@@ -538,9 +539,7 @@ async function handler(req: Request): Promise<Response> {
             source: isVoiceWorkerRequest(req) ? "voice" : "chat",
             command: sshArgv.join(" "),
             outcome,
-            detail: [`exit ${result.code}`, summarizeActionDetail(outcome, result.stdout, result.stderr)]
-              .filter(Boolean)
-              .join(": "),
+            detail: sshActionDetail(result.code, result.stdout, result.stderr),
           }),
         );
         return Response.json(result);
