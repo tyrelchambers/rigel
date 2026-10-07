@@ -56,22 +56,24 @@ export function guardExecArgs(logicalName: string, userArgs: string[]): string[]
 }
 
 /**
- * Shim entry. argv layout = `[logicalName, realBinaryPath, ...userArgs]`:
+ * Shim entry. argv layout = `[logicalName, realBinaryPath, sshHosts, ...userArgs]`:
  *   - logicalName: "kubectl" | "helm" | "ssh" | an ssh transfer tool (what the agent typed),
- *   - realBinaryPath: absolute path to the genuine binary (resolved at provision time).
+ *   - realBinaryPath: absolute path to the genuine binary (resolved at provision time),
+ *   - sshHosts: the comma-joined hosts enabled for this turn, baked in at provision time
+ *     so the agent's shell can't widen them through the environment.
  * Allowed reads exec the real binary (stdio inherited, exit code forwarded); denied
  * mutations write the steering reason to stderr and exit 1 WITHOUT running anything.
  */
 export function runGuard(argv: string[]): Promise<number> {
-  const [logicalName, realBinaryPath, ...userArgs] = argv;
-  if (!logicalName || !realBinaryPath) {
+  const [logicalName, realBinaryPath, sshHosts, ...userArgs] = argv;
+  if (!logicalName || !realBinaryPath || sshHosts === undefined) {
     process.stderr.write(
-      "guarded-kubectl: usage: <logicalName> <realBinaryPath> [args…]\n",
+      "guarded-kubectl: usage: <logicalName> <realBinaryPath> <sshHosts> [args…]\n",
     );
     return Promise.resolve(2);
   }
 
-  const verdict = guardVerdict(logicalName, userArgs, parseSshHostsEnv(process.env.RIGEL_SSH_HOSTS));
+  const verdict = guardVerdict(logicalName, userArgs, parseSshHostsEnv(sshHosts));
   if (verdict.decision === "deny") {
     process.stderr.write(verdict.reason + "\n");
     return Promise.resolve(1);
@@ -128,8 +130,18 @@ async function whichBinary(name: string): Promise<string | null> {
   });
 }
 
-/** One wrapper script: exec the guard entry with (logicalName, realBinaryPath, "$@"). */
-export function wrapperScript(runner: string, logicalName: string, realBinaryPath: string): string {
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
+/** One wrapper script: exec the guard entry with (logicalName, realBinaryPath, sshHosts, "$@"). */
+export function wrapperScript(
+  runner: string,
+  logicalName: string,
+  realBinaryPath: string,
+  sshHosts: readonly string[],
+): string {
+  const hosts = shellQuote(sshHosts.filter((h) => !h.includes(",")).join(","));
   // logicalName + realBinaryPath are single-quoted so spaces in install paths
   // (e.g. "/Applications/My App.app/…", "Application Support") don't word-split.
   // ${runner} stays unquoted — it is intentionally multi-word (e.g.
@@ -138,7 +150,7 @@ export function wrapperScript(runner: string, logicalName: string, realBinaryPat
   return `#!/bin/sh
 # Auto-generated guarded shim for \`${logicalName}\` — routes through Rigel's command
 # policy (apps/server/src/guardedKubectl.ts). Reads run; cluster mutations are denied.
-exec ${runner} '${logicalName}' '${realBinaryPath}' "$@"
+exec ${runner} '${logicalName}' '${realBinaryPath}' ${hosts} "$@"
 `;
 }
 
@@ -150,7 +162,7 @@ exec ${runner} '${logicalName}' '${realBinaryPath}' "$@"
  * wrapper. Throws if kubectl can't be found — without it there's nothing to
  * guard. helm, ssh and the transfer tools are optional and only wrapped when present.
  */
-export async function provisionGuardBin(): Promise<string> {
+export async function provisionGuardBin(sshHosts: readonly string[]): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "rigel-guard-"));
   const runner = guardRunnerCommand();
 
@@ -160,14 +172,14 @@ export async function provisionGuardBin(): Promise<string> {
       "guarded-kubectl: `kubectl` was not found on PATH — cannot provision the guarded shim.",
     );
   }
-  await writeWrapper(dir, runner, "kubectl", kubectlReal);
+  await writeWrapper(dir, runner, "kubectl", kubectlReal, sshHosts);
 
   const helmReal = await whichBinary("helm");
-  if (helmReal) await writeWrapper(dir, runner, "helm", helmReal);
+  if (helmReal) await writeWrapper(dir, runner, "helm", helmReal, sshHosts);
 
   for (const name of ["ssh", ...SSH_TRANSFER_TOOLS]) {
     const real = await whichBinary(name);
-    if (real) await writeWrapper(dir, runner, name, real);
+    if (real) await writeWrapper(dir, runner, name, real, sshHosts);
   }
 
   return dir;
@@ -178,9 +190,10 @@ async function writeWrapper(
   runner: string,
   logicalName: string,
   realBinaryPath: string,
+  sshHosts: readonly string[],
 ): Promise<void> {
   const path = join(dir, logicalName);
-  await writeFile(path, wrapperScript(runner, logicalName, realBinaryPath));
+  await writeFile(path, wrapperScript(runner, logicalName, realBinaryPath, sshHosts));
   await chmod(path, 0o755);
 }
 

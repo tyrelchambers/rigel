@@ -90,39 +90,49 @@ describe("guardExecArgs", () => {
 describe("runGuard — dispatch (fake real binary = /bin/echo, never a cluster)", () => {
   test("allowed read execs the real binary and forwards exit 0", async () => {
     // Drive the shim entry as a real subprocess: kubectl → /bin/echo get pods.
-    const r = await runEntry(["kubectl", "/bin/echo", "get", "pods"]);
+    const r = await runEntry(["kubectl", "/bin/echo", "", "get", "pods"]);
     expect(r.code).toBe(0);
     expect(r.stdout).toContain("get pods");
   });
 
   test("denied mutation does NOT exec the real binary; stderr carries the steering hint", async () => {
-    const r = await runEntry(["kubectl", "/bin/echo", "delete", "pod", "x"]);
+    const r = await runEntry(["kubectl", "/bin/echo", "", "delete", "pod", "x"]);
     expect(r.code).not.toBe(0);
     expect(r.stderr).toMatch(/action block/i);
     expect(r.stdout).not.toContain("delete"); // echo never ran
   });
 
   test("an ssh read on an enabled host execs the real binary in batch mode", async () => {
-    const r = await runEntry(["ssh", "/bin/echo", "web-1", "uptime"], { RIGEL_SSH_HOSTS: "web-1" });
+    const r = await runEntry(["ssh", "/bin/echo", "web-1", "web-1", "uptime"]);
     expect(r.code).toBe(0);
     expect(r.stdout).toContain("-T -o BatchMode=yes web-1 uptime");
   });
 
   test("an ssh change is denied without exec and steers to an sshCommand action", async () => {
-    const r = await runEntry(["ssh", "/bin/echo", "web-1", "rm x"], { RIGEL_SSH_HOSTS: "web-1" });
+    const r = await runEntry(["ssh", "/bin/echo", "web-1", "web-1", "rm x"]);
     expect(r.code).toBe(1);
     expect(r.stderr).toMatch(/sshCommand/);
     expect(r.stdout).toBe("");
   });
 
-  test("runGuard rejects malformed argv (no real binary)", async () => {
+  test("the enabled hosts come only from the baked argv slot, never the environment", async () => {
+    const r = await runEntry(["ssh", "/bin/echo", "web-1", "not-enabled", "cat /etc/shadow"], {
+      RIGEL_SSH_HOSTS: "not-enabled",
+    });
+    expect(r.code).toBe(1);
+    expect(r.stdout).toBe("");
+    expect(r.stderr).toContain("not-enabled");
+  });
+
+  test("runGuard rejects malformed argv (no real binary or no hosts slot)", async () => {
     expect(await runGuard(["kubectl"])).toBe(2);
+    expect(await runGuard(["kubectl", "/bin/echo"])).toBe(2);
   });
 });
 
 describe("provisionGuardBin — materializes executable wrappers", () => {
   test("writes an executable kubectl wrapper referencing the real binary + guard entry", async () => {
-    const dir = await provisionGuardBin();
+    const dir = await provisionGuardBin(["web-1", "nas"]);
     const entries = await readdir(dir);
     expect(entries).toContain("kubectl");
 
@@ -134,12 +144,12 @@ describe("provisionGuardBin — materializes executable wrappers", () => {
     const text = await readFile(kubectlPath, "utf8");
     expect(text).toContain("kubectl"); // logical name
     expect(text).toContain("guardedKubectl"); // guard entry referenced via the runner
-    // runner + single-quoted logical name + single-quoted real abs path.
-    expect(text).toMatch(/exec .*'kubectl' '\/.*kubectl' "\$@"/);
+    // runner + single-quoted logical name, real abs path and enabled hosts.
+    expect(text).toMatch(/exec .*'kubectl' '\/.*kubectl' 'web-1,nas' "\$@"/);
   });
 
   test("wraps helm too when helm is installed (skipped otherwise)", async () => {
-    const dir = await provisionGuardBin();
+    const dir = await provisionGuardBin([]);
     const entries = await readdir(dir);
     const helmInstalled = await new Promise<boolean>((resolve) => {
       const c = spawn("/bin/sh", ["-c", "command -v helm"], { stdio: "ignore" });
@@ -162,8 +172,8 @@ describe("wrapperScript — spaced install paths don't word-split (packaged macO
 
   test("single-quotes logicalName + realBinaryPath in the generated string", () => {
     const spaced = "/Applications/My App.app/Contents/Resources/kubectl";
-    const text = wrapperScript(realRunner, "kubectl", spaced);
-    expect(text).toContain(`'kubectl' '${spaced}'`);
+    const text = wrapperScript(realRunner, "kubectl", spaced, []);
+    expect(text).toContain(`'kubectl' '${spaced}' ''`);
     expect(text).toMatch(/"\$@"\s*$/m); // "$@" preserved verbatim
   });
 
@@ -179,7 +189,7 @@ describe("wrapperScript — spaced install paths don't word-split (packaged macO
 
     // Generate the wrapper the SAME way the code does, then write + run it.
     const wrapperPath = join(base, "kubectl");
-    await writeFile(wrapperPath, wrapperScript(realRunner, "kubectl", fakeBin));
+    await writeFile(wrapperPath, wrapperScript(realRunner, "kubectl", fakeBin, []));
     await chmod(wrapperPath, 0o755);
 
     const r = await new Promise<{ code: number; stdout: string; stderr: string }>((resolve) => {
@@ -195,5 +205,37 @@ describe("wrapperScript — spaced install paths don't word-split (packaged macO
     expect(r.stderr).not.toMatch(/No such file|not found|cannot/i);
     expect(r.code).toBe(0);
     expect(r.stdout).toContain("FAKE-RAN: get pods");
+  });
+
+  test("bakes the enabled hosts, escaping a single quote and dropping a comma alias", () => {
+    const text = wrapperScript(realRunner, "ssh", "/usr/bin/ssh", ["web-1", "o'brien", "a,b"]);
+    expect(text).toContain(`'ssh' '/usr/bin/ssh' 'web-1,o'\\''brien' "$@"`);
+  });
+
+  test("a built ssh wrapper ignores RIGEL_SSH_HOSTS from the agent's shell", async () => {
+    const base = await mkdtemp(join(tmpdir(), "rigel-guard-hosts-"));
+    const wrapperPath = join(base, "ssh");
+    await writeFile(wrapperPath, wrapperScript(realRunner, "ssh", "/bin/echo", ["web-1"]));
+    await chmod(wrapperPath, 0o755);
+    const run = (args: string[]) =>
+      new Promise<{ code: number; stdout: string; stderr: string }>((resolve) => {
+        const child = spawn(wrapperPath, args, {
+          stdio: ["ignore", "pipe", "pipe"],
+          env: { ...process.env, RIGEL_SSH_HOSTS: "not-enabled" },
+        });
+        let stdout = "";
+        let stderr = "";
+        child.stdout.on("data", (d) => (stdout += d));
+        child.stderr.on("data", (d) => (stderr += d));
+        child.on("exit", (code) => resolve({ code: code ?? -1, stdout, stderr }));
+      });
+
+    const blocked = await run(["not-enabled", "cat /etc/shadow"]);
+    expect(blocked.code).toBe(1);
+    expect(blocked.stdout).toBe("");
+
+    const allowed = await run(["web-1", "uptime"]);
+    expect(allowed.code).toBe(0);
+    expect(allowed.stdout).toContain("-T -o BatchMode=yes web-1 uptime");
   });
 });

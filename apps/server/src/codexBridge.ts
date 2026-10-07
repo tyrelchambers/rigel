@@ -257,13 +257,12 @@ export async function* runCodex(
   // the workspace temp dir would leak. guardBin is only removed if it was created.
   let guardBin: string | undefined;
   try {
-    guardBin = await provisionGuardBin();
+    guardBin = await provisionGuardBin(opts?.sshHosts ?? []);
 
     const env: Record<string, string> = {
       ...(process.env as Record<string, string>),
       ...(context ? { KUBECONFIG_CONTEXT: context } : {}),
       ...(await codexAuthEnv(context)),
-      RIGEL_SSH_HOSTS: (opts?.sshHosts ?? []).join(","),
       // Guard shim FIRST on PATH so kubectl/helm (and any child like `sh -c …`)
       // resolve to the read-only-enforcing wrappers, not the real binaries.
       PATH: `${guardBin}${path.delimiter}${process.env.PATH ?? ""}`,
