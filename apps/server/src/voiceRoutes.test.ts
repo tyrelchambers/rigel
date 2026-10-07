@@ -1,12 +1,13 @@
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   identityFor, mintVoiceToken, agentConfigResponse, checkWorkerToken, isVoiceWorkerRequest,
-  maskedVoiceConfig, voiceConfigPatch, VOICE_ROOM, VOICE_WORKER_HEADER,
+  maskedVoiceConfig, newVoiceRoom, voiceConfigPatch, voiceTokenResponse, VOICE_WORKER_HEADER,
 } from "./voiceRoutes";
-import { setVoiceConfig, voiceConfig, missingVoiceFields } from "./voiceConfig";
+import { createVoiceDispatch, type VoiceJob } from "./voiceDispatch";
+import { setVoiceConfig } from "./voiceConfig";
 import {
   __setClusterConfigIO,
   __useFakeClusterConfig,
@@ -27,6 +28,7 @@ let prevHome: string | undefined;
 let fake: FakeClusterConfig;
 /** Config is per cluster, so every call names the context it belongs to. */
 const CTX = "test-cluster";
+const ROOM = "rigel-desktop-0a1b2c3d";
 
 beforeEach(async () => {
   fake = __useFakeClusterConfig();
@@ -61,25 +63,51 @@ describe("identityFor", () => {
   });
 });
 
+describe("newVoiceRoom", () => {
+  test("names the role and carries eight hex characters", () => {
+    expect(newVoiceRoom("desktop")).toMatch(/^rigel-desktop-[0-9a-f]{8}$/);
+    expect(newVoiceRoom("phone")).toMatch(/^rigel-phone-[0-9a-f]{8}$/);
+  });
+
+  test("every connection gets a different room", () => {
+    const rooms = new Set(Array.from({ length: 50 }, () => newVoiceRoom("desktop")));
+    expect(rooms.size).toBe(50);
+  });
+});
+
 describe("mintVoiceToken", () => {
-  test("mints a JWT for the fixed room with join + data grants", async () => {
-    const minted = await mintVoiceToken("desktop", CTX);
+  test("mints a JWT for exactly the given room with join + data grants", async () => {
+    const minted = await mintVoiceToken("desktop", CTX, ROOM);
     expect(minted?.url).toBe("wss://test.livekit.example");
+    expect(minted?.identity).toBe("rigel-desktop");
     const payload = decodeJwt(minted!.token) as { sub: string; video: Record<string, unknown> };
     expect(payload.sub).toBe("rigel-desktop");
-    expect(payload.video.room).toBe(VOICE_ROOM);
+    expect(payload.video.room).toBe(ROOM);
     expect(payload.video.roomJoin).toBe(true);
     expect(payload.video.canPublishData).toBe(true);
   });
 
+  test("lives for one hour, whatever the role", async () => {
+    for (const role of ["desktop", "agent", "phone"] as const) {
+      const payload = decodeJwt((await mintVoiceToken(role, CTX, ROOM))!.token) as { exp: number; nbf: number };
+      expect(payload.exp - payload.nbf).toBe(3600);
+    }
+  });
+
+  test("reports the phone identity it minted, so the worker can link that participant", async () => {
+    const phone = await mintVoiceToken("phone", CTX, ROOM);
+    expect(phone?.identity).toMatch(/^rigel-phone-/);
+    expect(decodeJwt(phone!.token).sub).toBe(phone?.identity);
+  });
+
   test("returns null when LiveKit is unconfigured", async () => {
     delete process.env.LIVEKIT_URL;
-    expect(await mintVoiceToken("desktop", CTX)).toBeNull();
+    expect(await mintVoiceToken("desktop", CTX, ROOM)).toBeNull();
   });
 
   test("phone tokens cannot publish data; desktop tokens can", async () => {
-    const phone = await mintVoiceToken("phone", CTX);
-    const desktop = await mintVoiceToken("desktop", CTX);
+    const phone = await mintVoiceToken("phone", CTX, ROOM);
+    const desktop = await mintVoiceToken("desktop", CTX, ROOM);
     const phonePayload = decodeJwt(phone!.token) as { video: Record<string, unknown> };
     const desktopPayload = decodeJwt(desktop!.token) as { video: Record<string, unknown> };
     expect(phonePayload.video.canPublishData).toBeFalsy();
@@ -87,7 +115,7 @@ describe("mintVoiceToken", () => {
   });
 
   test("agent tokens carry the agent kind claim, the agent marker, and canUpdateOwnMetadata", async () => {
-    const agent = await mintVoiceToken("agent", CTX);
+    const agent = await mintVoiceToken("agent", CTX, ROOM);
     const payload = decodeJwt(agent!.token) as { kind?: string; video: Record<string, unknown> };
     expect(payload.kind).toBe("agent");
     expect(payload.video.agent).toBe(true);
@@ -95,7 +123,7 @@ describe("mintVoiceToken", () => {
   });
 
   test("desktop tokens carry canUpdateOwnMetadata but neither the agent kind nor the marker", async () => {
-    const desktop = await mintVoiceToken("desktop", CTX);
+    const desktop = await mintVoiceToken("desktop", CTX, ROOM);
     const payload = decodeJwt(desktop!.token) as { kind?: string; video: Record<string, unknown> };
     expect(payload.video.canUpdateOwnMetadata).toBe(true);
     expect(payload.video.agent).toBeFalsy();
@@ -103,7 +131,7 @@ describe("mintVoiceToken", () => {
   });
 
   test("phone tokens carry neither the agent marker nor canUpdateOwnMetadata", async () => {
-    const phone = await mintVoiceToken("phone", CTX);
+    const phone = await mintVoiceToken("phone", CTX, ROOM);
     const payload = decodeJwt(phone!.token) as { video: Record<string, unknown> };
     expect(payload.video.agent).toBeFalsy();
     expect(payload.video.canUpdateOwnMetadata).toBeFalsy();
@@ -112,28 +140,75 @@ describe("mintVoiceToken", () => {
 });
 
 describe("agentConfigResponse", () => {
-  test("carries the agent token plus provider keys and model", async () => {
-    const res = await agentConfigResponse(CTX);
+  test("carries the agent token for the room plus provider keys and model", async () => {
+    const res = await agentConfigResponse(CTX, ROOM);
     expect(res?.openrouterApiKey).toBe("or-key");
     expect(res?.model).toBeTruthy();
     expect(res?.apiKey).toBe("APIkey");
     expect(res?.apiSecret).toBe("sixty-four-chars-of-secret-material-for-hs256-signing-goes-here!");
     expect(res?.sttModel).toBeTruthy();
     expect(res?.ttsModel).toBeTruthy();
-    expect(decodeJwt(res!.token).sub).toBe("rigel-agent");
+    const payload = decodeJwt(res!.token) as { sub: string; video: Record<string, unknown> };
+    expect(payload.sub).toBe("rigel-agent");
+    expect(payload.video.room).toBe(ROOM);
+    expect(res).not.toHaveProperty("identity");
   });
 
   test("null without an OpenRouter key", async () => {
     delete process.env.OPENROUTER_API_KEY;
-    expect(await agentConfigResponse(CTX)).toBeNull();
+    expect(await agentConfigResponse(CTX, ROOM)).toBeNull();
+  });
+});
+
+describe("voiceTokenResponse", () => {
+  test("without a worker attached, 503 naming the agent", async () => {
+    const res = await voiceTokenResponse("desktop", CTX, createVoiceDispatch());
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: "The voice agent isn't running." });
   });
 
-  test("when null, missingVoiceFields names what index.ts reports in the 409 body", async () => {
+  test("hands the worker a job for a fresh room and the client a token for the same room", async () => {
+    const hub = createVoiceDispatch();
+    const jobs: VoiceJob[] = [];
+    hub.subscribe((j) => jobs.push(j));
+    const res = await voiceTokenResponse("desktop", CTX, hub);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { url: string; token: string; room: string };
+    expect(body.url).toBe("wss://test.livekit.example");
+    expect(body.room).toMatch(/^rigel-desktop-[0-9a-f]{8}$/);
+    expect((decodeJwt(body.token) as { video: { room: string } }).video.room).toBe(body.room);
+
+    expect(jobs).toHaveLength(1);
+    const job = jobs[0]!;
+    expect(job.room).toBe(body.room);
+    expect(job.role).toBe("desktop");
+    expect(job.clientIdentity).toBe("rigel-desktop");
+    expect(job.context).toBe(CTX);
+    const agent = decodeJwt(job.config.token) as { sub: string; video: { room: string } };
+    expect(agent.sub).toBe("rigel-agent");
+    expect(agent.video.room).toBe(body.room);
+    expect(job.config.openrouterApiKey).toBe("or-key");
+  });
+
+  test("a phone job links the phone identity its token was minted for", async () => {
+    const hub = createVoiceDispatch();
+    const jobs: VoiceJob[] = [];
+    hub.subscribe((j) => jobs.push(j));
+    const body = (await (await voiceTokenResponse("phone", CTX, hub)).json()) as { token: string };
+    expect(jobs[0]!.role).toBe("phone");
+    expect(jobs[0]!.clientIdentity).toBe(decodeJwt(body.token).sub);
+  });
+
+  test("409 naming what is missing, and nothing dispatched, when voice is not configured", async () => {
     delete process.env.LIVEKIT_API_SECRET;
     delete process.env.OPENROUTER_API_KEY;
-    expect(await agentConfigResponse(CTX)).toBeNull();
-    const { config } = await voiceConfig(CTX);
-    expect(missingVoiceFields(config)).toEqual(["apiSecret", "openrouterApiKey"]);
+    const hub = createVoiceDispatch();
+    const listener = vi.fn();
+    hub.subscribe(listener);
+    const res = await voiceTokenResponse("desktop", CTX, hub);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "voice is not configured", missing: ["apiSecret", "openrouterApiKey"] });
+    expect(listener).not.toHaveBeenCalled();
   });
 });
 
