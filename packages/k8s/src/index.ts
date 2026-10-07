@@ -4,7 +4,15 @@
 export * from "./alerts";
 export * from "./digest";
 export * from "./commandPolicy";
-export * from "./sshPolicy";
+export {
+  classifySsh,
+  parseSshHostsEnv,
+  SSH_BATCH_ARGS,
+  SSH_INDIRECT_HINT,
+  SSH_TRANSFER_TOOLS,
+  type SshDecision,
+  type SshVerdict,
+} from "./sshPolicy";
 export * from "./rbacPolicy";
 
 export {

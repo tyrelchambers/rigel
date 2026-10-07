@@ -11,6 +11,7 @@
 // that tells the model to raise an action block). This module is reused by every
 // future non-Claude runner — it adds NO policy of its own.
 import { spawn } from "node:child_process";
+import { existsSync, realpathSync } from "node:fs";
 import { mkdtemp, writeFile, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -142,11 +143,12 @@ exec ${runner} '${logicalName}' '${realBinaryPath}' "$@"
 }
 
 /**
- * Materialize the guarded shim dir. Writes executable `kubectl` (and `helm`, `ssh` and
- * the ssh transfer tools when installed) wrappers into a fresh OS-temp dir (NOT inside any workspace). The Codex
- * runner prepends the returned dir to its subprocess PATH so every kubectl/helm the
- * agent execs resolves to a wrapper. Throws if kubectl can't be found — without it
- * there's nothing to guard. helm is optional and only wrapped when present.
+ * Materialize the guarded shim dir. Writes an executable `kubectl` wrapper, plus
+ * `helm`, `ssh` and the ssh transfer tools when installed, into a fresh OS-temp
+ * dir (NOT inside any workspace). The Codex runner prepends the returned dir to
+ * its subprocess PATH so every guarded binary the agent execs resolves to a
+ * wrapper. Throws if kubectl can't be found — without it there's nothing to
+ * guard. helm, ssh and the transfer tools are optional and only wrapped when present.
  */
 export async function provisionGuardBin(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "rigel-guard-"));
@@ -183,7 +185,7 @@ async function writeWrapper(
 }
 
 // Run as the shim only when executed directly (not when imported by tests).
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+if (process.argv[1] && existsSync(process.argv[1]) && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])) {
   runGuard(process.argv.slice(2)).then(
     (code) => process.exit(code),
     (err) => {

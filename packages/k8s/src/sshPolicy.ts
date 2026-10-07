@@ -1,5 +1,5 @@
-import { classifyTier, printsSecretValues } from "./commandPolicy";
-import { ShellParseError, splitSegments, tokenizeShell, type ShellSegment } from "./shellWords";
+import { classifyTier, findVerb, KUBECTL_READONLY_SUBCOMMANDS, printsSecretValues } from "./kubectlPolicy";
+import { ASSIGNMENT, flagValues, parseShell, splitHead, type ParsedShell, type ShellSegment } from "./shellWords";
 
 export type SshDecision = "read" | "approve" | "deny";
 
@@ -16,7 +16,9 @@ export const SSH_BATCH_ARGS = ["-T", "-o", "BatchMode=yes"] as const;
 
 export const SSH_TRANSFER_TOOLS: readonly string[] = ["scp", "sftp", "rsync", "sshfs", "sshpass", "autossh", "mosh"];
 
-export const SSH_FAMILY = /(?:^|[\s;|&(`'"\/=])(?:ssh|scp|sftp|sshfs|sshpass|autossh|mosh|rsync)(?=$|[\s;|&)`'"])/;
+export const SSH_FAMILY = new RegExp(
+  "(?:^|[\\s;|&(`'\"/=])(?:" + ["ssh", ...SSH_TRANSFER_TOOLS].join("|") + ")(?=$|[\\s;|&)`'\"])",
+);
 
 const SSH_VALUE_FLAGS = new Set("BbcDEeFIiJLlmOopQRSWw".split(""));
 const SSH_BOOL_FLAGS = new Set("46aCgGKknqTVvxy".split(""));
@@ -72,6 +74,23 @@ function positionals(args: readonly string[]): string[] {
   return [...before.filter((a) => a === "-" || !a.startsWith("-")), ...after];
 }
 
+function hasRequiredShortFlag(args: readonly string[], letter: string, valueLetters: string): boolean {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (a === "--") return false;
+    if (!a.startsWith("-") || a.startsWith("--") || a === "-") continue;
+    for (let j = 1; j < a.length; j++) {
+      const c = a[j]!;
+      if (c === letter) return true;
+      if (valueLetters.includes(c)) {
+        if (j === a.length - 1) i++;
+        break;
+      }
+    }
+  }
+  return false;
+}
+
 function lookup<T>(table: Record<string, T>, key: string | undefined): T | undefined {
   return key !== undefined && Object.prototype.hasOwnProperty.call(table, key) ? table[key] : undefined;
 }
@@ -85,7 +104,7 @@ function leadingVerb(args: readonly string[], reads: Set<string>, groups: Record
 }
 
 const any = () => true;
-const subIn = (set: Set<string>, allowNone = false) => (args: readonly string[]) =>
+const subIn = (args: readonly string[], set: ReadonlySet<string>, allowNone = false) =>
   args[0] === undefined ? allowNone : set.has(args[0]);
 const countedSampler = (args: readonly string[]) => positionals(args).length !== 1;
 
@@ -102,7 +121,11 @@ const IP_READ_VERBS = new Set(["show", "list", "ls", "get"]);
 const IP_LEADING_FLAGS = new Set([
   "-s", "-4", "-6", "-j", "-p", "-br", "-c", "-d", "-o", "-stats", "-brief", "-json", "-details", "-color", "-pretty",
 ]);
-const ZPOOL_READS = subIn(new Set(["status", "list"]));
+const STATUS_READS = new Set(["status", "show"]);
+const ZPOOL_READS = new Set(["status", "list"]);
+const ZFS_READS = new Set(["list", "get"]);
+const PING_VALUE_LETTERS = "CceFiIlmMNpQsStTwW";
+const TOP_VALUE_LETTERS = "dEenopUuw";
 const FIND_ACTIONS = new Set(["-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0", "-fprintf", "-fls"]);
 const CRICTL_READS = new Set(["ps", "pods", "logs", "inspect", "inspectp", "inspecti", "images", "img", "stats", "statsp", "info", "version"]);
 const DOCKER_READS = new Set(["ps", "logs", "inspect", "images", "version", "info", "top", "port", "diff", "history", "stats"]);
@@ -119,10 +142,10 @@ const KUBECTL_REMOTE_READS = new Set([
   "get", "describe", "logs", "top", "version", "api-resources", "api-versions", "cluster-info", "explain", "events",
 ]);
 const KUBECTL_REMOTE_GROUP_READS: Record<string, Set<string>> = {
-  auth: new Set(["can-i", "whoami"]),
-  rollout: new Set(["status", "history"]),
+  ...KUBECTL_READONLY_SUBCOMMANDS,
   config: new Set(["view", "get-contexts", "current-context"]),
 };
+const KUBECTL_GLOBAL_BOOLEANS = new Set(["--insecure-skip-tls-verify", "--match-server-version", "--warnings-as-errors"]);
 
 function dockerRead(args: readonly string[]): boolean {
   const verb = leadingVerb(args, DOCKER_READS, DOCKER_GROUP_READS);
@@ -134,27 +157,18 @@ function dockerRead(args: readonly string[]): boolean {
 }
 
 function crictlRead(args: readonly string[]): boolean {
-  const sub = args[0];
-  if (sub === undefined || !CRICTL_READS.has(sub)) return false;
-  return sub !== "logs" || !hasFlag(args, ["f"], ["--follow"]);
-}
-
-function rawFlagValue(args: readonly string[]): string | null {
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i]!;
-    if (a === "--raw") return args[i + 1] ?? "";
-    if (a.startsWith("--raw=")) return a.slice("--raw=".length);
-  }
-  return null;
+  if (!subIn(args, CRICTL_READS)) return false;
+  return args[0] !== "logs" || !hasFlag(args, ["f"], ["--follow"]);
 }
 
 function kubectlRead(args: readonly string[]): boolean {
-  const verb = leadingVerb(args, KUBECTL_REMOTE_READS, KUBECTL_REMOTE_GROUP_READS);
+  const { verb, sub } = findVerb(args, KUBECTL_GLOBAL_BOOLEANS);
   if (verb === null) return false;
+  const group = lookup(KUBECTL_REMOTE_GROUP_READS, verb);
+  if (group ? sub === null || !group.has(sub) : !KUBECTL_REMOTE_READS.has(verb)) return false;
   if (verb === "cluster-info" && args.includes("dump")) return false;
-  if (verb === "view" && hasFlag(args, [], ["--raw"])) return false;
-  const rawPath = rawFlagValue(args);
-  if (rawPath !== null && /secret/i.test(rawPath)) return false;
+  if (verb === "config" && hasFlag(args, [], ["--raw"])) return false;
+  if (flagValues(args, ["--raw"]).some((path) => /secret/i.test(path))) return false;
   const cmd = ["kubectl", ...args].join(" ");
   return (
     classifyTier(cmd).tier === "read" &&
@@ -181,8 +195,8 @@ const REMOTE_READS: Record<string, (args: readonly string[]) => boolean> = {
   sort: (a) => !hasFlag(a, ["o"], ["--output", "--compress-program"]),
   uniq: (a) => positionals(a).length <= 1,
   find: (a) => !a.some((x) => FIND_ACTIONS.has(x)),
-  top: (a) => hasFlag(a, ["b"], []) && hasFlag(a, ["n"], []),
-  ping: (a) => hasFlag(a, ["c"], ["--count"]) && !hasFlag(a, ["f"], []),
+  top: (a) => hasRequiredShortFlag(a, "b", TOP_VALUE_LETTERS) && hasRequiredShortFlag(a, "n", TOP_VALUE_LETTERS),
+  ping: (a) => hasRequiredShortFlag(a, "c", PING_VALUE_LETTERS) && !hasFlag(a, ["f"], []),
   ss: (a) => !hasFlag(a, ["K", "D"], ["--kill", "--diag"]),
   ip: (a) => {
     let i = 0;
@@ -195,9 +209,9 @@ const REMOTE_READS: Record<string, (args: readonly string[]) => boolean> = {
       "--follow", "--vacuum-size", "--vacuum-time", "--vacuum-files", "--rotate", "--flush", "--sync",
       "--relinquish-var", "--smart-relinquish-var", "--update-catalog", "--setup-keys", "--cursor-file",
     ]),
-  systemctl: (a) => (a[0] !== undefined && SYSTEMCTL_READS.has(a[0])) || a.every((x) => SYSTEMCTL_BARE_FLAGS.has(x)),
-  timedatectl: subIn(new Set(["status", "show"]), true),
-  hostnamectl: subIn(new Set(["status", "show"]), true),
+  systemctl: (a) => subIn(a, SYSTEMCTL_READS) || a.every((x) => SYSTEMCTL_BARE_FLAGS.has(x)),
+  timedatectl: (a) => subIn(a, STATUS_READS, true),
+  hostnamectl: (a) => subIn(a, STATUS_READS, true),
   dmesg: (a) =>
     !hasFlag(a, ["c", "C", "D", "E", "n", "w", "W"], [
       "--clear", "--read-clear", "--console-off", "--console-on", "--console-level", "--follow", "--follow-new",
@@ -209,8 +223,8 @@ const REMOTE_READS: Record<string, (args: readonly string[]) => boolean> = {
     a[0] === "--version" || a[0] === "-v" || a[0] === "check-config" ||
     (a[0] === "kubectl" && kubectlRead(a.slice(1))) ||
     (a[0] === "crictl" && crictlRead(a.slice(1))),
-  zpool: (a) => ZPOOL_READS(a) && !hasFlag(a, ["c"], []),
-  zfs: subIn(new Set(["list", "get"])),
+  zpool: (a) => subIn(a, ZPOOL_READS) && !hasFlag(a, ["c"], []),
+  zfs: (a) => subIn(a, ZFS_READS),
   smartctl: (a) => !hasFlag(a, ["t", "s", "o", "S", "X"], ["--test", "--smart", "--offlineauto", "--saveauto", "--abort", "--set"]),
 };
 
@@ -225,12 +239,6 @@ function redirectIsSafe({ op, target }: ShellSegment["redirects"][number]): bool
 
 const READ_HEAD_DIRS = new Set(["/usr/bin", "/bin", "/usr/sbin", "/sbin"]);
 
-function commandName(head: string): string | null {
-  const slash = head.lastIndexOf("/");
-  if (slash < 0) return head;
-  return READ_HEAD_DIRS.has(head.slice(0, slash)) ? head.slice(slash + 1) : null;
-}
-
 function segmentIsRead(seg: ShellSegment, depth: number): boolean {
   if (!seg.redirects.every(redirectIsSafe)) return false;
   let words = seg.words;
@@ -239,9 +247,9 @@ function segmentIsRead(seg: ShellSegment, depth: number): boolean {
     while (words[0] === "-n") words = words.slice(1);
   }
   const [head, ...args] = words;
-  if (head === undefined || /^[A-Za-z_][A-Za-z0-9_]*=/.test(head)) return false;
-  const name = commandName(head);
-  if (name === null) return false;
+  if (head === undefined || ASSIGNMENT.test(head)) return false;
+  const { dir, name } = splitHead(head);
+  if (dir !== null && !READ_HEAD_DIRS.has(dir)) return false;
   if (name === "sh" || name === "bash") {
     return args.length === 2 && args[0] === "-c" && remoteIsRead(args[1]!, depth + 1);
   }
@@ -251,15 +259,9 @@ function segmentIsRead(seg: ShellSegment, depth: number): boolean {
 
 function remoteIsRead(command: string, depth = 0): boolean {
   if (depth > 3 || /[()]/.test(command)) return false;
-  let parsed;
-  try {
-    parsed = tokenizeShell(command);
-  } catch {
-    return false;
-  }
-  if (parsed.substitution) return false;
-  const segments = splitSegments(parsed.tokens);
-  return segments.length > 0 && segments.every((s) => segmentIsRead(s, depth));
+  const parsed = parseShell(command);
+  if (!parsed || parsed.substitution) return false;
+  return parsed.segments.length > 0 && parsed.segments.every((s) => segmentIsRead(s, depth));
 }
 
 function optionAllowed(value: string): boolean {
@@ -279,14 +281,13 @@ export function classifySsh(argv: readonly string[], enabledHosts: readonly stri
     if (!a.startsWith("-") || a === "-") break;
     for (let j = 1; j < a.length; j++) {
       const f = a[j]!;
+      if (SSH_DENY_FLAGS.has(f)) return deny(f === "N" || f === "t" ? INTERACTIVE_HINT : `ssh -${f} isn't allowed from chat.`);
       if (SSH_VALUE_FLAGS.has(f)) {
         const value = a.slice(j + 1) || argv[++i];
         if (value === undefined) return deny(`ssh -${f} is missing its value.`);
-        if (SSH_DENY_FLAGS.has(f)) return deny(f === "N" || f === "t" ? INTERACTIVE_HINT : `ssh -${f} isn't allowed from chat.`);
         if (f === "o" && !optionAllowed(value)) return deny(`ssh -o ${value} isn't allowed from chat.`);
         break;
       }
-      if (SSH_DENY_FLAGS.has(f)) return deny(f === "N" || f === "t" ? INTERACTIVE_HINT : `ssh -${f} isn't allowed from chat.`);
       if (!SSH_BOOL_FLAGS.has(f)) return deny(`Unknown ssh option -${f}.`);
     }
   }
@@ -306,17 +307,10 @@ export function classifySsh(argv: readonly string[], enabledHosts: readonly stri
     : { decision: "approve", reason: approvalHint(host) };
 }
 
-export function classifyShellSsh(command: string, enabledHosts: readonly string[]): ShellSshVerdict {
-  let parsed;
-  try {
-    parsed = tokenizeShell(command);
-  } catch (err) {
-    if (err instanceof ShellParseError) return { decision: "deny", reason: SSH_INDIRECT_HINT };
-    throw err;
-  }
+export function classifyShellSsh(parsed: ParsedShell, enabledHosts: readonly string[]): ShellSshVerdict {
   if (parsed.substitution) return { decision: "deny", reason: SSH_INDIRECT_HINT };
   const local: string[] = [];
-  for (const seg of splitSegments(parsed.tokens)) {
+  for (const seg of parsed.segments) {
     const [head, ...rest] = seg.words;
     if (head === "ssh") {
       const v = classifySsh(rest, enabledHosts);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ShellParseError, splitSegments, tokenizeShell } from "./shellWords";
+import { flagValues, parseShell, ShellParseError, splitHead, splitSegments, tokenizeShell } from "./shellWords";
 
 const words = (s: string) => splitSegments(tokenizeShell(s).tokens).map((g) => g.words);
 
@@ -48,5 +48,48 @@ describe("tokenizeShell", () => {
   it("throws on unterminated quotes", () => {
     expect(() => tokenizeShell("echo 'oops")).toThrow(ShellParseError);
     expect(() => tokenizeShell('echo "oops')).toThrow(ShellParseError);
+  });
+});
+
+describe("parseShell", () => {
+  it.each([
+    ["ls *.log", [false, true]],
+    ["ls '*.log'", [false, false]],
+    ['ls "*.log"', [false, false]],
+    ["ls \\*.log", [false, false]],
+    ["echo a'*'b*", [false, true]],
+    ["echo {a,b}", [false, true]],
+    ["echo '{a,b}'", [false, false]],
+    ["cat ~/x", [false, true]],
+    ["cat '~/x'", [false, false]],
+    ["kubectl get pods -o jsonpath='{.items[*]}'", [false, false, false, false, false]],
+  ])("%s marks unquoted glob words as %j", (cmd, globs) => {
+    expect(parseShell(cmd)!.segments[0]!.wordGlobs).toEqual(globs);
+  });
+
+  it("returns null instead of throwing on a parse error", () => {
+    expect(parseShell("echo 'oops")).toBeNull();
+    expect(parseShell("echo ok")).toEqual({
+      segments: [{ words: ["echo", "ok"], wordGlobs: [false, false], redirects: [] }],
+      substitution: false,
+    });
+  });
+});
+
+describe("splitHead", () => {
+  it.each([
+    ["kubectl", { dir: null, name: "kubectl" }],
+    ["/usr/bin/kubectl", { dir: "/usr/bin", name: "kubectl" }],
+    ["/x", { dir: "", name: "x" }],
+    ["./uptime", { dir: ".", name: "uptime" }],
+  ])("%s", (word, parts) => {
+    expect(splitHead(word)).toEqual(parts);
+  });
+});
+
+describe("flagValues", () => {
+  it("reads both the separate and the = form, every occurrence", () => {
+    expect(flagValues(["--context", "a", "get", "--context=b", "--context="], ["--context"])).toEqual(["a", "b"]);
+    expect(flagValues(["get", "--context"], ["--context"])).toEqual([]);
   });
 });

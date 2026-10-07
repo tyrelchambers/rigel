@@ -144,3 +144,38 @@ export function splitSegments(tokens: ShellToken[]): ShellSegment[] {
   push();
   return out;
 }
+
+export interface ParsedShell {
+  segments: ShellSegment[];
+  substitution: boolean;
+}
+
+export function parseShell(input: string): ParsedShell | null {
+  try {
+    const { tokens, substitution } = tokenizeShell(input);
+    return { segments: splitSegments(tokens), substitution };
+  } catch (err) {
+    if (err instanceof ShellParseError) return null;
+    throw err;
+  }
+}
+
+export const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+
+export function splitHead(word: string): { dir: string | null; name: string } {
+  const slash = word.lastIndexOf("/");
+  return slash < 0 ? { dir: null, name: word } : { dir: word.slice(0, slash), name: word.slice(slash + 1) };
+}
+
+export function flagValues(tokens: readonly string[], names: readonly string[]): string[] {
+  const out: string[] = [];
+  tokens.forEach((t, i) => {
+    const eq = t.indexOf("=");
+    if (eq < 0) {
+      if (names.includes(t) && i + 1 < tokens.length) out.push(tokens[i + 1]!);
+    } else if (names.includes(t.slice(0, eq)) && eq + 1 < t.length) {
+      out.push(t.slice(eq + 1));
+    }
+  });
+  return out;
+}

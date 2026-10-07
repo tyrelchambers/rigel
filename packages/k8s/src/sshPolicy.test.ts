@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parseShell } from "./shellWords";
 import { classifyShellSsh, classifySsh, parseSshHostsEnv } from "./sshPolicy";
 
 const HOSTS = ["web-1", "nas"];
@@ -21,6 +22,8 @@ describe("classifySsh: remote reads", () => {
     "docker stats --no-stream",
     "crictl ps",
     "kubectl get pods -A",
+    "kubectl -n kube-system get pods",
+    "kubectl --insecure-skip-tls-verify get nodes",
     "kubectl get --raw /api/v1/nodes",
     "kubectl get --raw=/api/v1/nodes",
     "k3s kubectl get nodes",
@@ -85,6 +88,11 @@ describe("classifySsh: needs approval", () => {
     "docker logs -f api",
     "docker stats",
     "kubectl delete pod x",
+    "kubectl --field-selector get delete pod x",
+    "kubectl --field-selector=x get pods",
+    "kubectl rollout --field-selector status restart deploy/api",
+    "ping -Ic 1.1.1.1",
+    "top -bdn",
     "kubectl get secret s -o yaml",
     "kubectl get --raw /api/v1/namespaces/default/secrets",
     "kubectl get --raw=/api/v1/namespaces/default/Secrets/x",
@@ -205,13 +213,15 @@ describe("classifySsh: denied", () => {
 });
 
 describe("classifyShellSsh", () => {
+  const shell = (cmd: string) => classifyShellSsh(parseShell(cmd)!, HOSTS);
+
   it("allows a direct read and returns the local remainder", () => {
-    const v = classifyShellSsh(`ssh web-1 'journalctl -u x -n 50' | grep err`, HOSTS);
+    const v = shell(`ssh web-1 'journalctl -u x -n 50' | grep err`);
     expect(v).toEqual({ decision: "allow", reason: expect.any(String), local: "grep err" });
   });
 
   it("denies a remote write with the approval hint", () => {
-    const v = classifyShellSsh(`ssh web-1 'systemctl restart x'`, HOSTS);
+    const v = shell(`ssh web-1 'systemctl restart x'`);
     expect(v.decision).toBe("deny");
     expect(v.reason).toContain("sshCommand");
   });
@@ -225,9 +235,8 @@ describe("classifyShellSsh", () => {
     `sftp web-1`,
     `S=ssh; $S web-1 rm x`,
     `$(echo ssh) web-1 uptime`,
-    `ssh web-1 'uptime`,
   ])("%s is denied as indirect", (cmd) => {
-    expect(classifyShellSsh(cmd, HOSTS).decision).toBe("deny");
+    expect(shell(cmd).decision).toBe("deny");
   });
 });
 

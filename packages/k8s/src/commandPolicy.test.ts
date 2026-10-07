@@ -129,12 +129,8 @@ describe("printsSecretValues", () => {
   });
 });
 
-describe("classifyCommand ssh routing", () => {
+describe("classifyCommand ssh routing and command heads", () => {
   const hosts = ["web-1"];
-
-  test("allows a read on an enabled host", () => {
-    expect(classifyCommand("ssh web-1 'df -h'", "ctx", hosts).decision).toBe("allow");
-  });
 
   test("denies ssh entirely when no hosts are passed", () => {
     expect(classifyCommand("ssh web-1 'df -h'", "ctx").decision).toBe("deny");
@@ -146,59 +142,52 @@ describe("classifyCommand ssh routing", () => {
     expect(v.reason).toContain("sshCommand");
   });
 
-  test("takes the strictest verdict across local and ssh segments", () => {
-    expect(classifyCommand("kubectl --context ctx delete pod x && ssh web-1 uptime", "ctx", hosts).decision).toBe("deny");
-    expect(classifyCommand("ssh web-1 'docker ps' | grep api", "ctx", hosts).decision).toBe("allow");
+  test.each([
+    "ssh web-1 'df -h'",
+    "ssh web-1 'docker ps' | grep api",
+    "cat ~/.ssh/config",
+    "kubectl get secrets --field-selector type=kubernetes.io/ssh-auth",
+    "echo $HOME",
+    "ls /var/log/*.log",
+    "cat /etc/*release",
+    "kubectl get pods -o jsonpath='{.items[*].metadata.name}'",
+    "jq '.items[] | .x'",
+    "[ -f x ] && echo y",
+    "grep -r 'ssh[ :]' /etc",
+  ])("allows %s", (cmd) => {
+    expect(classifyCommand(cmd, "ctx", hosts).decision).toBe("allow");
   });
 
-  test("does not trip on ssh-looking paths and labels", () => {
-    expect(classifyCommand("cat ~/.ssh/config", "ctx").decision).toBe("allow");
-    expect(classifyCommand("kubectl get secrets --field-selector type=kubernetes.io/ssh-auth", "ctx").decision).toBe("allow");
+  test.each([
+    "kubectl --context ctx delete pod x && ssh web-1 uptime",
+    "\\ssh web-1 'rm -rf /'",
+    "s\\sh web-1 'rm -rf /'",
+    `s""sh web-1 'rm -rf /'`,
+    "k=kubectl; $k delete pod x",
+    "/usr/bin/k?bectl delete pod x",
+    "/usr/bin/ss[h] evil uptime",
+    "ss[h] prod-db 'rm -rf /'",
+    "/usr/bin/s{s,x}h web-1 uptime",
+    "{ssh,} web-1 uptime",
+    "kube[c]tl delete pod x",
+    "sudo kube[c]tl delete pod x",
+    "~kubectl get pods",
+    "cat /usr/bin/kube*",
+    "ls /opt/homebrew/bin/*",
+    "/usr/bin/kubectl delete pod x",
+    "/usr/local/bin/k get pods",
+    "/usr/bin/helm uninstall app",
+    "grep -r ssh /etc",
+  ])("denies %s", (cmd) => {
+    expect(classifyCommand(cmd, "ctx", hosts).decision).toBe("deny");
   });
 
-  test("catches ssh spelled with shell escapes or quotes", () => {
-    expect(classifyCommand("\\ssh web-1 'rm -rf /'", "ctx", hosts).decision).toBe("deny");
-    expect(classifyCommand("s\\sh web-1 'rm -rf /'", "ctx", hosts).decision).toBe("deny");
-    expect(classifyCommand(`s""sh web-1 'rm -rf /'`, "ctx", hosts).decision).toBe("deny");
-    expect(classifyCommand("echo $HOME", "ctx").decision).toBe("allow");
-  });
-
-  test("denies a dynamic command head", () => {
-    expect(classifyCommand("k=kubectl; $k delete pod x", "ctx").decision).toBe("deny");
-    expect(classifyCommand("/usr/bin/k?bectl delete pod x", "ctx").decision).toBe("deny");
-  });
-
-  test("denies glob and brace command heads bash would expand", () => {
-    expect(classifyCommand("/usr/bin/ss[h] evil uptime", "ctx", hosts).decision).toBe("deny");
-    expect(classifyCommand("ss[h] prod-db 'rm -rf /'", "ctx", hosts).decision).toBe("deny");
-    expect(classifyCommand("/usr/bin/s{s,x}h web-1 uptime", "ctx", hosts).decision).toBe("deny");
-    expect(classifyCommand("{ssh,} web-1 uptime", "ctx", hosts).decision).toBe("deny");
-    expect(classifyCommand("kube[c]tl delete pod x", "ctx").decision).toBe("deny");
-    expect(classifyCommand("sudo kube[c]tl delete pod x", "ctx").decision).toBe("deny");
-    expect(classifyCommand("~kubectl get pods", "ctx").decision).toBe("deny");
-  });
-
-  test("denies a glob on a bin path anywhere in the segment", () => {
-    expect(classifyCommand("cat /usr/bin/kube*", "ctx").decision).toBe("deny");
-    expect(classifyCommand("ls /opt/homebrew/bin/*", "ctx").decision).toBe("deny");
-  });
-
-  test("still allows globs on non-bin paths and quoted braces", () => {
-    expect(classifyCommand("ls /var/log/*.log", "ctx").decision).toBe("allow");
-    expect(classifyCommand("cat /etc/*release", "ctx").decision).toBe("allow");
-    expect(classifyCommand("kubectl get pods -o jsonpath='{.items[*].metadata.name}'", "ctx").decision).toBe("allow");
-    expect(classifyCommand("jq '.items[] | .x'", "ctx").decision).toBe("allow");
-    expect(classifyCommand("[ -f x ] && echo y", "ctx").decision).toBe("allow");
-  });
-
-  test("denies a path-prefixed kubectl, k or helm", () => {
-    expect(classifyCommand("/usr/bin/kubectl delete pod x", "ctx").decision).toBe("deny");
-    expect(classifyCommand("/usr/local/bin/k get pods", "ctx").decision).toBe("deny");
-    expect(classifyCommand("/usr/bin/helm uninstall app", "ctx").decision).toBe("deny");
-  });
-
-  test("denies a bare ssh word but allows ssh only as a search pattern", () => {
-    expect(classifyCommand("grep -r ssh /etc", "ctx").decision).toBe("deny");
-    expect(classifyCommand("grep -r 'ssh[ :]' /etc", "ctx").decision).toBe("allow");
-  });
+  test.each(["ssh web-1 'uptime", "echo 'oops", 'kubectl get pods -l "a', "echo trailing\\"])(
+    "denies %s because it doesn't parse",
+    (cmd) => {
+      const v = classifyCommand(cmd, "ctx", hosts);
+      expect(v.decision).toBe("deny");
+      expect(v.reason).toContain("couldn't be parsed");
+    },
+  );
 });
