@@ -475,7 +475,7 @@ test("an sshCommand runs ssh in batch mode against the enabled host and is recor
   expect(spawns[0]!.bin).toBe("ssh");
   expect(spawns[0]!.args).toEqual(["-T", "-o", "BatchMode=yes", "--", "k8s-truenas", "apt list --upgradable"]);
   expect(spawns[0]!.opts.stdio[0]).toBe("ignore");
-  expect(spawns[0]!.opts.timeout).toBeGreaterThan(0);
+  expect(spawns[0]!.opts.timeout).toBe(30 * 60_000);
 
   proc.stdout.end("curl/questing-updates 8.14.1 amd64\n");
   await settle();

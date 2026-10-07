@@ -14,7 +14,7 @@ export interface SshHost {
 }
 
 const SSH_DIR = join(homedir(), ".ssh");
-export const SSH_ACTION_TIMEOUT_MS = 120_000;
+export const SSH_ACTION_TIMEOUT_MS = 30 * 60_000;
 const ACTION_MAX_OUTPUT = 10 * 1024 * 1024;
 
 function enabledFile(): string {
