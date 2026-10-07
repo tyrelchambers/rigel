@@ -206,6 +206,18 @@ describe("runActionInBackground — streaming path", () => {
     );
   });
 
+  it("shows an action.error in the progress toast even if it arrived before the toast mounted", () => {
+    runActionInBackground({ action: streamingAction, label: "Run command", commandString: "kubectl ..." });
+
+    const runId = mockRunAction.mock.calls[0]![0] as string;
+    actionEventCallbacks.get(runId)!({ type: "action.error", id: runId, message: "Rigel lost its connection; run it again." });
+
+    expect(toastCustom).toHaveBeenCalledTimes(2);
+    expect(toastCustom.mock.calls[1]![1]).toMatchObject({ id: "toast-custom-1", duration: Infinity });
+    const render = toastCustom.mock.calls[1]![0] as (t: string) => React.ReactElement<{ error?: string }>;
+    expect(render("toast-custom-1").props.error).toBe("Rigel lost its connection; run it again.");
+  });
+
   it("fires onResult on action.error (fromChat)", () => {
     const onResult = vi.fn();
     runActionInBackground({

@@ -106,6 +106,20 @@ describe("ActionProgressToast", () => {
     expect(screen.getByText(/Exited with code 1/)).toBeDefined();
   });
 
+  test("an error handed in as a prop shows the error state, with or without a prior mount", () => {
+    const { rerender } = render(<ActionProgressToast id="r5" label="Upgrade" />);
+    expect(screen.getByText("Running…")).toBeDefined();
+
+    rerender(<ActionProgressToast id="r5" label="Upgrade" error="Rigel lost its connection; run it again." />);
+    expect(screen.getByText("Rigel lost its connection; run it again.")).toBeDefined();
+    expect(screen.queryByText("Running…")).toBeNull();
+    cleanup();
+
+    render(<ActionProgressToast id="r6" label="Upgrade" error="boom" />);
+    expect(screen.getByText("boom")).toBeDefined();
+    expect(screen.queryByText(/streaming…/)).toBeNull();
+  });
+
   test("dismiss button closes this toast via sonner", () => {
     render(<ActionProgressToast id="r1" label="Delete X" toastId="t-9" />);
 

@@ -186,4 +186,22 @@ describe("runAction", () => {
     expect(actionFrames).toHaveLength(1);
     expect(JSON.parse(actionFrames[0]!)).toEqual({ type: "action.run", id: "run-buf", action: testAction });
   });
+
+  it("never queues a frame carrying a secret: with the socket down the run fails locally", () => {
+    const sudoAction: ActionBlock = { kind: "sshCommand", host: "web-1", command: "apt-get upgrade -y", sudo: true };
+    const received: ActionEvent[] = [];
+    const unsub = onActionEvent("run-sudo", (e) => received.push(e));
+    mockWs.readyState = 0;
+    mockWs.sent = [];
+
+    runAction("run-sudo", sudoAction, "hunter2");
+    mockWs.readyState = 1;
+    mockWs.onopen?.();
+
+    expect(received).toEqual([
+      { type: "action.error", id: "run-sudo", message: "Rigel lost its connection; run it again." },
+    ]);
+    expect(mockWs.sent.join("")).not.toContain("hunter2");
+    unsub();
+  });
 });

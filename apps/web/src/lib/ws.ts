@@ -143,9 +143,15 @@ export function onActionEvent(id: string, cb: ActionCallback): () => void {
 
 /**
  * Send an action.run frame to start executing a chat action-block on the server.
- * `secret` (a sudo sshCommand's password) rides beside the action, never in it.
+ * `secret` (a sudo sshCommand's password) rides beside the action, never in it,
+ * and is never queued: with the socket down the run fails locally instead.
  */
 export function runAction(id: string, action: ActionBlock, secret?: string): void {
+  if (secret && !(socket && socket.readyState === WebSocket.OPEN)) {
+    const lost: ActionEvent = { type: "action.error", id, message: "Rigel lost its connection; run it again." };
+    actionListeners.get(id)?.forEach((cb) => cb(lost));
+    return;
+  }
   rawSend(
     JSON.stringify({
       type: "action.run",

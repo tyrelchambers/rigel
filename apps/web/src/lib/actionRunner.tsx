@@ -93,6 +93,12 @@ export function runActionInBackground(opts: RunBackgroundActionOptions): void {
         unsub();
         const result: ActionResult = { code: 1, stdout: "", stderr: e.message };
         if (fromChat) onResult?.({ action, result, commandString });
+        if (toastId !== undefined) {
+          toast.custom((t) => <ActionProgressToast id={runId} label={label} toastId={t} error={e.message} />, {
+            id: toastId,
+            duration: Infinity,
+          });
+        }
         // Leave error toast persistent; user must dismiss.
       }
     });
