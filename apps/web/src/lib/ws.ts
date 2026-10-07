@@ -141,10 +141,19 @@ export function onActionEvent(id: string, cb: ActionCallback): () => void {
   };
 }
 
-/** Send an action.run frame to start executing a chat action-block on the server. */
-export function runAction(id: string, action: ActionBlock): void {
+/**
+ * Send an action.run frame to start executing a chat action-block on the server.
+ * `secret` (a sudo sshCommand's password) rides beside the action, never in it.
+ */
+export function runAction(id: string, action: ActionBlock, secret?: string): void {
   rawSend(
-    JSON.stringify({ type: "action.run", id, action, ...(currentContext ? { context: currentContext } : {}) }),
+    JSON.stringify({
+      type: "action.run",
+      id,
+      action,
+      ...(currentContext ? { context: currentContext } : {}),
+      ...(secret ? { secret } : {}),
+    }),
   );
 }
 

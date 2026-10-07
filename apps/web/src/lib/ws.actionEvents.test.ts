@@ -152,6 +152,18 @@ describe("runAction", () => {
     expect(frame).toEqual({ type: "action.run", id: "run-42", action: testAction });
   });
 
+  it("carries a sudo secret beside the action only when one is given", () => {
+    const sudoAction: ActionBlock = { kind: "sshCommand", host: "web-1", command: "apt-get upgrade -y", sudo: true };
+    mockWs.sent = [];
+    runAction("run-43", sudoAction, "hunter2");
+    runAction("run-44", testAction);
+
+    const [withSecret, without] = mockWs.sent.map((raw) => JSON.parse(raw));
+    expect(withSecret).toEqual({ type: "action.run", id: "run-43", action: sudoAction, secret: "hunter2" });
+    expect(withSecret.action).not.toHaveProperty("secret");
+    expect(without).not.toHaveProperty("secret");
+  });
+
   it("buffers the frame if the socket is not yet OPEN and sends it on connect", () => {
     // Simulate a socket in CONNECTING state (readyState 0).
     mockWs.readyState = 0;

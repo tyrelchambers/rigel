@@ -108,6 +108,7 @@ import {
   transcript,
   shortSessionId,
   toActionBlock,
+  isBatchable,
 } from "@/panels/chat/chatLogic";
 import type { ChatEvent, ChatMessage } from "@/panels/chat/types";
 import { RigelMark } from "@/components/RigelMark";
@@ -643,11 +644,9 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   const [pendingBatch, setPendingBatch] = useState<ActionBlock[] | null>(null);
 
   function handleRunBatch(suggestions: SuggestedAction[]) {
-    // purge/applyManifest can't join a sequential batch (already excluded in the
-    // list UI; filter defensively).
-    const blocks = suggestions
-      .map(toActionBlock)
-      .filter((b) => b.kind !== "purge" && b.kind !== "applyManifest");
+    // Non-batchable actions (purge, applyManifest, proposeRepoFix, a sudo
+    // sshCommand) are already excluded in the list UI; filter defensively.
+    const blocks = suggestions.filter(isBatchable).map(toActionBlock);
     if (blocks.length === 0) return;
     setPendingBatch(blocks);
   }

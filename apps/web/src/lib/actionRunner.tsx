@@ -24,6 +24,8 @@ export interface RunBackgroundActionOptions {
   fromChat?: boolean;
   /** Fires once the action settles (success OR failure) when `fromChat`. */
   onResult?: (info: BackgroundActionInfo) => void;
+  /** A sudo sshCommand's password, sent once with the run frame and never kept. */
+  secret?: string;
 }
 
 /**
@@ -53,7 +55,7 @@ const OUTPUT_KEEP_MAX = 8000;
  * the streamed stdout/stderr) and the exact command on both success and failure.
  */
 export function runActionInBackground(opts: RunBackgroundActionOptions): void {
-  const { action, label, commandString, fromChat, onResult } = opts;
+  const { action, label, commandString, fromChat, onResult, secret } = opts;
 
   const streamed = !REST_ONLY_KINDS.has(action.kind);
 
@@ -104,7 +106,7 @@ export function runActionInBackground(opts: RunBackgroundActionOptions): void {
     });
 
     // Start the action on the server.
-    runAction(runId, action);
+    runAction(runId, action, secret);
     return;
   }
 

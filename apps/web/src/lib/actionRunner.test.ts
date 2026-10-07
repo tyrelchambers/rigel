@@ -132,6 +132,16 @@ describe("runActionInBackground — streaming path", () => {
     );
   });
 
+  it("forwards a sudo secret to runAction beside the action, never inside it", () => {
+    const sudoAction: ActionBlock = { kind: "sshCommand", host: "web-1", command: "apt-get upgrade -y", sudo: true };
+    runActionInBackground({ action: sudoAction, label: "Upgrade", commandString: "ssh ...", secret: "hunter2" });
+
+    expect(mockRunAction.mock.calls[0]![1]).toBe(sudoAction);
+    expect(mockRunAction.mock.calls[0]![2]).toBe("hunter2");
+    expect(JSON.stringify(sudoAction)).not.toContain("hunter2");
+    expect(JSON.stringify(toastCustom.mock.calls)).not.toContain("hunter2");
+  });
+
   it("passes the streamed stdout and stderr lines to onResult on action.done (fromChat)", () => {
     const onResult = vi.fn();
     runActionInBackground({
