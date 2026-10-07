@@ -563,6 +563,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   function startNewChat() {
     // The previous conversation stays saved; this just begins a fresh one.
     resetConversation();
+    setAutoFocusComposer(true);
   }
 
   // ── Chat history modal ─────────────────────────────────────────────────────

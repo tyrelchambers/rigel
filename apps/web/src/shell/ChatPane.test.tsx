@@ -111,6 +111,16 @@ describe("ChatPane chat enablement (active-agent gating)", () => {
     expect(screen.getByText(/isn't set up yet/i)).toBeInTheDocument();
   });
 
+  it("focuses the composer when a new chat is started", () => {
+    renderPane({ activeAgentId: "codex", agents: [claude, codex] });
+    const button = screen.getByRole("button", { name: "New chat" });
+    button.focus();
+
+    fireEvent.click(button);
+
+    expect(composer()).toHaveFocus();
+  });
+
   it("treats the still-loading agents query as not-configured (disabled)", () => {
     renderPane(); // no agents data seeded → query is loading
 
