@@ -42,6 +42,8 @@ extraResources:
     to: server/permissionHook.ts
   - from: dist/permissionHook.mjs
     to: server/permissionHook.mjs
+  - from: dist/guardedKubectl.mjs
+    to: server/guardedKubectl.mjs
   # node-pty as a real, unpacked package tree next to the server's cwd so
   # `import "node-pty"` resolves from resources/server/node_modules/node-pty.
   # Includes lib/, prebuilds/ (pty.node + spawn-helper) — the native addon and

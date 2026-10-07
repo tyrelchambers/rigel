@@ -34,6 +34,10 @@ const electronBundles = build({
   logLevel: "info",
 });
 
+const requireBanner = {
+  js: "import { createRequire as __rigelCreateRequire } from 'node:module'; const require = __rigelCreateRequire(import.meta.url);",
+};
+
 const serverBundle = build({
   entryPoints: ["../server/src/index.ts"],
   outfile: "dist/server.mjs",
@@ -52,9 +56,7 @@ const serverBundle = build({
   // Give the ESM bundle a real CommonJS `require` so esbuild's interop shim can
   // load Node builtins (events/stream/etc. via `ws`) under Electron's utility
   // ESM loader, which otherwise rejects esbuild's default dynamic-require shim.
-  banner: {
-    js: "import { createRequire as __rigelCreateRequire } from 'node:module'; const require = __rigelCreateRequire(import.meta.url);",
-  },
+  banner: requireBanner,
   logLevel: "info",
 });
 
@@ -88,6 +90,18 @@ const permissionHookMjsBundle = build({
   format: "esm",
   target: "node22",
   allowOverwrite: true,
+  logLevel: "info",
+});
+
+const guardMjsBundle = build({
+  entryPoints: ["../server/src/guardedKubectl.ts"],
+  outfile: "dist/guardedKubectl.mjs",
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  target: "node22",
+  allowOverwrite: true,
+  banner: requireBanner,
   logLevel: "info",
 });
 
@@ -148,9 +162,7 @@ const voiceBundle = build({
   target: "node22",
   external: ["@livekit/rtc-node", "@livekit/local-inference", "electron", "node-pty"],
   plugins: [stubSharpPlugin],
-  banner: {
-    js: "import { createRequire as __rigelCreateRequire } from 'node:module'; const require = __rigelCreateRequire(import.meta.url);",
-  },
+  banner: requireBanner,
   logLevel: "info",
 });
 
@@ -189,7 +201,7 @@ await import("./voice.mjs");
 `,
 );
 
-await Promise.all([electronBundles, serverBundle, permissionHookBundle, permissionHookMjsBundle, voiceBundle]);
+await Promise.all([electronBundles, serverBundle, permissionHookBundle, permissionHookMjsBundle, guardMjsBundle, voiceBundle]);
 
 // The worker's externals cannot ship as pnpm symlinks into a store the app
 // bundle will not contain, so flatten their closure into a real node_modules

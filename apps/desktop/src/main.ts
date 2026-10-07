@@ -341,6 +341,7 @@ function forkServer(port: number): UtilityProcess {
     const hookMjs = join(serverDir, "permissionHook.mjs");
     const shq = (p: string) => `'${p.replace(/'/g, "'\\''")}'`;
     env.HELMSMAN_HOOK_CMD = `ELECTRON_RUN_AS_NODE=1 ${shq(process.execPath)} ${shq(hookMjs)}`;
+    env.RIGEL_GUARD_CMD = `env ELECTRON_RUN_AS_NODE=1 ${shq(process.execPath)} ${shq(join(serverDir, "guardedKubectl.mjs"))}`;
   } else {
     // ── DEV branch ─────────────────────────────────────────────────────────
     // Fork the desktop-bundled server (dist/server.mjs). cwd = apps/desktop so
