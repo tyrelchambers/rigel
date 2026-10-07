@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, readdir, stat, writeFile, chmod } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { guardVerdict, runGuard, provisionGuardBin, wrapperScript } from "./guardedKubectl";
+import { guardExecArgs, guardVerdict, runGuard, provisionGuardBin, wrapperScript } from "./guardedKubectl";
 
 // Absolute path to the guard entry, resolved next to this test so the real
 // subprocess tests work in dev (tsx) regardless of cwd. Nothing here EVER touches
@@ -55,6 +55,38 @@ describe("guardVerdict — pure policy decisions (reuses classifyCommand)", () =
   });
 });
 
+describe("guardVerdict ssh", () => {
+  test("allows a read on an enabled host", () => {
+    expect(guardVerdict("ssh", ["web-1", "uptime"], ["web-1"]).decision).toBe("allow");
+  });
+
+  test("classifies exact argv, so a quoted redirect stays remote", () => {
+    expect(guardVerdict("ssh", ["web-1", "cat x > /etc/y"], ["web-1"]).decision).toBe("deny");
+  });
+
+  test("denies a host that is not enabled", () => {
+    expect(guardVerdict("ssh", ["web-1", "uptime"], []).decision).toBe("deny");
+  });
+
+  test.each(["scp", "sftp", "rsync", "sshfs", "sshpass", "autossh", "mosh"])("always denies %s", (name) => {
+    expect(guardVerdict(name, ["web-1:/x", "."], ["web-1"]).decision).toBe("deny");
+  });
+
+  test("leaves kubectl behaviour unchanged", () => {
+    expect(guardVerdict("kubectl", ["get", "pods"]).decision).toBe("allow");
+  });
+});
+
+describe("guardExecArgs", () => {
+  test("forces batch mode and no tty for ssh", () => {
+    expect(guardExecArgs("ssh", ["web-1", "uptime"])).toEqual(["-T", "-o", "BatchMode=yes", "web-1", "uptime"]);
+  });
+
+  test("passes kubectl args through", () => {
+    expect(guardExecArgs("kubectl", ["get", "pods"])).toEqual(["get", "pods"]);
+  });
+});
+
 describe("runGuard — dispatch (fake real binary = /bin/echo, never a cluster)", () => {
   test("allowed read execs the real binary and forwards exit 0", async () => {
     // Drive the shim entry as a real subprocess: kubectl → /bin/echo get pods.
@@ -68,6 +100,19 @@ describe("runGuard — dispatch (fake real binary = /bin/echo, never a cluster)"
     expect(r.code).not.toBe(0);
     expect(r.stderr).toMatch(/action block/i);
     expect(r.stdout).not.toContain("delete"); // echo never ran
+  });
+
+  test("an ssh read on an enabled host execs the real binary in batch mode", async () => {
+    const r = await runEntry(["ssh", "/bin/echo", "web-1", "uptime"], { RIGEL_SSH_HOSTS: "web-1" });
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain("-T -o BatchMode=yes web-1 uptime");
+  });
+
+  test("an ssh change is denied without exec and steers to an sshCommand action", async () => {
+    const r = await runEntry(["ssh", "/bin/echo", "web-1", "rm x"], { RIGEL_SSH_HOSTS: "web-1" });
+    expect(r.code).toBe(1);
+    expect(r.stderr).toMatch(/sshCommand/);
+    expect(r.stdout).toBe("");
   });
 
   test("runGuard rejects malformed argv (no real binary)", async () => {

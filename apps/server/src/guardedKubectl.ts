@@ -15,10 +15,20 @@ import { mkdtemp, writeFile, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { classifyCommand, type CommandVerdict } from "@rigel/k8s";
+import {
+  classifyCommand,
+  classifySsh,
+  parseSshHostsEnv,
+  SSH_BATCH_ARGS,
+  SSH_INDIRECT_HINT,
+  SSH_TRANSFER_TOOLS,
+  type CommandVerdict,
+} from "@rigel/k8s";
 
 /**
- * Pure decision core. Reconstructs the command the agent asked to run as
+ * Pure decision core. ssh is classified on its exact argv by classifySsh, and the
+ * file-transfer tools (scp, rsync, …) are always denied. For kubectl/helm it
+ * reconstructs the command the agent asked to run as
  * `[logicalName, ...userArgs].join(" ")` and defers to the shared policy. The
  * reconstruction is safe here because the shim only ever receives ONE already-split
  * invocation (no pipes/chains across argv), and the policy biases to deny on any
@@ -30,14 +40,23 @@ import { classifyCommand, type CommandVerdict } from "@rigel/k8s";
  * master's classifyCommand, this becomes a one-line change (thread the active context
  * through to classifyCommand).
  */
-export function guardVerdict(logicalName: string, userArgs: string[]): CommandVerdict {
+export function guardVerdict(logicalName: string, userArgs: string[], sshHosts: readonly string[] = []): CommandVerdict {
+  if (SSH_TRANSFER_TOOLS.includes(logicalName)) return { decision: "deny", reason: SSH_INDIRECT_HINT };
+  if (logicalName === "ssh") {
+    const v = classifySsh(userArgs, sshHosts);
+    return { decision: v.decision === "read" ? "allow" : "deny", reason: v.reason };
+  }
   const cmd = [logicalName, ...userArgs].join(" ");
   return classifyCommand(cmd);
 }
 
+export function guardExecArgs(logicalName: string, userArgs: string[]): string[] {
+  return logicalName === "ssh" ? [...SSH_BATCH_ARGS, ...userArgs] : userArgs;
+}
+
 /**
  * Shim entry. argv layout = `[logicalName, realBinaryPath, ...userArgs]`:
- *   - logicalName: "kubectl" | "helm" (what the agent typed),
+ *   - logicalName: "kubectl" | "helm" | "ssh" | an ssh transfer tool (what the agent typed),
  *   - realBinaryPath: absolute path to the genuine binary (resolved at provision time).
  * Allowed reads exec the real binary (stdio inherited, exit code forwarded); denied
  * mutations write the steering reason to stderr and exit 1 WITHOUT running anything.
@@ -51,14 +70,14 @@ export function runGuard(argv: string[]): Promise<number> {
     return Promise.resolve(2);
   }
 
-  const verdict = guardVerdict(logicalName, userArgs);
+  const verdict = guardVerdict(logicalName, userArgs, parseSshHostsEnv(process.env.RIGEL_SSH_HOSTS));
   if (verdict.decision === "deny") {
     process.stderr.write(verdict.reason + "\n");
     return Promise.resolve(1);
   }
 
   return new Promise<number>((resolve) => {
-    const child = spawn(realBinaryPath, userArgs, { stdio: "inherit" });
+    const child = spawn(realBinaryPath, guardExecArgs(logicalName, userArgs), { stdio: "inherit" });
     child.on("error", (err) => {
       process.stderr.write(`guarded-kubectl: failed to exec ${realBinaryPath}: ${err.message}\n`);
       resolve(127);
@@ -123,8 +142,8 @@ exec ${runner} '${logicalName}' '${realBinaryPath}' "$@"
 }
 
 /**
- * Materialize the guarded shim dir. Writes executable `kubectl` (and `helm` if it's
- * installed) wrappers into a fresh OS-temp dir (NOT inside any workspace). The Codex
+ * Materialize the guarded shim dir. Writes executable `kubectl` (and `helm`, `ssh` and
+ * the ssh transfer tools when installed) wrappers into a fresh OS-temp dir (NOT inside any workspace). The Codex
  * runner prepends the returned dir to its subprocess PATH so every kubectl/helm the
  * agent execs resolves to a wrapper. Throws if kubectl can't be found — without it
  * there's nothing to guard. helm is optional and only wrapped when present.
@@ -143,6 +162,11 @@ export async function provisionGuardBin(): Promise<string> {
 
   const helmReal = await whichBinary("helm");
   if (helmReal) await writeWrapper(dir, runner, "helm", helmReal);
+
+  for (const name of ["ssh", ...SSH_TRANSFER_TOOLS]) {
+    const real = await whichBinary(name);
+    if (real) await writeWrapper(dir, runner, name, real);
+  }
 
   return dir;
 }
