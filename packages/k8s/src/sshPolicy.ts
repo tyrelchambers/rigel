@@ -6,7 +6,7 @@ import {
   printsSecretValues,
   type StrictFlags,
 } from "./kubectlPolicy";
-import { ASSIGNMENT, flagValues, parseShell, splitHead, type ParsedShell, type ShellSegment } from "./shellWords";
+import { ASSIGNMENT, commandIndex, flagValues, parseShell, splitHead, type ParsedShell, type ShellSegment } from "./shellWords";
 
 export type SshDecision = "read" | "approve" | "deny";
 
@@ -190,7 +190,7 @@ const REMOTE_READS: Record<string, (args: readonly string[]) => boolean> = {
   ps: any, pgrep: any, lsof: any, w: any, who: any, last: any, getent: any,
   ls: any, cat: any, zcat: any, head: any, wc: any, stat: any, readlink: any,
   realpath: any, grep: any, egrep: any, fgrep: any, cut: any, jq: any,
-  md5sum: any, sha256sum: any, echo: any, pwd: any, nslookup: any, host: any, netstat: any,
+  md5sum: any, sha256sum: any, echo: any, true: any, false: any, pwd: any, nslookup: any, host: any, netstat: any,
   hostname: (a) => a.every((x) => HOSTNAME_FLAGS.has(x)),
   file: (a) => !hasFlag(a, ["C"], ["--compile"]),
   dig: (a) => !hasFlag(a, ["f"], []),
@@ -314,13 +314,15 @@ export function classifySsh(argv: readonly string[], enabledHosts: readonly stri
     : { decision: "approve", reason: approvalHint(host) };
 }
 
+const SSH_WRAPPERS: ReadonlySet<string> = new Set(["timeout", "nice", "time"]);
+
 export function classifyShellSsh(parsed: ParsedShell, enabledHosts: readonly string[]): ShellSshVerdict {
   if (parsed.substitution) return { decision: "deny", reason: SSH_INDIRECT_HINT };
   const local: string[] = [];
   for (const seg of parsed.segments) {
-    const [head, ...rest] = seg.words;
-    if (head === "ssh") {
-      const v = classifySsh(rest, enabledHosts);
+    const hi = commandIndex(seg.words, SSH_WRAPPERS);
+    if (hi >= 0 && seg.words[hi] === "ssh") {
+      const v = classifySsh(seg.words.slice(hi + 1), enabledHosts);
       if (v.decision !== "read") return { decision: "deny", reason: v.reason };
       continue;
     }

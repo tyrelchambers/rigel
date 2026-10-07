@@ -154,6 +154,10 @@ describe("classifyCommand ssh routing and command heads", () => {
     "jq '.items[] | .x'",
     "[ -f x ] && echo y",
     "grep -r 'ssh[ :]' /etc",
+    `timeout 20 ssh -o BatchMode=yes -o ConnectTimeout=10 web-1 'echo OK; id; uname -srm; sudo -n true 2>&1 && echo "SUDO:passwordless" || echo "SUDO:needs-password"' 2>&1`,
+    "timeout -s KILL 20 ssh web-1 uptime",
+    "nice -n 5 ssh web-1 uptime",
+    "time ssh web-1 uptime",
   ])("allows %s", (cmd) => {
     expect(classifyCommand(cmd, "ctx", hosts).decision).toBe("allow");
   });
@@ -178,6 +182,15 @@ describe("classifyCommand ssh routing and command heads", () => {
     "/usr/local/bin/k get pods",
     "/usr/bin/helm uninstall app",
     "grep -r ssh /etc",
+    "timeout 20 ssh web-1 'rm -rf /tmp/x'",
+    "timeout 20 ssh prod-db uptime",
+    "timeout 20 ssh -L 80:localhost:80 web-1 uptime",
+    "sudo ssh web-1 uptime",
+    "env FOO=1 ssh web-1 uptime",
+    "SSH_AUTH_SOCK=/tmp/x ssh web-1 uptime",
+    "xargs ssh web-1",
+    "nohup ssh web-1 uptime",
+    "timeout 20 kube[c]tl delete pod x",
   ])("denies %s", (cmd) => {
     expect(classifyCommand(cmd, "ctx", hosts).decision).toBe("deny");
   });

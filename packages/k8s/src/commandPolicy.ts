@@ -1,5 +1,5 @@
 import { BLOCKED_HINT, classifyTier, segmentContexts, segmentTier } from "./kubectlPolicy";
-import { ASSIGNMENT, parseShell, splitHead, type ShellSegment } from "./shellWords";
+import { commandIndex, parseShell, splitHead, type ShellSegment } from "./shellWords";
 import { classifyShellSsh, SSH_FAMILY } from "./sshPolicy";
 
 export {
@@ -38,68 +38,9 @@ const DYNAMIC_HEAD_HINT =
 const PATH_TOOL_HINT =
   "Call `kubectl`, `k` and `helm` by their bare name, not a full path, so the policy can classify them.";
 
-interface PrefixValueFlags {
-  short: string;
-  long: readonly string[];
-}
-
-const NO_VALUE_FLAGS: PrefixValueFlags = { short: "", long: [] };
-
-const HEAD_PREFIX_WORDS = new Map<string, PrefixValueFlags>([
-  ...["do", "then", "else", "elif", "if", "while", "until", "!", "nohup", "command", "builtin", "setsid"].map(
-    (w) => [w, NO_VALUE_FLAGS] as const,
-  ),
-  ["time", { short: "fo", long: ["--format", "--output"] }],
-  ["exec", { short: "a", long: [] }],
-  ["env", { short: "uC", long: ["--unset", "--chdir"] }],
-  ["sudo", {
-    short: "CDghprRtTUu",
-    long: ["--close-from", "--chdir", "--group", "--host", "--prompt", "--chroot", "--role", "--type", "--command-timeout", "--other-user", "--user"],
-  }],
-  ["nice", { short: "n", long: ["--adjustment"] }],
-  ["timeout", { short: "sk", long: ["--signal", "--kill-after"] }],
-  ["stdbuf", { short: "ioe", long: ["--input", "--output", "--error"] }],
-  ["xargs", { short: "ILnPsdEa", long: ["--max-args", "--max-procs", "--delimiter", "--arg-file", "--max-chars"] }],
-]);
-const HEAD_PREFIX_NUMERIC_ARG = new Set(["timeout", "nice"]);
-const GROUP_OPENERS = new Set(["(", "{"]);
 const BARE_HEADS = new Set(["[", "[[", ":", ")", "}"]);
 const SAFE_HEAD = /^[A-Za-z0-9._/+-]+$/;
 const PATH_TOOLS = new Set(["kubectl", "k", "helm"]);
-
-function skipPrefixFlags(words: readonly string[], from: number, flags: PrefixValueFlags): number {
-  let i = from;
-  while (i < words.length && words[i]!.startsWith("-")) {
-    const w = words[i++]!;
-    if (w.startsWith("--")) {
-      if (!w.includes("=") && flags.long.includes(w)) i++;
-      continue;
-    }
-    const letters = w.slice(1);
-    const at = [...letters].findIndex((c) => flags.short.includes(c));
-    if (at >= 0 && at === letters.length - 1) i++;
-  }
-  return i;
-}
-
-function headIndex(words: readonly string[]): number {
-  let i = 0;
-  while (i < words.length) {
-    const w = words[i]!;
-    if (ASSIGNMENT.test(w) || GROUP_OPENERS.has(w)) {
-      i++;
-      continue;
-    }
-    const flags = HEAD_PREFIX_WORDS.get(w);
-    if (flags) {
-      i = skipPrefixFlags(words, i + 1, flags);
-      if (HEAD_PREFIX_NUMERIC_ARG.has(w) && i < words.length && /^\d+(\.\d+)?[smhd]?$/.test(words[i]!)) i++;
-      continue;
-    }
-    return i;
-  }
-  return -1;
-}
 
 function globsIntoBinDir(word: string, glob: boolean): boolean {
   const { dir } = splitHead(word);
@@ -111,7 +52,7 @@ function headVerdict(segments: readonly ShellSegment[]): CommandVerdict | null {
     if (seg.words.some((w, i) => globsIntoBinDir(w, seg.wordGlobs[i]!))) {
       return { decision: "deny", reason: DYNAMIC_HEAD_HINT };
     }
-    const hi = headIndex(seg.words);
+    const hi = commandIndex(seg.words);
     if (hi < 0) continue;
     const head = seg.words[hi]!;
     if (BARE_HEADS.has(head)) continue;

@@ -179,3 +179,66 @@ export function flagValues(tokens: readonly string[], names: readonly string[]):
   });
   return out;
 }
+
+interface PrefixValueFlags {
+  short: string;
+  long: readonly string[];
+}
+
+const NO_VALUE_FLAGS: PrefixValueFlags = { short: "", long: [] };
+
+const HEAD_PREFIX_WORDS = new Map<string, PrefixValueFlags>([
+  ...["do", "then", "else", "elif", "if", "while", "until", "!", "nohup", "command", "builtin", "setsid"].map(
+    (w) => [w, NO_VALUE_FLAGS] as const,
+  ),
+  ["time", { short: "fo", long: ["--format", "--output"] }],
+  ["exec", { short: "a", long: [] }],
+  ["env", { short: "uC", long: ["--unset", "--chdir"] }],
+  ["sudo", {
+    short: "CDghprRtTUu",
+    long: ["--close-from", "--chdir", "--group", "--host", "--prompt", "--chroot", "--role", "--type", "--command-timeout", "--other-user", "--user"],
+  }],
+  ["nice", { short: "n", long: ["--adjustment"] }],
+  ["timeout", { short: "sk", long: ["--signal", "--kill-after"] }],
+  ["stdbuf", { short: "ioe", long: ["--input", "--output", "--error"] }],
+  ["xargs", { short: "ILnPsdEa", long: ["--max-args", "--max-procs", "--delimiter", "--arg-file", "--max-chars"] }],
+]);
+const HEAD_PREFIX_NUMERIC_ARG = new Set(["timeout", "nice"]);
+const GROUP_OPENERS = new Set(["(", "{"]);
+
+function skipPrefixFlags(words: readonly string[], from: number, flags: PrefixValueFlags): number {
+  let i = from;
+  while (i < words.length && words[i]!.startsWith("-")) {
+    const w = words[i++]!;
+    if (w.startsWith("--")) {
+      if (!w.includes("=") && flags.long.includes(w)) i++;
+      continue;
+    }
+    const letters = w.slice(1);
+    const at = [...letters].findIndex((c) => flags.short.includes(c));
+    if (at >= 0 && at === letters.length - 1) i++;
+  }
+  return i;
+}
+
+export function commandIndex(
+  words: readonly string[],
+  prefixes: ReadonlySet<string> | null = null,
+): number {
+  let i = 0;
+  while (i < words.length) {
+    const w = words[i]!;
+    if (prefixes === null && (ASSIGNMENT.test(w) || GROUP_OPENERS.has(w))) {
+      i++;
+      continue;
+    }
+    const flags = prefixes === null || prefixes.has(w) ? HEAD_PREFIX_WORDS.get(w) : undefined;
+    if (flags) {
+      i = skipPrefixFlags(words, i + 1, flags);
+      if (HEAD_PREFIX_NUMERIC_ARG.has(w) && i < words.length && /^\d+(\.\d+)?[smhd]?$/.test(words[i]!)) i++;
+      continue;
+    }
+    return i;
+  }
+  return -1;
+}
