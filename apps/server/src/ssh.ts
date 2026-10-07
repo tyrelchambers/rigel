@@ -16,7 +16,6 @@ export interface SshHost {
 
 const SSH_DIR = join(homedir(), ".ssh");
 export const SSH_ACTION_TIMEOUT_MS = 30 * 60_000;
-/** The prompt `sudo -S` prints on stderr; seeing it is the cue to write the password to stdin. */
 export const SUDO_PROMPT_MARKER = "[rigel-sudo-prompt]";
 const ACTION_MAX_OUTPUT = 10 * 1024 * 1024;
 
@@ -101,11 +100,6 @@ export async function listSshHosts(): Promise<SshHost[]> {
   );
 }
 
-/**
- * The ssh argv for an approved action. With `sudo`, the remote command runs as
- * root under `sudo -S`, which reads the password from ssh's stdin after printing
- * SUDO_PROMPT_MARKER; `exec </dev/null` keeps the command itself off that pipe.
- */
 export function sshActionArgv(host: string, command: string, sudo = false): string[] {
   const remote = sudo
     ? `sudo -S -p ${shellQuote(SUDO_PROMPT_MARKER)} -- sh -c ${shellQuote(`exec </dev/null; ${command}`)}`
@@ -134,12 +128,6 @@ export function runSshAction(host: string, command: string): Promise<RunResult> 
   return runProcess(bin!, args, { timeout: SSH_ACTION_TIMEOUT_MS, maxOutput: ACTION_MAX_OUTPUT });
 }
 
-/**
- * REST /api/action for an sshCommand: preview it, or run it and hand the run to
- * `record` for the ledger. A `sudo` action is refused here (the voice worker
- * uses this route too): its password only travels on the chat confirm dialog's
- * streaming run.
- */
 export async function sshActionResponse(
   body: { host?: string; command?: string; sudo?: boolean },
   enabledHosts: readonly string[],

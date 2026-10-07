@@ -132,7 +132,6 @@ export function toActionBlock(action: SuggestedAction): ActionBlock {
 // so they stay single-only.
 const NON_BATCHABLE = new Set(["purge", "applyManifest", "proposeRepoFix"]);
 
-/** Whether an action may join a batch run (BatchConfirmSheet). */
 export function isBatchable(action: SuggestedAction): boolean {
   return !NON_BATCHABLE.has(action.kind) && !(action.kind === "sshCommand" && action.sudo === true);
 }

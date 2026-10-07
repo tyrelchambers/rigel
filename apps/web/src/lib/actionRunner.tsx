@@ -35,7 +35,6 @@ export interface RunBackgroundActionOptions {
  */
 const REST_ONLY_KINDS = new Set(["purge", "applyManifest", "proposeRepoFix"]);
 
-/** Head of each stream kept for the chat result; the feedback clips tighter still. */
 const OUTPUT_KEEP_MAX = 8000;
 
 /**
