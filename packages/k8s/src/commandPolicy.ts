@@ -12,6 +12,9 @@
 // bias unknown verbs to destructive, so unrecognized plugin mutations are bounded
 // by RBAC (the cluster's hard ceiling), not this classifier.
 
+import { splitSegments, tokenizeShell } from "./shellWords";
+import { classifyShellSsh, SSH_FAMILY } from "./sshPolicy";
+
 /** kubectl verbs that change cluster/pod state and are REVERSIBLE. */
 const KUBECTL_REVERSIBLE = new Set([
   "apply", "create", "patch", "edit", "replace", "scale",
@@ -231,13 +234,47 @@ export function printsSecretValues(command: string): boolean {
 export const SECRET_VALUES_HINT =
   "denied: that would print a Secret's values into the transcript. Use `kubectl describe secret <name> -n <ns>`, which gives you the keys, their types and their sizes without the values.";
 
-export function classifyCommand(command: string, activeContext?: string | null): CommandVerdict {
-  const { tier } = classifyTier(command);
+const DYNAMIC_HEAD_HINT =
+  "Commands can't start with a variable or a glob here. Write the command name out literally, e.g. `kubectl get pods`.";
+
+function hasDynamicHead(command: string): boolean {
+  try {
+    return splitSegments(tokenizeShell(command).tokens).some((s) => {
+      const head = s.words.find((w) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(w));
+      return head !== undefined && /[$*?]/.test(head);
+    });
+  } catch {
+    return false;
+  }
+}
+
+function mentionsSsh(command: string): boolean {
+  if (SSH_FAMILY.test(command)) return true;
+  try {
+    return splitSegments(tokenizeShell(command).tokens).some((s) => s.words.some((w) => SSH_FAMILY.test(w)));
+  } catch {
+    return false;
+  }
+}
+
+export function classifyCommand(
+  command: string,
+  activeContext?: string | null,
+  sshHosts: readonly string[] = [],
+): CommandVerdict {
+  if (hasDynamicHead(command)) return { decision: "deny", reason: DYNAMIC_HEAD_HINT };
+  let scanned = command;
+  if (mentionsSsh(command)) {
+    const ssh = classifyShellSsh(command, sshHosts);
+    if (ssh.decision === "deny") return ssh;
+    scanned = ssh.local;
+  }
+  const { tier } = classifyTier(scanned);
   if (tier === "read") return { decision: "allow", reason: "non-mutating — read/investigation command" };
   if (tier === "blocked") return { decision: "deny", reason: BLOCKED_HINT };
   // reversible or destructive → mutation
   if (activeContext) {
-    for (const seg of command.split(/;|&&|\|\||\||\n/)) {
+    for (const seg of scanned.split(/;|&&|\|\||\||\n/)) {
       const segTier = segmentTier(seg);
       if (segTier === "reversible" || segTier === "destructive") {
         if (segmentContexts(seg).some((c) => c !== activeContext)) {

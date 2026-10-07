@@ -128,3 +128,43 @@ describe("printsSecretValues", () => {
     expect(classifyCommand("kubectl get secret db -o yaml", null)).toMatchObject({ decision: "allow" });
   });
 });
+
+describe("classifyCommand ssh routing", () => {
+  const hosts = ["web-1"];
+
+  test("allows a read on an enabled host", () => {
+    expect(classifyCommand("ssh web-1 'df -h'", "ctx", hosts).decision).toBe("allow");
+  });
+
+  test("denies ssh entirely when no hosts are passed", () => {
+    expect(classifyCommand("ssh web-1 'df -h'", "ctx").decision).toBe("deny");
+  });
+
+  test("routes a remote write to the sshCommand hint, not the kubectl hint", () => {
+    const v = classifyCommand("ssh web-1 'kubectl delete pod x'", "ctx", hosts);
+    expect(v.decision).toBe("deny");
+    expect(v.reason).toContain("sshCommand");
+  });
+
+  test("takes the strictest verdict across local and ssh segments", () => {
+    expect(classifyCommand("kubectl --context ctx delete pod x && ssh web-1 uptime", "ctx", hosts).decision).toBe("deny");
+    expect(classifyCommand("ssh web-1 'docker ps' | grep api", "ctx", hosts).decision).toBe("allow");
+  });
+
+  test("does not trip on ssh-looking paths and labels", () => {
+    expect(classifyCommand("cat ~/.ssh/config", "ctx").decision).toBe("allow");
+    expect(classifyCommand("kubectl get secrets --field-selector type=kubernetes.io/ssh-auth", "ctx").decision).toBe("allow");
+  });
+
+  test("catches ssh spelled with shell escapes or quotes", () => {
+    expect(classifyCommand("\\ssh web-1 'rm -rf /'", "ctx", hosts).decision).toBe("deny");
+    expect(classifyCommand("s\\sh web-1 'rm -rf /'", "ctx", hosts).decision).toBe("deny");
+    expect(classifyCommand(`s""sh web-1 'rm -rf /'`, "ctx", hosts).decision).toBe("deny");
+    expect(classifyCommand("echo $HOME", "ctx").decision).toBe("allow");
+  });
+
+  test("denies a dynamic command head", () => {
+    expect(classifyCommand("k=kubectl; $k delete pod x", "ctx").decision).toBe("deny");
+    expect(classifyCommand("/usr/bin/k?bectl delete pod x", "ctx").decision).toBe("deny");
+  });
+});
