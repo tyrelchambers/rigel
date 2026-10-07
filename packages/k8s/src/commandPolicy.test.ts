@@ -220,3 +220,41 @@ describe("unknown flag before a kubectl or helm verb", () => {
     expect(classifyTier("kubectl --field-selector get delete pod x").tier).toBe("destructive");
   });
 });
+
+describe("shell grouping and prefix commands", () => {
+  test.each([
+    "kubectl get pods -o name | xargs -I {} kubectl describe {} -n web",
+    "kubectl get pods -o name | xargs -n 1 kubectl describe",
+    "{ kubectl get pods; kubectl get svc; } | head",
+    "( kubectl get pods ) | head",
+    ":",
+    "sudo -u root kubectl get pods",
+    "timeout 5s kubectl get pods",
+    "nice -n 5 kubectl get pods",
+  ])("allows %s", (cmd) => {
+    expect(classifyCommand(cmd, "ctx", ["web-1"]).decision).toBe("allow");
+  });
+
+  test.each([
+    "(ssh web-1 uptime)",
+    "( ssh web-1 uptime )",
+    "{ ssh web-1 uptime; }",
+    "( kube[c]tl delete pod x )",
+    "{ kube[c]tl delete pod x; }",
+    "xargs -I {} ss[h] web-1 uptime",
+    "xargs -i kube[c]tl delete pod {}",
+    "xargs --replace kube[c]tl delete pod {}",
+    "{ kubectl delete pod x; }",
+    "( kubectl delete pod x )",
+    "sudo -u root kube[c]tl delete pod x",
+    "timeout 5s kube[c]tl delete pod x",
+    "timeout -s KILL 5 kube[c]tl delete pod x",
+    "nice -n 5 kube[c]tl delete pod x",
+    "env -u X kube[c]tl delete pod x",
+    "stdbuf -o L kube[c]tl delete pod x",
+    "env -S 'kubectl delete pod x'",
+    "env - kube[c]tl delete pod x",
+  ])("denies %s", (cmd) => {
+    expect(classifyCommand(cmd, "ctx", ["web-1"]).decision).toBe("deny");
+  });
+});
