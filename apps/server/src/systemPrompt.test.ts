@@ -152,4 +152,10 @@ describe("systemPrompt ssh section", () => {
     expect(p).toContain("`web-1`, `nas`");
     expect(p).toContain("sshCommand");
   });
+  it("tells the model to flag root commands with sudo and leave the password to the user", () => {
+    const p = systemPrompt("ctx", ["ctx"], ["web-1"]);
+    expect(p).toContain('"sudo":true');
+    expect(p).toContain("without the sudo prefix");
+    expect(p).toContain("password in the confirm dialog");
+  });
 });

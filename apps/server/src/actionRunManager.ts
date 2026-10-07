@@ -8,7 +8,14 @@ import {
 } from "@rigel/k8s/src/aiActionLedger";
 import { recordAiAction } from "./aiActionLedger";
 import { buildCommand, PurgeActionError, type ActionBlock } from "./actions";
-import { enabledSshHosts, SSH_ACTION_TIMEOUT_MS, sshActionArgv, sshActionDetail, validateSshAction } from "./ssh";
+import {
+  enabledSshHosts,
+  SSH_ACTION_TIMEOUT_MS,
+  sshActionArgv,
+  sshActionDetail,
+  SUDO_PROMPT_MARKER,
+  validateSshAction,
+} from "./ssh";
 
 interface JsonSink { send(data: string): unknown }
 
@@ -27,6 +34,12 @@ export interface ActionRunRequest {
   action: ActionBlock;
   /** Per-request context override; falls back to the connection's boot context. */
   context?: string | null;
+  /**
+   * A `sudo` sshCommand's password, typed in the confirm dialog. Kept apart from
+   * `action` so it never reaches the ledger, frames or command string; it is only
+   * written to ssh's stdin when sudo prompts.
+   */
+  secret?: string;
 }
 
 interface InFlightRun {
@@ -45,9 +58,10 @@ interface InFlightRun {
  * the kubectl argv via the same `buildCommand` the REST route uses (preserving
  * all guards), or for `sshCommand` the same validated ssh argv the REST route
  * runs, spawns it, and streams output line-by-line as
- * `action.progress` frames. Multiple concurrent runs are allowed (each
- * identified by the caller's `id`). Every completed run is appended to the
- * AI-action ledger (HELM-18), best-effort.
+ * `action.progress` frames. A `sudo` sshCommand also gets a piped stdin that
+ * receives the request's `secret` once, when sudo's marker prompt appears.
+ * Multiple concurrent runs are allowed (each identified by the caller's `id`).
+ * Every completed run is appended to the AI-action ledger (HELM-18), best-effort.
  *
  * Frame types emitted:
  *   { type: "action.progress", id, line, stream } — one stdout/stderr line
@@ -81,7 +95,7 @@ export class ActionRunManager {
     }
 
     if (action.kind === "sshCommand") {
-      void this.runSsh(id, action, req.context ?? this.context);
+      void this.runSsh(id, action, req.context ?? this.context, req.secret);
       return;
     }
 
@@ -114,7 +128,7 @@ export class ActionRunManager {
     this.start(id, action, context, "kubectl", buildKubectlArgs(context, argv), {});
   }
 
-  private async runSsh(id: string, action: ActionBlock, context: string | null): Promise<void> {
+  private async runSsh(id: string, action: ActionBlock, context: string | null, secret?: string): Promise<void> {
     let enabled: string[];
     try {
       enabled = await this.sshHosts();
@@ -123,9 +137,18 @@ export class ActionRunManager {
     }
     const valid = validateSshAction(action, enabled);
     if ("error" in valid) return this.error(id, valid.error);
+    if (valid.sudo && !secret) return this.error(id, "This action needs your sudo password");
     if (this.runs.has(id)) return this.error(id, `action run '${id}' is already in progress`);
-    const [bin, ...args] = sshActionArgv(valid.host, valid.command);
-    this.start(id, { ...action, host: valid.host }, context, bin!, args, { timeout: SSH_ACTION_TIMEOUT_MS });
+    const [bin, ...args] = sshActionArgv(valid.host, valid.command, valid.sudo);
+    this.start(
+      id,
+      { ...action, host: valid.host },
+      context,
+      bin!,
+      args,
+      { timeout: SSH_ACTION_TIMEOUT_MS },
+      valid.sudo ? secret : undefined,
+    );
   }
 
   private start(
@@ -135,11 +158,13 @@ export class ActionRunManager {
     bin: string,
     args: string[],
     opts: { timeout?: number },
+    sudoSecret?: string,
   ): void {
     let proc: ChildProcess;
+    let pendingSecret = sudoSecret ?? null;
     try {
       proc = this.spawnFn(bin, args, {
-        stdio: ["ignore", "pipe", "pipe"],
+        stdio: [pendingSecret === null ? "ignore" : "pipe", "pipe", "pipe"],
         env: spawnEnv(),
         ...opts,
       });
@@ -156,13 +181,26 @@ export class ActionRunManager {
     };
     this.runs.set(id, inFlight);
 
+    proc.stdin?.on("error", () => {});
+    const finishStdin = () => {
+      pendingSecret = null;
+      proc.stdin?.end();
+    };
+    const onSudoPrompt = () => {
+      if (pendingSecret === null) return;
+      proc.stdin?.write(`${pendingSecret}\n`);
+      finishStdin();
+    };
+
     this.pump(id, proc.stdout, "stdout");
-    this.pump(id, proc.stderr, "stderr");
+    this.pump(id, proc.stderr, "stderr", sudoSecret === undefined ? undefined : onSudoPrompt);
     proc.on("error", (err: Error) => {
+      finishStdin();
       this.runs.delete(id);
       this.error(id, err.message);
     });
     proc.on("close", (code) => {
+      finishStdin();
       if (this.runs.get(id) !== inFlight) return;
       this.runs.delete(id);
       this.ws.send(JSON.stringify({ type: "action.done", id, code: code ?? -1 }));
@@ -190,8 +228,17 @@ export class ActionRunManager {
     );
   }
 
-  /** Forward a stream's lines as action.progress frames. */
-  private pump(id: string, stream: NodeJS.ReadableStream | null, channel: "stdout" | "stderr"): void {
+  /**
+   * Forward a stream's lines as action.progress frames. With `onSudoPrompt`,
+   * every SUDO_PROMPT_MARKER is cut from the text before it is forwarded or
+   * captured, and each sighting calls `onSudoPrompt`.
+   */
+  private pump(
+    id: string,
+    stream: NodeJS.ReadableStream | null,
+    channel: "stdout" | "stderr",
+    onSudoPrompt?: () => void,
+  ): void {
     if (!stream) return;
     let buf = "";
     const capture = (text: string) => {
@@ -201,6 +248,10 @@ export class ActionRunManager {
     };
     stream.on("data", (chunk: Buffer) => {
       buf += chunk.toString("utf8");
+      if (onSudoPrompt && buf.includes(SUDO_PROMPT_MARKER)) {
+        buf = buf.split(SUDO_PROMPT_MARKER).join("");
+        onSudoPrompt();
+      }
       let nl: number;
       while ((nl = buf.indexOf("\n")) >= 0) {
         const line = buf.slice(0, nl);

@@ -67,11 +67,9 @@ import {
   enabledSshHosts,
   listSshConfigAliases,
   listSshHosts,
-  runSshAction,
   setEnabledSshHosts,
-  sshActionArgv,
   sshActionDetail,
-  validateSshAction,
+  sshActionResponse,
 } from "./ssh";
 import { buildAiActionEntry, summarizeActionDetail } from "@rigel/k8s/src/aiActionLedger";
 import { agentsView, setAgentAuth, setActiveAgent } from "./agentConfig";
@@ -526,23 +524,23 @@ async function handler(req: Request): Promise<Response> {
       }
 
       if (body.kind === "sshCommand") {
-        const valid = validateSshAction(body, await enabledSshHosts());
-        if ("error" in valid) return Response.json({ error: valid.error }, { status: 422 });
-        const sshArgv = sshActionArgv(valid.host, valid.command);
-        if (url.searchParams.get("preview") === "1") return Response.json({ command: sshArgv });
-        const result = await runSshAction(valid.host, valid.command);
-        const outcome = result.code === 0 ? "success" : "failure";
-        void recordAiAction(
-          context,
-          buildAiActionEntry({
-            action: { ...body, host: valid.host },
-            source: isVoiceWorkerRequest(req) ? "voice" : "chat",
-            command: sshArgv.join(" "),
-            outcome,
-            detail: sshActionDetail(result.code, result.stdout, result.stderr),
-          }),
+        return sshActionResponse(
+          body,
+          await enabledSshHosts(),
+          url.searchParams.get("preview") === "1",
+          ({ host, command, result }) => {
+            void recordAiAction(
+              context,
+              buildAiActionEntry({
+                action: { ...body, host },
+                source: isVoiceWorkerRequest(req) ? "voice" : "chat",
+                command,
+                outcome: result.code === 0 ? "success" : "failure",
+                detail: sshActionDetail(result.code, result.stdout, result.stderr),
+              }),
+            );
+          },
         );
-        return Response.json(result);
       }
 
       let argv: string[];

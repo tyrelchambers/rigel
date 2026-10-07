@@ -55,6 +55,7 @@ function approvalHint(host: string): string {
     `This command changes ${host} or isn't on the read-only list, so it can't run unattended. Do NOT retry it via Bash. ` +
     `Emit a \`\`\`action block {"kind":"sshCommand","label":"<short label>","host":"${host}","command":"<the exact remote command>"} ` +
     `so the user gets an approve-and-run button. Set "destructive":true only when it removes data. ` +
+    `If it needs root, set "sudo":true and write the command without the sudo prefix; the user types their sudo password when they approve. ` +
     `If you only need to slice a read's output, pipe it into local tools instead: ssh ${host} 'journalctl -u x -n 500' | grep error.`
   );
 }

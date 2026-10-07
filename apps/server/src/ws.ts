@@ -289,7 +289,12 @@ export function makeWsHandlers(
             ws.send(JSON.stringify({ type: "action.error", id: m.id, message: GATED_MESSAGE, gated: true }));
             return;
           }
-          actionRunners.get(ws)?.run({ id: m.id, action: m.action, context: actionCtx });
+          actionRunners.get(ws)?.run({
+            id: m.id,
+            action: m.action,
+            context: actionCtx,
+            secret: typeof m.secret === "string" ? m.secret : undefined,
+          });
         });
       }
     },

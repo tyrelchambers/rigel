@@ -179,6 +179,12 @@ describe("classifySsh: needs approval", () => {
     expect(v.reason).toContain("sshCommand");
     expect(v.reason).toContain("web-1");
   });
+
+  it("tells the model how to ask for root instead of writing sudo into the command", () => {
+    const v = classifySsh(["web-1", "sudo apt-get upgrade -y"], HOSTS);
+    expect(v.reason).toContain('"sudo":true');
+    expect(v.reason).toContain("without the sudo prefix");
+  });
 });
 
 describe("classifySsh: denied", () => {

@@ -4,6 +4,7 @@ import { dirname, isAbsolute, join } from "node:path";
 import { SSH_BATCH_ARGS } from "@rigel/k8s";
 import { summarizeActionDetail } from "@rigel/k8s/src/aiActionLedger";
 import { runProcess, type RunResult } from "@rigel/k8s/src/run";
+import { shellQuote } from "./guardedKubectl";
 
 export interface SshHost {
   alias: string;
@@ -15,6 +16,8 @@ export interface SshHost {
 
 const SSH_DIR = join(homedir(), ".ssh");
 export const SSH_ACTION_TIMEOUT_MS = 30 * 60_000;
+/** The prompt `sudo -S` prints on stderr; seeing it is the cue to write the password to stdin. */
+export const SUDO_PROMPT_MARKER = "[rigel-sudo-prompt]";
 const ACTION_MAX_OUTPUT = 10 * 1024 * 1024;
 
 function enabledFile(): string {
@@ -98,25 +101,62 @@ export async function listSshHosts(): Promise<SshHost[]> {
   );
 }
 
-export function sshActionArgv(host: string, command: string): string[] {
-  return ["ssh", ...SSH_BATCH_ARGS, "--", host, command];
+/**
+ * The ssh argv for an approved action. With `sudo`, the remote command runs as
+ * root under `sudo -S`, which reads the password from ssh's stdin after printing
+ * SUDO_PROMPT_MARKER; `exec </dev/null` keeps the command itself off that pipe.
+ */
+export function sshActionArgv(host: string, command: string, sudo = false): string[] {
+  const remote = sudo
+    ? `sudo -S -p ${shellQuote(SUDO_PROMPT_MARKER)} -- sh -c ${shellQuote(`exec </dev/null; ${command}`)}`
+    : command;
+  return ["ssh", ...SSH_BATCH_ARGS, "--", host, remote];
 }
 
 export function validateSshAction(
-  body: { host?: string; command?: string },
+  body: { host?: string; command?: string; sudo?: boolean },
   enabledHosts: readonly string[],
-): { host: string; command: string } | { error: string } {
+): { host: string; command: string; sudo: boolean } | { error: string } {
   const host = body.host?.trim() ?? "";
   const command = body.command?.trim() ?? "";
+  const sudo = body.sudo === true;
   if (!host || !command) return { error: "sshCommand needs host and command" };
   if (command.startsWith("-")) return { error: "sshCommand command can't start with -" };
+  if (sudo && /^sudo(\s|$)/.test(command)) {
+    return { error: 'With "sudo": true, write the command without the sudo prefix; Rigel adds it.' };
+  }
   if (!enabledHosts.includes(host)) return { error: `${host} isn't enabled in Settings > AI agents > SSH hosts` };
-  return { host, command };
+  return { host, command, sudo };
 }
 
 export function runSshAction(host: string, command: string): Promise<RunResult> {
   const [bin, ...args] = sshActionArgv(host, command);
   return runProcess(bin!, args, { timeout: SSH_ACTION_TIMEOUT_MS, maxOutput: ACTION_MAX_OUTPUT });
+}
+
+/**
+ * REST /api/action for an sshCommand: preview it, or run it and hand the run to
+ * `record` for the ledger. A `sudo` action is refused here (the voice worker
+ * uses this route too): its password only travels on the chat confirm dialog's
+ * streaming run.
+ */
+export async function sshActionResponse(
+  body: { host?: string; command?: string; sudo?: boolean },
+  enabledHosts: readonly string[],
+  preview: boolean,
+  record: (run: { host: string; command: string; result: RunResult }) => void,
+  run: typeof runSshAction = runSshAction,
+): Promise<Response> {
+  const valid = validateSshAction(body, enabledHosts);
+  if ("error" in valid) return Response.json({ error: valid.error }, { status: 422 });
+  const argv = sshActionArgv(valid.host, valid.command, valid.sudo);
+  if (preview) return Response.json({ command: argv });
+  if (valid.sudo) {
+    return Response.json({ error: "Run this from the chat confirm dialog; it needs your sudo password." }, { status: 422 });
+  }
+  const result = await run(valid.host, valid.command);
+  record({ host: valid.host, command: argv.join(" "), result });
+  return Response.json(result);
 }
 
 export function sshActionDetail(code: number, stdout: string, stderr: string): string {

@@ -507,3 +507,112 @@ test.each([
   const err = ws.sent.find((m) => m.type === "action.error" && m.id === "s2");
   expect(err?.message).toContain(message);
 });
+
+// ---------------------------------------------------------------------------
+// sudo sshCommand: the password rides beside the action and reaches only stdin.
+// ---------------------------------------------------------------------------
+
+const SECRET = "hunter2-Sup3r";
+const sudoAction: ActionBlock = {
+  kind: "sshCommand",
+  label: "Upgrade packages",
+  host: "k8s-truenas",
+  command: "apt-get upgrade -y",
+  sudo: true,
+};
+
+function sudoHarness() {
+  const h = sshHarness(["k8s-truenas"]);
+  const stdin = new PassThrough();
+  const written: string[] = [];
+  stdin.on("data", (d: Buffer) => written.push(d.toString()));
+  h.proc.stdin = stdin;
+  return { ...h, stdin, written };
+}
+
+test("a sudo sshCommand pipes stdin and writes the secret only once sudo prompts", async () => {
+  const { spawns, proc, ws, mgr, stdin, written } = sudoHarness();
+  mgr.run({ id: "su1", action: sudoAction, secret: SECRET });
+  await settle();
+
+  expect(spawns[0]!.opts.stdio).toEqual(["pipe", "pipe", "pipe"]);
+  expect(spawns[0]!.args.at(-1)).toBe(
+    "sudo -S -p '[rigel-sudo-prompt]' -- sh -c 'exec </dev/null; apt-get upgrade -y'",
+  );
+  proc.stdout.write("Reading package lists...\n");
+  await settle();
+  expect(written).toEqual([]);
+
+  proc.stderr.write("[rigel-sudo");
+  await settle();
+  expect(written).toEqual([]);
+  proc.stderr.write("-prompt]");
+  await settle();
+  expect(written).toEqual([`${SECRET}\n`]);
+  expect(stdin.writableEnded).toBe(true);
+
+  proc.stderr.write("[rigel-sudo-prompt]W: some warning\n");
+  proc.stderr.end();
+  await settle();
+  expect(written).toEqual([`${SECRET}\n`]);
+  proc.emit("close", 0);
+  await settle();
+
+  const progress = ws.sent.filter((m) => m.type === "action.progress" && m.id === "su1");
+  expect(progress).toContainEqual({ type: "action.progress", id: "su1", line: "W: some warning", stream: "stderr" });
+  expect(JSON.stringify(ws.sent)).not.toContain("rigel-sudo-prompt");
+});
+
+test("a sudo sshCommand with no prompt (cached or passwordless sudo) writes nothing and ends stdin on exit", async () => {
+  const { proc, mgr, stdin, written } = sudoHarness();
+  mgr.run({ id: "su2", action: sudoAction, secret: SECRET });
+  await settle();
+
+  proc.stdout.end("0 upgraded\n");
+  proc.stderr.end();
+  await settle();
+  proc.emit("close", 0);
+  await settle();
+
+  expect(written).toEqual([]);
+  expect(stdin.writableEnded).toBe(true);
+});
+
+test("a sudo sshCommand without a secret is refused without spawning", async () => {
+  const { spawns, ws, mgr } = sudoHarness();
+  mgr.run({ id: "su3", action: sudoAction });
+  await settle();
+
+  expect(spawns).toHaveLength(0);
+  expect(ws.sent).toContainEqual({ type: "action.error", id: "su3", message: "This action needs your sudo password" });
+});
+
+test("a sudo sshCommand whose command starts with sudo is refused without spawning", async () => {
+  const { spawns, ws, mgr } = sudoHarness();
+  mgr.run({ id: "su4", action: { ...sudoAction, command: "sudo apt-get upgrade -y" }, secret: SECRET });
+  await settle();
+
+  expect(spawns).toHaveLength(0);
+  expect(ws.sent.find((m) => m.type === "action.error" && m.id === "su4")?.message).toContain("without the sudo prefix");
+});
+
+test("the secret never reaches the spawn args, frames, or ledger entry", async () => {
+  const { recorded, spawns, proc, ws, mgr } = sudoHarness();
+  mgr.run({ id: "su5", action: sudoAction, secret: SECRET });
+  await settle();
+  proc.stderr.write("[rigel-sudo-prompt]");
+  await settle();
+  proc.stderr.end("sudo: 1 incorrect password attempt\n");
+  await settle();
+  proc.emit("close", 1);
+  await settle();
+
+  expect(JSON.stringify(spawns)).not.toContain(SECRET);
+  expect(JSON.stringify(ws.sent)).not.toContain(SECRET);
+  expect(JSON.stringify(recorded)).not.toContain(SECRET);
+  expect(recorded[0]!.entry).toMatchObject({
+    command: "ssh -T -o BatchMode=yes -- k8s-truenas sudo -S -p '[rigel-sudo-prompt]' -- sh -c 'exec </dev/null; apt-get upgrade -y'",
+    outcome: "failure",
+    detail: "exit 1: sudo: 1 incorrect password attempt",
+  });
+});

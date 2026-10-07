@@ -1,13 +1,16 @@
+import { execFileSync } from "node:child_process";
 import { mkdtemp, mkdir, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   listSshConfigAliases,
   parseSshConfig,
   readEnabledSshHosts,
   setEnabledSshHosts,
   sshActionArgv,
+  sshActionResponse,
+  SUDO_PROMPT_MARKER,
   validateSshAction,
 } from "./ssh";
 
@@ -69,13 +72,36 @@ describe("sshActionArgv", () => {
       "ssh", "-T", "-o", "BatchMode=yes", "--", "web-1", "systemctl restart k3s",
     ]);
   });
+
+  it("wraps a sudo command so sudo reads the password from stdin behind a marker prompt", () => {
+    expect(sshActionArgv("web-1", "apt-get upgrade -y", true)).toEqual([
+      "ssh", "-T", "-o", "BatchMode=yes", "--", "web-1",
+      `sudo -S -p '${SUDO_PROMPT_MARKER}' -- sh -c 'exec </dev/null; apt-get upgrade -y'`,
+    ]);
+  });
+
+  it("quotes a sudo command containing single quotes so the remote shell runs it unchanged", () => {
+    const remote = sshActionArgv("web-1", `echo 'a b' "c'd" && cat`, true).at(-1)!;
+    const fakeSudo = 'sudo() { [ "$1 $2 $3 $4" = "-S -p [rigel-sudo-prompt] --" ] || exit 9; shift 4; "$@"; }';
+    const out = execFileSync("/bin/sh", ["-c", `${fakeSudo}; ${remote}`], { input: "hunter2\n" }).toString();
+    expect(out).toBe("a b c'd\n");
+  });
 });
 
 describe("validateSshAction", () => {
   const enabled = ["web-1"];
 
   it("returns the trimmed host and command for an enabled host", () => {
-    expect(validateSshAction({ host: " web-1 ", command: " uptime " }, enabled)).toEqual({ host: "web-1", command: "uptime" });
+    expect(validateSshAction({ host: " web-1 ", command: " uptime " }, enabled)).toEqual({
+      host: "web-1",
+      command: "uptime",
+      sudo: false,
+    });
+    expect(validateSshAction({ host: "web-1", command: "apt-get upgrade -y", sudo: true }, enabled)).toEqual({
+      host: "web-1",
+      command: "apt-get upgrade -y",
+      sudo: true,
+    });
   });
 
   it("needs both host and command", () => {
@@ -89,9 +115,62 @@ describe("validateSshAction", () => {
     });
   });
 
+  it("refuses a sudo action whose command already starts with sudo", () => {
+    expect(validateSshAction({ host: "web-1", command: "sudo apt-get upgrade -y", sudo: true }, enabled)).toEqual({
+      error: 'With "sudo": true, write the command without the sudo prefix; Rigel adds it.',
+    });
+    expect(validateSshAction({ host: "web-1", command: "sudo apt-get upgrade -y" }, enabled)).toMatchObject({
+      command: "sudo apt-get upgrade -y",
+    });
+  });
+
   it("refuses a host the user has not enabled", () => {
     expect(validateSshAction({ host: "nas", command: "uptime" }, enabled)).toEqual({
       error: "nas isn't enabled in Settings > AI agents > SSH hosts",
     });
+  });
+});
+
+describe("sshActionResponse (REST /api/action)", () => {
+  const enabled = ["web-1"];
+  const ok = { code: 0, stdout: "up 3 days\n", stderr: "" };
+
+  it("runs a plain command and records it", async () => {
+    const run = vi.fn(async () => ok);
+    const record = vi.fn();
+    const res = await sshActionResponse({ host: "web-1", command: "uptime" }, enabled, false, record, run);
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(ok);
+    expect(run).toHaveBeenCalledWith("web-1", "uptime");
+    expect(record).toHaveBeenCalledWith({ host: "web-1", command: "ssh -T -o BatchMode=yes -- web-1 uptime", result: ok });
+  });
+
+  it("previews a sudo command with its wrapper", async () => {
+    const run = vi.fn(async () => ok);
+    const res = await sshActionResponse(
+      { host: "web-1", command: "apt-get upgrade -y", sudo: true }, enabled, true, vi.fn(), run,
+    );
+
+    expect(await res.json()).toEqual({ command: sshActionArgv("web-1", "apt-get upgrade -y", true) });
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("refuses to execute a sudo command, which needs the password from the chat confirm dialog", async () => {
+    const run = vi.fn(async () => ok);
+    const record = vi.fn();
+    const res = await sshActionResponse(
+      { host: "web-1", command: "apt-get upgrade -y", sudo: true }, enabled, false, record, run,
+    );
+
+    expect(res.status).toBe(422);
+    expect(await res.json()).toEqual({ error: "Run this from the chat confirm dialog; it needs your sudo password." });
+    expect(run).not.toHaveBeenCalled();
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it("returns a validation error as 422", async () => {
+    const res = await sshActionResponse({ host: "nas", command: "uptime" }, enabled, false, vi.fn(), vi.fn());
+    expect(res.status).toBe(422);
   });
 });
