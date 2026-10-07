@@ -1650,14 +1650,22 @@ export function useSaveVoiceConfig() {
   });
 }
 
-export async function fetchVoiceToken(): Promise<{ url: string; token: string }> {
+export class VoiceAgentUnavailableError extends Error {
+  constructor(message: string) { super(message); this.name = "VoiceAgentUnavailableError"; }
+}
+
+export async function fetchVoiceToken(): Promise<{ url: string; token: string; room: string }> {
   const res = await apiFetch("/api/voice/token", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ role: "desktop" }),
   });
+  if (res.status === 503) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new VoiceAgentUnavailableError(body.error ?? "The voice agent isn't running.");
+  }
   if (!res.ok) throw new Error(`voice token failed: ${res.status}`);
-  return (await res.json()) as { url: string; token: string };
+  return (await res.json()) as { url: string; token: string; room: string };
 }
 
 export interface ClusterHealth { ok: boolean; authExpired: boolean }

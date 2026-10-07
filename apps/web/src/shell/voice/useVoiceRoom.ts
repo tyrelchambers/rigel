@@ -6,14 +6,15 @@ import {
   type AgentState,
   type TrackReference,
 } from "@livekit/components-react";
-import { fetchVoiceToken } from "@/lib/api";
+import { fetchVoiceToken, VoiceAgentUnavailableError } from "@/lib/api";
 import { effectiveAgentState, type AgentReport } from "./VoiceMark";
 
 export type VoiceConnection = "idle" | "connecting" | "connected" | "error";
 
-/** Why the last attempt failed. Separate from `status` because the two
- * failures send the user to opposite places: one to the OS, one to Settings. */
-export type VoiceFailure = "mic-denied" | "connect";
+/** Why the last attempt failed. Separate from `status` because the failures
+ * send the user to different places: the OS, Settings, or simply trying again
+ * once the worker is back. */
+export type VoiceFailure = "mic-denied" | "connect" | "agent-unavailable";
 
 /**
  * The connection machinery's own state, as opposed to the `status` the popover
@@ -45,8 +46,9 @@ export function isMicDenied(err: unknown): boolean {
   return name === "NotAllowedError" || name === "PermissionDeniedError";
 }
 
-/** Owns the renderer's LiveKit room: connect on demand, publish the mic, stay
- * connected while the popover is closed, disconnect on End.
+/** Owns the renderer's LiveKit room: connect on demand, publish the mic,
+ * disconnect on End. Every connect asks the server for a fresh room, which the
+ * worker joins for that connection only.
  *
  * The phase only reaches "live" once connect and mic-enable have both
  * succeeded, never earlier: that's what lets `disconnect()` tell "there is a
@@ -67,8 +69,8 @@ export function useVoiceRoom() {
       // Re-arm the attempt already in flight instead of starting a second one.
       // Nothing awaits between an attempt reading `cancelled` and this phase
       // ending, so a phase still reading "connecting" means that read is still
-      // ahead of us. A second attempt would also join the room twice under the
-      // one desktop identity.
+      // ahead of us. A second attempt would also mint a second room and start
+      // a second agent session for it.
       phase.cancelled = false;
       if (mountedRef.current) {
         setFailure(null);
@@ -129,7 +131,9 @@ export function useVoiceRoom() {
       void r?.disconnect();
       if (mountedRef.current && !attempt.cancelled) {
         setRoom(null);
-        setFailure(isMicDenied(err) ? "mic-denied" : "connect");
+        setFailure(
+          err instanceof VoiceAgentUnavailableError ? "agent-unavailable" : isMicDenied(err) ? "mic-denied" : "connect",
+        );
         setStatus("error");
       }
     }
@@ -183,10 +187,11 @@ export function useMicTrackRef(): TrackReference | undefined {
 
 /**
  * How long a live room may go without the worker saying what the agent is doing
- * before the popover calls it unavailable. The worker joins the room at app
- * start and replies to a desktop joining immediately, so the only case that
- * legitimately runs long is opening voice while the worker is still booting.
- * Not terminal either way: a report arriving later takes over.
+ * before the popover calls it unavailable. A worker that is not running at all
+ * is refused at the token request instead, so this covers a worker that took
+ * the job and then never reported, whose only legitimate slow case is the
+ * pipeline's cold start. Not terminal either way: a report arriving later
+ * takes over.
  */
 export const AGENT_REPORT_TIMEOUT_MS = 15_000;
 

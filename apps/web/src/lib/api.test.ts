@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { applyManifestYaml, fetchRecentDeploys, undoDeploy } from "./api";
+import { applyManifestYaml, fetchRecentDeploys, fetchVoiceToken, undoDeploy, VoiceAgentUnavailableError } from "./api";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -40,5 +40,30 @@ describe("recent deploys api", () => {
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("/api/deployments/undo");
     expect(JSON.parse(init!.body as string)).toEqual({ batchId: "b1", namespace: "shop" });
+  });
+});
+
+describe("fetchVoiceToken", () => {
+  test("returns the room it minted alongside the token", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ url: "wss://x", token: "jwt", room: "rigel-desktop-0a1b2c3d" }), { status: 200 }),
+    );
+    expect(await fetchVoiceToken()).toEqual({ url: "wss://x", token: "jwt", room: "rigel-desktop-0a1b2c3d" });
+  });
+
+  test("a 503 is the agent being unavailable, with the server's own words", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ error: "The voice agent isn't running." }), { status: 503 }),
+    );
+    const err = await fetchVoiceToken().catch((e) => e);
+    expect(err).toBeInstanceOf(VoiceAgentUnavailableError);
+    expect((err as Error).message).toBe("The voice agent isn't running.");
+  });
+
+  test("any other failure stays a plain error", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 409 }));
+    const err = await fetchVoiceToken().catch((e) => e);
+    expect(err).not.toBeInstanceOf(VoiceAgentUnavailableError);
+    expect((err as Error).message).toMatch(/409/);
   });
 });
