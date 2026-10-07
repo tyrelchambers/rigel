@@ -40,6 +40,10 @@ export interface SuggestedAction {
   resourceKind?: string;
   /** command — literal kubectl args WITHOUT the binary or --context. */
   args?: string[];
+  /** sshCommand — an alias the user enabled from ~/.ssh/config. */
+  host?: string;
+  /** sshCommand — the exact remote command. */
+  command?: string;
   /** command — Claude's destructive hint (app takes the stricter of this and inference). */
   destructive?: boolean;
   /** applyManifest only — the paired yaml content, attached by the parser (not in the model's JSON). */
@@ -125,6 +129,7 @@ export const ACTION_KINDS = [
   "label",
   "purge",
   "command",
+  "sshCommand",
   "applyManifest",
   "proposeRepoFix",
   "adoptWorkload",

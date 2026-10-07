@@ -277,6 +277,7 @@ export function ConfirmSheet({
   const isPurge = action?.kind === "purge";
   const isApply = action?.kind === "applyManifest";
   const isFix = action?.kind === "proposeRepoFix";
+  const sshHost = action?.kind === "sshCommand" ? (action.host ?? "") : null;
   // Destructive treatment is reserved for actions that REMOVE or evict a
   // resource: the delete/drain/purge family, or anything the model explicitly
   // flags `destructive` (e.g. a scale-down). Additive applies (install/create)
@@ -333,14 +334,18 @@ export function ConfirmSheet({
       ? (action?.title ?? action?.label ?? "Propose fix")
       : isApply
         ? (action?.label ?? "Apply manifest")
-        : (action?.label ?? "Confirm action");
+        : sshHost !== null
+          ? `Run on ${sshHost}`
+          : (action?.label ?? "Confirm action");
   const description = isPurge
     ? "Opens the application removal flow. Nothing is deleted until you confirm in the next step."
     : isFix
       ? "Review the change below, then open a pull request. Nothing is applied to the cluster — you merge & sync."
       : isApply
         ? "Review the resources below, then apply them to the cluster."
-        : "This is the exact command that will run against your cluster.";
+        : sshHost !== null
+          ? `This is the exact command that will run on ${sshHost}.`
+          : "This is the exact command that will run against your cluster.";
 
   return (
     <Dialog
@@ -413,7 +418,7 @@ export function ConfirmSheet({
 
           {/* Target cluster — the active rail context, which REST actually
               executes against via X-Rigel-Context. */}
-          {activeContext && (
+          {activeContext && sshHost === null && (
             <div className="flex items-center gap-2">
               <span className="text-2xs text-muted-foreground">Runs on</span>
               <span

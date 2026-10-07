@@ -99,3 +99,24 @@ describe("ConfirmSheet — target cluster indicator", () => {
     expect(screen.queryByText("Runs on")).not.toBeInTheDocument();
   });
 });
+
+describe("ConfirmSheet — sshCommand", () => {
+  it("shows the host and the exact ssh command instead of the cluster target", async () => {
+    mockActiveContext = "k8s-truenas";
+    const { fetchPreviewCommand } = await import("@/lib/api");
+    vi.mocked(fetchPreviewCommand).mockResolvedValueOnce([
+      "ssh", "-T", "-o", "BatchMode=yes", "--", "web-1", "sudo systemctl restart k3s",
+    ]);
+    const ssh: ActionBlock = { kind: "sshCommand", host: "web-1", command: "sudo systemctl restart k3s" };
+
+    wrap(<ConfirmSheet action={ssh} open={true} onClose={vi.fn()} />);
+
+    expect(await screen.findByText("Run on web-1")).toBeInTheDocument();
+    const preview = await screen.findByText(
+      (_, el) => el?.tagName === "PRE" && !!el.textContent?.includes("ssh -T -o BatchMode=yes -- web-1 sudo systemctl restart k3s"),
+    );
+    expect(preview).toBeInTheDocument();
+    expect(screen.getByText(/will run on web-1/)).toBeInTheDocument();
+    expect(screen.queryByText("Runs on")).not.toBeInTheDocument();
+  });
+});

@@ -41,6 +41,10 @@ export interface ActionBlock {
   /** linkCatalogApp only: catalog app id the workload is bound to. */
   appID?: string;
   args?: string[];
+  /** sshCommand only: an alias the user enabled from ~/.ssh/config. */
+  host?: string;
+  /** sshCommand only: the exact remote command. */
+  command?: string;
   destructive?: boolean;
   /** applyManifest only — manifest YAML applied via /api/apply. */
   manifest?: string;

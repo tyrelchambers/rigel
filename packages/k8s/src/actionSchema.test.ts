@@ -65,6 +65,7 @@ const CANONICAL: Record<string, SuggestedAction> = {
   deleteNamespace: { label: "Delete staging", kind: "deleteNamespace", name: "staging" },
   purge: { label: "Purge memos", kind: "purge", name: "memos", namespace: "default" },
   command: { label: "Patch web", kind: "command", args: ["patch", "deployment/web", "-n", "default"] },
+  sshCommand: { label: "Restart k3s", kind: "sshCommand", host: "web-1", command: "sudo systemctl restart k3s" },
   applyManifest: { label: "Install memos", kind: "applyManifest", manifest: "apiVersion: v1\nkind: Namespace\n" },
   mergePullRequest: {
     label: "Merge #7", kind: "mergePullRequest", prUrl: "https://github.com/owner/repo/pull/7",
@@ -164,6 +165,6 @@ describe("actionSchema survives the SDK's own conversion", () => {
   });
 
   test("stays inside its size budget, because every turn pays for it", () => {
-    expect(JSON.stringify(converted()).length).toBeLessThan(10_000);
+    expect(JSON.stringify(converted()).length).toBeLessThan(10_500);
   });
 });
