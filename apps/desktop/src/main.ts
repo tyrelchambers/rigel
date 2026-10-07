@@ -32,7 +32,7 @@ import {
   DOWNLOAD_URL,
 } from "./appUpdater";
 
-app.setName("Rigel");
+app.setName(app.isPackaged ? "Rigel" : "Rigel Dev");
 
 // The accounts + billing backend base. Overridable so a dev/test build can point
 // at a test signups deployment (test Stripe keys) — release builds stay on live
@@ -603,7 +603,7 @@ function createWindow(port: number): BrowserWindow {
     height: 900,
     minWidth: 960,
     minHeight: 640,
-    title: "Rigel",
+    title: app.name,
     ...titleBar,
     show: !SMOKE, // headless smoke run keeps the window hidden
     backgroundColor: "#0b0f14",
@@ -931,7 +931,7 @@ function ptyUnderElectron(port: number): Promise<void> {
 // gated by another running instance.
 let gotLock = true;
 if (!SMOKE) {
-  app.setAsDefaultProtocolClient("rigel");
+  if (app.isPackaged) app.setAsDefaultProtocolClient("rigel");
   gotLock = app.requestSingleInstanceLock();
   if (!gotLock) {
     app.quit();
