@@ -3,7 +3,8 @@
 // be told what the agent is doing, and once the client is gone the session and
 // the room have to go with it.
 import type { VoiceJob } from "@rigel/server/src/voiceDispatch";
-import type { voice } from "@livekit/agents";
+import { voice } from "@livekit/agents";
+import { DisconnectReason } from "@livekit/rtc-node";
 import { publishJson, type PublishRoom, type VoiceClient } from "./publish.js";
 
 /**
@@ -19,6 +20,7 @@ import { publishJson, type PublishRoom, type VoiceClient } from "./publish.js";
 export const AGENT_STATE_TOPIC = "rigel.agent.state";
 
 export const CLIENT_JOIN_TIMEOUT_MS = 30_000;
+export const CLIENT_REJOIN_GRACE_MS = 20_000;
 
 /**
  * Tells the client what the agent is doing. Sent on every transition and again
@@ -32,13 +34,19 @@ export function announceAgentState(room: PublishRoom, client: VoiceClient, state
 
 export interface SupervisedRoom {
   remoteParticipants: Map<string, { identity: string }>;
-  on(event: "participantConnected" | "participantDisconnected", listener: (participant: { identity: string }) => void): unknown;
+  on(event: "participantConnected", listener: (participant: { identity: string }) => void): unknown;
+  on(
+    event: "participantDisconnected",
+    listener: (participant: { identity: string; disconnectReason?: DisconnectReason }) => void,
+  ): unknown;
   on(event: "disconnected", listener: () => void): unknown;
   disconnect(): Promise<void>;
 }
 
 export interface ClosableSession {
+  readonly _closing: boolean;
   close(): Promise<void>;
+  on(event: voice.AgentSessionEventTypes.Close, listener: () => void): unknown;
 }
 
 export function superviseSession(
@@ -48,13 +56,16 @@ export function superviseSession(
   session: ClosableSession,
   joinTimeoutMs = CLIENT_JOIN_TIMEOUT_MS,
 ): () => Promise<void> {
-  let ended: Promise<void> | null = null;
-  let joinTimer: ReturnType<typeof setTimeout> | undefined;
+  let ending = false;
+  let ended: Promise<void> = Promise.resolve();
+  let clientTimer: ReturnType<typeof setTimeout> | undefined;
   const teardown = () => {
-    ended ??= (async () => {
-      clearTimeout(joinTimer);
+    if (ending) return ended;
+    ending = true;
+    clearTimeout(clientTimer);
+    ended = (async () => {
       try {
-        await session.close();
+        if (!session._closing) await session.close();
       } catch (err) {
         console.error(`${job.room}: closing the session failed:`, err);
       }
@@ -68,22 +79,32 @@ export function superviseSession(
     })();
     return ended;
   };
-
-  if (!room.remoteParticipants.has(job.clientIdentity)) {
-    joinTimer = setTimeout(() => {
-      console.log(`${job.room}: ${job.clientIdentity} never joined`);
+  const awaitClient = (ms: number, why: string) => {
+    clearTimeout(clientTimer);
+    clientTimer = setTimeout(() => {
+      console.log(`${job.room}: ${job.clientIdentity} ${why}`);
       void teardown();
-    }, joinTimeoutMs);
-  }
+    }, ms);
+  };
+
+  if (!room.remoteParticipants.has(job.clientIdentity)) awaitClient(joinTimeoutMs, "never joined");
   room.on("participantConnected", (participant) => {
-    if (participant.identity === job.clientIdentity) clearTimeout(joinTimer);
+    if (participant.identity === job.clientIdentity) clearTimeout(clientTimer);
   });
   room.on("participantDisconnected", (participant) => {
     if (participant.identity !== job.clientIdentity) return;
-    console.log(`${job.room}: ${job.clientIdentity} left`);
-    void teardown();
+    if (participant.disconnectReason === DisconnectReason.CLIENT_INITIATED) {
+      console.log(`${job.room}: ${job.clientIdentity} left`);
+      void teardown();
+      return;
+    }
+    console.log(`${job.room}: ${job.clientIdentity} dropped (reason ${participant.disconnectReason ?? "unknown"})`);
+    awaitClient(CLIENT_REJOIN_GRACE_MS, "never came back");
   });
   room.on("disconnected", () => {
+    void teardown();
+  });
+  session.on(voice.AgentSessionEventTypes.Close, () => {
     void teardown();
   });
 
