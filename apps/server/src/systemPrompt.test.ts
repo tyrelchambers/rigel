@@ -141,3 +141,15 @@ test("the voice prompt splits changes it may run from changes it must surface", 
   expect(p).toContain("anything destructive");
   expect(p).toContain("for the operator to approve");
 });
+
+describe("systemPrompt ssh section", () => {
+  it("is omitted with no hosts", () => {
+    expect(systemPrompt("ctx", ["ctx"], [])).not.toContain("SSH HOSTS");
+  });
+  it("names the hosts and the action kind", () => {
+    const p = systemPrompt("ctx", ["ctx"], ["web-1", "nas"]);
+    expect(p).toContain("SSH HOSTS");
+    expect(p).toContain("`web-1`, `nas`");
+    expect(p).toContain("sshCommand");
+  });
+});

@@ -357,3 +357,8 @@ describe("runCodex (fake codex on PATH)", () => {
     await rm(emptyDir, { recursive: true, force: true });
   });
 });
+
+test("buildCodexArgs passes enabled ssh hosts into the system prompt", () => {
+  const argv = buildCodexArgs("hi", "prod", { sshHosts: ["web-1"] });
+  expect(argv[argv.length - 1]).toContain("`web-1`");
+});

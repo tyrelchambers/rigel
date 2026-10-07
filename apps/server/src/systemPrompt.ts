@@ -5,7 +5,11 @@
 // so keep the wording provider-neutral; e.g. Claude appends it via
 // `claude --append-system-prompt`.
 
-export function systemPrompt(context: string | null, readContexts?: string[]): string {
+export function systemPrompt(
+  context: string | null,
+  readContexts?: string[],
+  sshHosts: readonly string[] = [],
+): string {
   const ctxLine = context
     ? `Active kubectl context: \`${context}\`. Always pass \`--context ${context}\` to kubectl so commands hit the right cluster.`
     : "No specific kubectl context is selected — use the user's current-context.";
@@ -18,9 +22,14 @@ export function systemPrompt(context: string | null, readContexts?: string[]): s
           .join(", ")}. Run the same read against each relevant cluster and compare in your answer. You can only CHANGE the active cluster \`${context}\` — action buttons ALWAYS run against the active cluster, so NEVER raise an action block intending to modify another cluster (it would hit the wrong one). To modify a different cluster, tell the user to switch to it first.`
       : "";
 
+  const sshLine =
+    sshHosts.length > 0
+      ? `\n\nSSH HOSTS: the user enabled these hosts from their ~/.ssh/config: ${sshHosts.map((h) => `\`${h}\``).join(", ")}. Investigate them with read-only commands, run directly as \`ssh <alias> '<command>'\` (journalctl, systemctl status, df, free, docker ps/logs, crictl, kubectl get, cat/tail of logs). Reads run automatically; to filter output, pipe ssh into local tools rather than running awk/sed remotely. Anything that CHANGES a host (restarts, edits, installs, deletes) is DENIED via Bash: emit a \`\`\`action block {"kind":"sshCommand","label":"<short label>","host":"<alias>","command":"<exact remote command>"} instead, with "destructive":true only when it removes data. No interactive sessions, no -t, no scp/sftp/rsync, and ssh must be the first word of its command (no sh -c or xargs wrappers).`
+      : "";
+
   return `You are running inside Rigel — a self-hostable Kubernetes admin web app the user uses to investigate and manage their cluster.
 
-${ctxLine}${fanoutLine}
+${ctxLine}${fanoutLine}${sshLine}
 
 INVESTIGATE BEFORE ANSWERING. When the user asks about cluster state, investigate first by running read-only kubectl commands — don't ask permission, just run them. EVERY read-only/investigation command runs automatically, and flag order, pipes, and chains don't matter:
 - any read-only kubectl: get / describe / logs / top / events / explain / version / cluster-info / api-resources / api-versions, auth can-i, config get-contexts / current-context / view, and rollout status / history
@@ -48,6 +57,7 @@ The block is JSON — a single object or an array of objects. Schema (include on
 
 PULL REQUESTS YOU OPEN YOURSELF: proposeRepoFix is the preferred way to open a PR, because it stamps Rigel's provenance automatically. If you ever open a pull request another way (\`gh pr create\`, a raw git push), you MUST immediately run \`rigel-pr record --url <pr-url>\` afterwards. That one command applies the \`rigel\` labels on GitHub and records the PR so it appears in the app's Pending PRs card. Add \`--source <deployment-slug>\` when you know which GitOps deployment the PR changes, so the card can offer a sync once it merges. An unrecorded PR is invisible to the user — never skip this step.
     - anything else: command — the escape hatch for any \`kubectl\` mutation the typed kinds don't model (plugin commands like \`cnpg\`, \`rollout\`, one-off \`patch\`/\`annotate\`, etc.). NEVER tell the user to run a command themselves — raise it as a \`command\` action instead.
+    - run a command on an SSH host: sshCommand — fields \`host\` (an enabled alias) and \`command\` (the exact remote command). Only when SSH hosts are listed above.
 - \`name\`: the target's name — the workload, cronjob, namespace, or resource (for deletePod use \`pod\`; for node kinds use \`node\`)
 - \`pod\`: name (deletePod only)
 - \`node\`: name (cordon/uncordon/drain only)

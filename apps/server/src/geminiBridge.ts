@@ -59,7 +59,7 @@ export function buildGeminiArgs(
   // Gemini has no append-system-prompt flag (unlike `claude --append-system-prompt`),
   // so we PREPEND our system prompt to the user prompt as a single positional. It
   // teaches the same read-only kubectl + action/question/alert block contract.
-  const fullPrompt = `${systemPrompt(context)}\n\n# User request\n${prompt}`;
+  const fullPrompt = `${systemPrompt(context, undefined, opts?.sshHosts ?? [])}\n\n# User request\n${prompt}`;
 
   const argv = ["gemini", "-p", fullPrompt, "-o", "stream-json", "--approval-mode", "yolo"];
 
@@ -192,6 +192,7 @@ export async function* runGemini(
       ...(process.env as Record<string, string>),
       ...(context ? { KUBECONFIG_CONTEXT: context } : {}),
       ...(await geminiAuthEnv(context)),
+      RIGEL_SSH_HOSTS: (opts?.sshHosts ?? []).join(","),
       // Guard shim FIRST on PATH so kubectl/helm (and any child like `sh -c …`)
       // resolve to the read-only-enforcing wrappers, not the real binaries.
       PATH: `${guardBin}${path.delimiter}${process.env.PATH ?? ""}`,

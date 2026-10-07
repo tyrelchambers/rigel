@@ -68,7 +68,7 @@ export function buildOpencodeArgs(
   // OpenCode has no append-system-prompt flag, so we PREPEND our system prompt to
   // the user prompt as a single positional. It teaches the same read-only kubectl +
   // action/question/alert block contract as the other runners.
-  const fullPrompt = `${systemPrompt(context)}\n\n# User request\n${prompt}`;
+  const fullPrompt = `${systemPrompt(context, undefined, opts?.sshHosts ?? [])}\n\n# User request\n${prompt}`;
 
   // Flags shared by the fresh and resume forms. Order is irrelevant for the flags;
   // the message stays the trailing positional.
@@ -238,6 +238,7 @@ export async function* runOpencode(
       ...(process.env as Record<string, string>),
       ...(context ? { KUBECONFIG_CONTEXT: context } : {}),
       ...(await opencodeAuthEnv()),
+      RIGEL_SSH_HOSTS: (opts?.sshHosts ?? []).join(","),
       // Guard shim FIRST on PATH so kubectl/helm (and any child like `sh -c …`)
       // resolve to the read-only-enforcing wrappers, not the real binaries.
       PATH: `${guardBin}${path.delimiter}${process.env.PATH ?? ""}`,
