@@ -72,3 +72,22 @@ test("runProcess uses a provided env", async () => {
   expect(r.code).toBe(0);
   expect(r.stdout).toBe("provided");
 });
+
+test("runProcess kills a child that outlives its timeout and reports exit 124", async () => {
+  const started = Date.now();
+  const r = await runProcess("sleep", ["5"], { timeout: 100 });
+  expect(Date.now() - started).toBeLessThan(3000);
+  expect(r.code).toBe(124);
+  expect(r.stderr).toContain("timed out after 100ms");
+});
+
+test("runProcess caps collected output at maxOutput bytes", async () => {
+  const r = await runProcess(
+    process.execPath,
+    ["-e", "process.stdout.write('x'.repeat(100)); process.stderr.write('y'.repeat(100))"],
+    { maxOutput: 10 },
+  );
+  expect(r.code).toBe(0);
+  expect(r.stdout).toBe("x".repeat(10));
+  expect(r.stderr).toBe("y".repeat(10));
+});

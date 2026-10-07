@@ -1,8 +1,8 @@
-import { execFile } from "node:child_process";
 import { glob, mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import { SSH_BATCH_ARGS } from "@rigel/k8s";
+import { runProcess, type RunResult } from "@rigel/k8s/src/run";
 
 export interface SshHost {
   alias: string;
@@ -12,14 +12,9 @@ export interface SshHost {
   enabled: boolean;
 }
 
-export interface SshRunResult {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
 const SSH_DIR = join(homedir(), ".ssh");
 const ACTION_TIMEOUT_MS = 120_000;
+const ACTION_MAX_OUTPUT = 10 * 1024 * 1024;
 
 function enabledFile(): string {
   const dir = process.env.RIGEL_USER_DATA_DIR;
@@ -35,7 +30,11 @@ export function parseSshConfig(text: string): { aliases: string[]; includes: str
     const m = line.match(/^(\S+?)(?:\s*=\s*|\s+)(.+)$/);
     if (!m) continue;
     const key = m[1]!.toLowerCase();
-    const values = m[2]!.split(/\s+/).filter(Boolean);
+    const values: string[] = [];
+    for (const [, quoted, bare] of m[2]!.matchAll(/"([^"]*)"|(\S+)/g)) {
+      if (bare?.startsWith("#")) break;
+      values.push(quoted ?? bare!);
+    }
     if (key === "host") aliases.push(...values.filter((v) => !/[*?!]/.test(v)));
     else if (key === "include") includes.push(...values);
   }
@@ -84,17 +83,8 @@ export async function enabledSshHosts(): Promise<string[]> {
   return readEnabledSshHosts(await listSshConfigAliases());
 }
 
-function run(argv: string[], timeout: number): Promise<SshRunResult> {
-  return new Promise((resolve) => {
-    execFile(argv[0]!, argv.slice(1), { timeout, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
-      const code = err ? (typeof err.code === "number" ? err.code : 1) : 0;
-      resolve({ code, stdout: String(stdout), stderr: String(stderr) || (err && !stderr ? err.message : "") });
-    });
-  });
-}
-
 async function resolvedHost(alias: string): Promise<Pick<SshHost, "hostName" | "user" | "port">> {
-  const { stdout } = await run(["ssh", "-G", "--", alias], 5_000);
+  const { stdout } = await runProcess("ssh", ["-G", "--", alias], { timeout: 5_000 });
   const get = (k: string) => stdout.match(new RegExp(`^${k} (.+)$`, "m"))?.[1] ?? "";
   return { hostName: get("hostname"), user: get("user"), port: get("port") };
 }
@@ -111,6 +101,19 @@ export function sshActionArgv(host: string, command: string): string[] {
   return ["ssh", ...SSH_BATCH_ARGS, "--", host, command];
 }
 
-export function runSshAction(host: string, command: string): Promise<SshRunResult> {
-  return run(sshActionArgv(host, command), ACTION_TIMEOUT_MS);
+export function validateSshAction(
+  body: { host?: string; command?: string },
+  enabledHosts: readonly string[],
+): { host: string; command: string } | { error: string } {
+  const host = body.host?.trim() ?? "";
+  const command = body.command?.trim() ?? "";
+  if (!host || !command) return { error: "sshCommand needs host and command" };
+  if (command.startsWith("-")) return { error: "sshCommand command can't start with -" };
+  if (!enabledHosts.includes(host)) return { error: `${host} isn't enabled in Settings > AI agents > SSH hosts` };
+  return { host, command };
+}
+
+export function runSshAction(host: string, command: string): Promise<RunResult> {
+  const [bin, ...args] = sshActionArgv(host, command);
+  return runProcess(bin!, args, { timeout: ACTION_TIMEOUT_MS, maxOutput: ACTION_MAX_OUTPUT });
 }

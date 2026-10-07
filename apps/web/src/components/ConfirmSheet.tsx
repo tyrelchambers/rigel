@@ -326,7 +326,10 @@ export function ConfirmSheet({
       ? "Apply"
       : isFix
         ? "Pull request"
-        : "Safe";
+        : sshHost !== null
+          ? "Remote"
+          : "Safe";
+  const neutralPill = !isDestructive && sshHost !== null;
 
   const title = isPurge
     ? "Remove application"
@@ -390,12 +393,18 @@ export function ConfirmSheet({
             {title}
           </DialogTitle>
           <span
-            className="shrink-0 rounded-full px-2 py-0.5 text-3xs font-semibold uppercase tracking-wider"
-            style={{
-              background: `${accentColor}1F`,
-              color: accentColor,
-              border: `1px solid ${accentColor}3D`,
-            }}
+            className={`shrink-0 rounded-full px-2 py-0.5 text-3xs font-semibold uppercase tracking-wider ${
+              neutralPill ? "border border-border bg-muted text-muted-foreground" : ""
+            }`}
+            style={
+              neutralPill
+                ? undefined
+                : {
+                    background: `${accentColor}1F`,
+                    color: accentColor,
+                    border: `1px solid ${accentColor}3D`,
+                  }
+            }
           >
             {riskLabel}
           </span>

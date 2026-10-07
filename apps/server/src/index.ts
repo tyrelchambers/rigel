@@ -63,7 +63,15 @@ import { readIssueMutes, writeIssueMutes } from "./issuesConfig";
 import { parseIssueMutes } from "@rigel/k8s/src/issues/mutes";
 import { mintVoiceToken, agentConfigResponse, checkWorkerToken, isVoiceWorkerRequest, maskedVoiceConfig, voiceConfigPatch, VOICE_WORKER_HEADER, type VoiceRole } from "./voiceRoutes";
 import { recordAiAction } from "./aiActionLedger";
-import { enabledSshHosts, listSshConfigAliases, listSshHosts, runSshAction, setEnabledSshHosts, sshActionArgv } from "./ssh";
+import {
+  enabledSshHosts,
+  listSshConfigAliases,
+  listSshHosts,
+  runSshAction,
+  setEnabledSshHosts,
+  sshActionArgv,
+  validateSshAction,
+} from "./ssh";
 import { buildAiActionEntry, summarizeActionDetail } from "@rigel/k8s/src/aiActionLedger";
 import { agentsView, setAgentAuth, setActiveAgent } from "./agentConfig";
 import { agentModels } from "./agentModels";
@@ -517,25 +525,22 @@ async function handler(req: Request): Promise<Response> {
       }
 
       if (body.kind === "sshCommand") {
-        const host = body.host?.trim() ?? "";
-        const command = body.command?.trim() ?? "";
-        if (!host || !command) return Response.json({ error: "sshCommand needs host and command" }, { status: 422 });
-        if (command.startsWith("-")) return Response.json({ error: "sshCommand command can't start with -" }, { status: 422 });
-        if (!(await enabledSshHosts()).includes(host)) {
-          return Response.json({ error: `${host} isn't enabled in Settings > AI agents > SSH hosts` }, { status: 422 });
-        }
-        const sshArgv = sshActionArgv(host, command);
+        const valid = validateSshAction(body, await enabledSshHosts());
+        if ("error" in valid) return Response.json({ error: valid.error }, { status: 422 });
+        const sshArgv = sshActionArgv(valid.host, valid.command);
         if (url.searchParams.get("preview") === "1") return Response.json({ command: sshArgv });
-        const result = await runSshAction(host, command);
+        const result = await runSshAction(valid.host, valid.command);
         const outcome = result.code === 0 ? "success" : "failure";
         void recordAiAction(
           context,
           buildAiActionEntry({
-            action: body,
+            action: { ...body, host: valid.host },
             source: isVoiceWorkerRequest(req) ? "voice" : "chat",
             command: sshArgv.join(" "),
             outcome,
-            detail: summarizeActionDetail(outcome, result.stdout, result.stderr),
+            detail: [`exit ${result.code}`, summarizeActionDetail(outcome, result.stdout, result.stderr)]
+              .filter(Boolean)
+              .join(": "),
           }),
         );
         return Response.json(result);

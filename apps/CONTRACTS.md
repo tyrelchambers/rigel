@@ -17,7 +17,7 @@ Action JSON (`SuggestedAction`):
   `pause`, `resume`, `deletePod`, `deleteWorkload`, `cordon`, `uncordon`,
   `drain`, `suspendCronJob`, `resumeCronJob`, `triggerCronJob`,
   `createNamespace`, `deleteNamespace`, `deleteResource`, `annotate`, `label`,
-  `purge`, `command`.
+  `purge`, `command`, `sshCommand`.
 - Target fields (presence depends on kind):
   - `name` — controller / cronjob / namespace / resource target.
     (`deployment` is accepted as a back-compat alias; `target = name ?? deployment`.)
@@ -37,6 +37,10 @@ Action JSON (`SuggestedAction`):
   - `destructive` (bool) — `command` only: Claude's hint. App also infers from
     destructive verbs in `args` and takes the STRICTER of the two (a `false` can
     never downgrade an obviously destructive command).
+  - `host` (string) — `sshCommand` only: an SSH alias the user enabled in
+    Settings > AI agents > SSH hosts.
+  - `command` (string) — `sshCommand` only: the exact remote command. It may not
+    start with `-`.
 
 Special kinds:
 - `purge` — full app removal. Emit `{"kind":"purge","name":<root-deployment>,"namespace":<ns>}`.
@@ -75,6 +79,12 @@ is keyed on the ACTION, not on what it hears:
   actual command tiers destructive.
 
 Additional kinds:
+- `sshCommand` — run one command on an enabled SSH host. Fields `host`,
+  `command`, optional `destructive`. The app runs
+  `ssh -T -o BatchMode=yes -- <host> <command>` after the confirm sheet and
+  records it (with the exit code) in the AI action ledger. Never
+  auto-runnable: it is not in `AUTO_RUNNABLE_KINDS`, so voice always surfaces
+  it for approval.
 - `applyManifest` — install/self-host a new app. The `action` block is
   IMMEDIATELY followed by a ` ```yaml ` block; the parser attaches it as
   `manifest` and the app applies it via `kubectl apply -f -`.

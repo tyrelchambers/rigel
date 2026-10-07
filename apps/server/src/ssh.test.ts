@@ -2,7 +2,14 @@ import { mkdtemp, mkdir, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { listSshConfigAliases, parseSshConfig, readEnabledSshHosts, setEnabledSshHosts, sshActionArgv } from "./ssh";
+import {
+  listSshConfigAliases,
+  parseSshConfig,
+  readEnabledSshHosts,
+  setEnabledSshHosts,
+  sshActionArgv,
+  validateSshAction,
+} from "./ssh";
 
 describe("parseSshConfig", () => {
   it("collects concrete aliases and includes, skipping patterns", () => {
@@ -17,6 +24,11 @@ Match host foo
   User x
 `;
     expect(parseSshConfig(text)).toEqual({ aliases: ["web-1", "web-2", "nas"], includes: ["config.d/*"] });
+  });
+
+  it("drops trailing comments and keeps a quoted alias whole", () => {
+    const text = 'Host web-1 # the edge box\nHost "my box" lab\nInclude extra # more hosts\n';
+    expect(parseSshConfig(text)).toEqual({ aliases: ["web-1", "my box", "lab"], includes: ["extra"] });
   });
 });
 
@@ -56,5 +68,30 @@ describe("sshActionArgv", () => {
     expect(sshActionArgv("web-1", "systemctl restart k3s")).toEqual([
       "ssh", "-T", "-o", "BatchMode=yes", "--", "web-1", "systemctl restart k3s",
     ]);
+  });
+});
+
+describe("validateSshAction", () => {
+  const enabled = ["web-1"];
+
+  it("returns the trimmed host and command for an enabled host", () => {
+    expect(validateSshAction({ host: " web-1 ", command: " uptime " }, enabled)).toEqual({ host: "web-1", command: "uptime" });
+  });
+
+  it("needs both host and command", () => {
+    expect(validateSshAction({ host: "web-1" }, enabled)).toEqual({ error: "sshCommand needs host and command" });
+    expect(validateSshAction({ command: "uptime" }, enabled)).toEqual({ error: "sshCommand needs host and command" });
+  });
+
+  it("refuses a command that starts with a dash", () => {
+    expect(validateSshAction({ host: "web-1", command: "-oProxyCommand=sh" }, enabled)).toEqual({
+      error: "sshCommand command can't start with -",
+    });
+  });
+
+  it("refuses a host the user has not enabled", () => {
+    expect(validateSshAction({ host: "nas", command: "uptime" }, enabled)).toEqual({
+      error: "nas isn't enabled in Settings > AI agents > SSH hosts",
+    });
   });
 });

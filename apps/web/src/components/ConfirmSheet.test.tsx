@@ -120,3 +120,19 @@ describe("ConfirmSheet — sshCommand", () => {
     expect(screen.queryByText("Runs on")).not.toBeInTheDocument();
   });
 });
+
+describe("ConfirmSheet — sshCommand risk pill", () => {
+  it("labels a host command Remote, never Safe", async () => {
+    const ssh: ActionBlock = { kind: "sshCommand", host: "web-1", command: "sudo systemctl restart k3s" };
+    wrap(<ConfirmSheet action={ssh} open={true} onClose={vi.fn()} />);
+    expect(await screen.findByText("Remote")).toBeInTheDocument();
+    expect(screen.queryByText("Safe")).not.toBeInTheDocument();
+  });
+
+  it("labels a destructive host command Destructive", async () => {
+    const ssh: ActionBlock = { kind: "sshCommand", host: "web-1", command: "rm -rf /var/lib/old", destructive: true };
+    wrap(<ConfirmSheet action={ssh} open={true} onClose={vi.fn()} />);
+    expect(await screen.findByText("Destructive")).toBeInTheDocument();
+    expect(screen.queryByText("Remote")).not.toBeInTheDocument();
+  });
+});
