@@ -1654,6 +1654,45 @@ export function useSaveVoiceConfig() {
   });
 }
 
+export interface SshHostView {
+  alias: string;
+  hostName: string;
+  user: string;
+  port: string;
+  enabled: boolean;
+}
+
+export function useSshHosts() {
+  return useQuery<SshHostView[], Error>({
+    queryKey: ["ssh-hosts"] as const,
+    queryFn: async () => {
+      const res = await apiFetch("/api/ssh/hosts");
+      if (!res.ok) throw new Error(`ssh hosts failed: ${res.status}`);
+      return ((await res.json()) as { hosts: SshHostView[] }).hosts;
+    },
+    staleTime: 30_000,
+  });
+}
+
+export function useSetSshHosts() {
+  const qc = useQueryClient();
+  return useMutation<SshHostView[], Error, string[]>({
+    mutationFn: async (enabled) => {
+      const res = await apiFetch("/api/ssh/hosts", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(err.error ?? "failed to save SSH hosts");
+      }
+      return ((await res.json()) as { hosts: SshHostView[] }).hosts;
+    },
+    onSuccess: (hosts) => qc.setQueryData(["ssh-hosts"], hosts),
+  });
+}
+
 export async function fetchVoiceToken(): Promise<{ url: string; token: string }> {
   const res = await apiFetch("/api/voice/token", {
     method: "POST",
