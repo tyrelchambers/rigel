@@ -1,5 +1,5 @@
 {
-  "version": "2.17",
+  "version": "2.20",
   "children": [
     {
       "type": "frame",
@@ -21516,6 +21516,732 @@
                       "fill": "$border-subtle"
                     }
                   ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "FVF9H",
+      "x": 3864,
+      "y": 880,
+      "name": "Settings — AI agents · SSH hosts",
+      "clip": true,
+      "width": 1120,
+      "fill": "$surface-primary",
+      "cornerRadius": 12,
+      "stroke": "$border-subtle",
+      "strokeWidth": 1,
+      "strokeAlignment": "inner",
+      "layout": "vertical",
+      "gap": 26,
+      "padding": [
+        26,
+        26,
+        34,
+        26
+      ],
+      "children": [
+        {
+          "type": "frame",
+          "id": "y4PiNM",
+          "name": "Page Head",
+          "width": "fill_container",
+          "gap": 16,
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "E4qThJ",
+              "name": "Titles",
+              "layout": "vertical",
+              "gap": 4,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "uJBFl",
+                  "fill": "$fg-primary",
+                  "content": "Settings",
+                  "lineHeight": 1.2,
+                  "fontFamily": "$font-sans",
+                  "fontSize": 19,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "HkeyO",
+                  "fill": "$fg-secondary",
+                  "content": "Connect agents, wire up channels, and set self-host defaults.",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-sans",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "ptvFK",
+              "name": "Spacer",
+              "width": "fill_container",
+              "height": 1
+            },
+            {
+              "type": "frame",
+              "id": "RpfhN",
+              "name": "Button",
+              "fill": "$surface-elevated",
+              "cornerRadius": 7,
+              "stroke": "$border-strong",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "padding": [
+                5,
+                10
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "xzW4n",
+                  "fill": "$fg-secondary",
+                  "content": "Setup guide",
+                  "lineHeight": 1.2,
+                  "fontFamily": "$font-sans",
+                  "fontSize": 11,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Cz61M",
+              "name": "TabBar",
+              "gap": 3,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "dUOHQ",
+                  "name": "Tab Overview",
+                  "fill": "#00000000",
+                  "cornerRadius": 7,
+                  "padding": [
+                    6,
+                    11
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "eS7Fh",
+                      "fill": "$fg-secondary",
+                      "content": "Overview",
+                      "lineHeight": 1.2,
+                      "fontFamily": "$font-sans",
+                      "fontSize": 11.5,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "qsWvb",
+                  "name": "Tab AI agents",
+                  "fill": "$surface-elevated",
+                  "cornerRadius": 7,
+                  "stroke": "$border-strong",
+                  "strokeWidth": 1,
+                  "strokeAlignment": "inner",
+                  "padding": [
+                    6,
+                    11
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "X9JuA1",
+                      "fill": "$fg-primary",
+                      "content": "AI agents",
+                      "lineHeight": 1.2,
+                      "fontFamily": "$font-sans",
+                      "fontSize": 11.5,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "SiBz9",
+                  "name": "Tab Channels",
+                  "fill": "#00000000",
+                  "cornerRadius": 7,
+                  "padding": [
+                    6,
+                    11
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "IL2WK",
+                      "fill": "$fg-secondary",
+                      "content": "Channels",
+                      "lineHeight": 1.2,
+                      "fontFamily": "$font-sans",
+                      "fontSize": 11.5,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "w2HgG",
+                  "name": "Tab App defaults",
+                  "fill": "#00000000",
+                  "cornerRadius": 7,
+                  "padding": [
+                    6,
+                    11
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "u3G8Q",
+                      "fill": "$fg-secondary",
+                      "content": "App defaults",
+                      "lineHeight": 1.2,
+                      "fontFamily": "$font-sans",
+                      "fontSize": 11.5,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "qSfMA",
+                  "name": "Tab Keyboard",
+                  "fill": "#00000000",
+                  "cornerRadius": 7,
+                  "stroke": "$border-strong",
+                  "strokeAlignment": "inner",
+                  "padding": [
+                    6,
+                    11
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "eSxED",
+                      "fill": "$fg-secondary",
+                      "content": "Keyboard",
+                      "lineHeight": 1.2,
+                      "fontFamily": "$font-sans",
+                      "fontSize": 11.5,
+                      "fontWeight": "700"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "dEgVR",
+          "name": "Intro",
+          "width": "fill_container",
+          "gap": 16,
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "I1GMmY",
+              "fill": "$fg-secondary",
+              "content": "Hosts from your ~/.ssh/config that the chat may run commands on. Reads run on their own; anything that changes a host asks you first.",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-sans",
+              "fontSize": 12,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "AfEcF",
+              "name": "Spacer",
+              "width": "fill_container",
+              "height": 1
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "FTTAZ",
+          "name": "Groups",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 28,
+          "children": [
+            {
+              "type": "frame",
+              "id": "XQyUA",
+              "name": "Group SSH hosts",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 2,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "tSc7P",
+                  "name": "Head",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "padding": [
+                    0,
+                    0,
+                    6,
+                    0
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "yEKEi",
+                      "name": "Label",
+                      "fill": "$fg-tertiary",
+                      "content": "SSH HOSTS",
+                      "fontFamily": "$font-sans",
+                      "fontSize": 10,
+                      "fontWeight": "700",
+                      "letterSpacing": 0.8
+                    },
+                    {
+                      "type": "frame",
+                      "id": "NGTAo",
+                      "name": "Spacer",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "text",
+                      "id": "D0fcq",
+                      "name": "Count",
+                      "fill": "$fg-tertiary",
+                      "content": "2 of 4 enabled",
+                      "fontFamily": "$font-sans",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "GX2vi",
+                  "name": "RowWrap",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "NbKpZ",
+                      "name": "Row",
+                      "width": "fill_container",
+                      "gap": 12,
+                      "padding": [
+                        11,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "rv6um",
+                          "name": "Titles",
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "pTTm5",
+                              "name": "Alias",
+                              "fill": "$fg-primary",
+                              "content": "k8s-truenas",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-sans",
+                              "fontSize": 12.5,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "mHbkG",
+                              "name": "Address",
+                              "fill": "$fg-tertiary",
+                              "content": "root@100.85.103.12:22",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "yRvvz",
+                          "name": "Spacer",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "iXUJ6",
+                          "name": "Switch On",
+                          "width": 30,
+                          "height": 17,
+                          "fill": "$accent-primary",
+                          "cornerRadius": 9,
+                          "padding": 2,
+                          "justifyContent": "end",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "ellipse",
+                              "id": "mOB7i",
+                              "name": "Knob",
+                              "fill": "$fg-inverse",
+                              "width": 13,
+                              "height": 13
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "VaxDI",
+                      "name": "Rule",
+                      "width": "fill_container",
+                      "height": 1,
+                      "fill": "$border-subtle"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "AUXHy",
+                  "name": "RowWrap",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "DMA15",
+                      "name": "Row",
+                      "width": "fill_container",
+                      "gap": 12,
+                      "padding": [
+                        11,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "wZz1r",
+                          "name": "Titles",
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "xbshC",
+                              "name": "Alias",
+                              "fill": "$fg-primary",
+                              "content": "docker-remote",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-sans",
+                              "fontSize": 12.5,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "T4cLyD",
+                              "name": "Address",
+                              "fill": "$fg-tertiary",
+                              "content": "linux@100.85.103.61:22",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "s1GAor",
+                          "name": "Spacer",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "S91sf",
+                          "name": "Switch On",
+                          "width": 30,
+                          "height": 17,
+                          "fill": "$accent-primary",
+                          "cornerRadius": 9,
+                          "padding": 2,
+                          "justifyContent": "end",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "ellipse",
+                              "id": "eMlH1",
+                              "name": "Knob",
+                              "fill": "$fg-inverse",
+                              "width": 13,
+                              "height": 13
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "j5aokM",
+                      "name": "Rule",
+                      "width": "fill_container",
+                      "height": 1,
+                      "fill": "$border-subtle"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "g6cBQ",
+                  "name": "RowWrap",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "joJgN",
+                      "name": "Row",
+                      "width": "fill_container",
+                      "gap": 12,
+                      "padding": [
+                        11,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "dGNP2",
+                          "name": "Titles",
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "wOuOD",
+                              "name": "Alias",
+                              "fill": "$fg-primary",
+                              "content": "nas",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-sans",
+                              "fontSize": 12.5,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "I2fWI5",
+                              "name": "Address",
+                              "fill": "$fg-tertiary",
+                              "content": "admin@nas.lan:22",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "q3xgJ",
+                          "name": "Spacer",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "S8BzJ",
+                          "name": "Switch Off",
+                          "width": 30,
+                          "height": 17,
+                          "fill": "$surface-sunken",
+                          "cornerRadius": 9,
+                          "stroke": "$border-strong",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "padding": 2,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "ellipse",
+                              "id": "ENW1E",
+                              "name": "Knob",
+                              "fill": "$fg-tertiary",
+                              "width": 13,
+                              "height": 13
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "u4i13O",
+                      "name": "Rule",
+                      "width": "fill_container",
+                      "height": 1,
+                      "fill": "$border-subtle"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "emHYB",
+                  "name": "RowWrap",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "Palg2",
+                      "name": "Row",
+                      "width": "fill_container",
+                      "gap": 12,
+                      "padding": [
+                        11,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "jgT9n",
+                          "name": "Titles",
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "d0hbb",
+                              "name": "Alias",
+                              "fill": "$fg-primary",
+                              "content": "pi-hole",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-sans",
+                              "fontSize": 12.5,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "w4NHZi",
+                              "name": "Address",
+                              "fill": "$fg-tertiary",
+                              "content": "pi@192.168.1.5:2222",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "XeIcX",
+                          "name": "Spacer",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "pJFnO",
+                          "name": "Switch Off",
+                          "width": 30,
+                          "height": 17,
+                          "fill": "$surface-sunken",
+                          "cornerRadius": 9,
+                          "stroke": "$border-strong",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "padding": 2,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "ellipse",
+                              "id": "CZm5w",
+                              "name": "Knob",
+                              "fill": "$fg-tertiary",
+                              "width": 13,
+                              "height": 13
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "TqYS2",
+                      "name": "Rule",
+                      "width": "fill_container",
+                      "height": 1,
+                      "fill": "$border-subtle"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "KNzte",
+              "name": "Empty state (no hosts)",
+              "width": "fill_container",
+              "fill": "$surface-sunken",
+              "cornerRadius": 8,
+              "stroke": "$border-subtle",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "layout": "vertical",
+              "gap": 6,
+              "padding": 16,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "NHCFl",
+                  "name": "Empty title",
+                  "fill": "$fg-secondary",
+                  "content": "No hosts found in ~/.ssh/config.",
+                  "fontFamily": "$font-sans",
+                  "fontSize": 12.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "RZ1X6",
+                  "name": "Empty hint",
+                  "fill": "$fg-tertiary",
+                  "content": "Add a Host entry to your SSH config and it shows up here.",
+                  "fontFamily": "$font-sans",
+                  "fontSize": 11.5,
+                  "fontWeight": "normal"
                 }
               ]
             }
