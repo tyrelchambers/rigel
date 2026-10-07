@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { createServerClient, VoiceNotConfiguredError } from "./serverClient.js";
+import { createServerClient } from "./serverClient.js";
 
 function fakeFetch(status: number, body: unknown) {
   return vi.fn(async () => ({ ok: status < 400, status, json: async () => body })) as unknown as typeof fetch;
@@ -8,28 +8,6 @@ function fakeFetch(status: number, body: unknown) {
 const BASE = "http://127.0.0.1:4321";
 
 describe("createServerClient", () => {
-  test("agentConfig sends the worker + session headers", async () => {
-    const f = fakeFetch(200, { url: "wss://x", token: "t", model: "m", sttModel: "deepgram/nova-3", ttsModel: "cartesia/sonic-2", apiKey: "k", apiSecret: "s", openrouterApiKey: "o" });
-    const c = createServerClient(BASE, "sess", "wt", f);
-    const cfg = await c.agentConfig();
-    expect(cfg.url).toBe("wss://x");
-    const [urlArg, init] = (f as unknown as ReturnType<typeof vi.fn>).mock.calls[0]!;
-    expect(urlArg).toBe(`${BASE}/api/voice/agent-config`);
-    expect((init as RequestInit).headers).toMatchObject({
-      "x-rigel-session": "sess",
-      "x-rigel-voice-worker": "wt",
-    });
-  });
-
-  test("agentConfig throws VoiceNotConfiguredError naming the missing fields on 409", async () => {
-    const f = fakeFetch(409, { error: "voice is not configured", missing: ["apiSecret", "openrouterApiKey"] });
-    const c = createServerClient(BASE, "sess", "wt", f);
-    const err = await c.agentConfig().catch((e) => e);
-    expect(err).toBeInstanceOf(VoiceNotConfiguredError);
-    expect((err as VoiceNotConfiguredError).missing).toEqual(["apiSecret", "openrouterApiKey"]);
-    expect((err as Error).message).toMatch(/apiSecret, openrouterApiKey/);
-  });
-
   test("jobs holds the dispatch stream open with the worker + session headers and yields each job", async () => {
     const job = { room: "rigel-desktop-0a1b2c3d", role: "desktop", clientIdentity: "rigel-desktop", context: "prod", config: {} };
     const text = `: ping\n\nevent: job\ndata: ${JSON.stringify(job)}\n\n`;

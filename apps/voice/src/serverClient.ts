@@ -1,4 +1,4 @@
-// The worker's only line to the local Rigel server: bootstrap config, and the
+// The worker's only line to the local Rigel server: the job stream, and the
 // SAME /api/action route the ConfirmSheet uses (identical execution + guards).
 import type { SuggestedAction } from "@rigel/k8s/src/actionBlocks";
 import type { VoiceJob } from "@rigel/server/src/voiceDispatch";
@@ -12,37 +12,10 @@ export interface ProposeFixResult extends RepoFixResult {
   included?: string[];
 }
 
-export interface AgentConfig {
-  url: string;
-  token: string;
-  model: string;
-  sttModel: string;
-  ttsModel: string;
-  apiKey: string;
-  apiSecret: string;
-  openrouterApiKey: string;
-}
-
-/**
- * The server answers /api/voice/agent-config with 409 (never thrown as a
- * generic HTTP error) when voice is reachable but not configured: missing a
- * required field in the rigel-user-config Secret, not a transient failure.
- * `missing` names which fields, straight from the response body, so a caller
- * can log something more useful than a bare status code.
- */
 export interface ActionResult {
   code: number;
   stdout: string;
   stderr: string;
-}
-
-export class VoiceNotConfiguredError extends Error {
-  readonly missing: string[];
-  constructor(missing: string[]) {
-    super(`voice is not configured${missing.length > 0 ? ` (missing ${missing.join(", ")})` : ""}`);
-    this.name = "VoiceNotConfiguredError";
-    this.missing = missing;
-  }
 }
 
 /** The workload a Git-link question is about; kind defaults to a Deployment. */
@@ -78,7 +51,6 @@ export interface RelatedResources {
 }
 
 export interface ServerClient {
-  agentConfig(): Promise<AgentConfig>;
   jobs(idleMs?: number): Promise<AsyncIterable<VoiceJob>>;
   /** Every resource belonging to one app, found the way the app itself was
    *  labelled rather than by a selector the model guessed at. */
@@ -125,15 +97,6 @@ export function createServerClient(
     ...(context ? { "X-Rigel-Context": context } : {}),
   });
   return {
-    async agentConfig() {
-      const res = await fetchFn(`${base}/api/voice/agent-config`, { headers: headers() });
-      if (res.status === 409) {
-        const body = (await res.json().catch(() => ({}))) as { missing?: string[] };
-        throw new VoiceNotConfiguredError(body.missing ?? []);
-      }
-      if (!res.ok) throw new Error(`agent-config failed: ${res.status}`);
-      return (await res.json()) as AgentConfig;
-    },
     async jobs(idleMs = 45_000) {
       const abort = new AbortController();
       const idle = setTimeout(() => abort.abort(), idleMs);

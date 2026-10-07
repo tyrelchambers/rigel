@@ -7,7 +7,9 @@
 //     `destinationIdentities`.
 // DataPublishOptions is not re-exported from the package root, so the shape is
 // restated here.
-import { DESKTOP_IDENTITY } from "./state.js";
+import type { VoiceJob } from "@rigel/server/src/voiceDispatch";
+
+export type VoiceClient = Pick<VoiceJob, "role" | "clientIdentity">;
 
 interface WorkerPublishOptions {
   reliable: boolean;
@@ -27,26 +29,32 @@ export interface PublishRoom {
 const encoder = new TextEncoder();
 
 /**
- * Targeted at the desktop rather than broadcast: every phone in the room holds a
- * valid token and would otherwise receive the action frames.
+ * Targeted at the room's client rather than broadcast: anyone else who got a
+ * token for the room would otherwise receive the action frames.
  */
-export async function publishJson(room: PublishRoom, topic: string, payload: unknown): Promise<void> {
+export async function publishJson(
+  room: PublishRoom,
+  client: VoiceClient,
+  topic: string,
+  payload: unknown,
+): Promise<void> {
   const local = room.localParticipant;
   if (!local) return;
   try {
     await local.publishData(encoder.encode(JSON.stringify(payload)), {
       reliable: true,
       topic,
-      destination_identities: [DESKTOP_IDENTITY],
+      destination_identities: [client.clientIdentity],
     });
   } catch (err) {
     console.error(`publishing ${topic} failed:`, err);
   }
 }
 
-export function desktopPresent(room: PublishRoom): boolean {
+export function desktopPresent(room: PublishRoom, client: VoiceClient): boolean {
+  if (client.role !== "desktop") return false;
   for (const p of room.remoteParticipants.values()) {
-    if (p.identity === DESKTOP_IDENTITY) return true;
+    if (p.identity === client.clientIdentity) return true;
   }
   return false;
 }

@@ -1,6 +1,5 @@
 import { buildKeyterms, sameKeyterms } from "./keyterms.js";
-
-export const DESKTOP_IDENTITY = "rigel-desktop";
+import type { VoiceClient } from "./publish.js";
 
 /** Mutable per-session state, shared by the tools and the turn hook. */
 export interface SessionState {
@@ -16,29 +15,13 @@ export interface SessionState {
   keyterms: string[];
 }
 
-export function emptySessionState(): SessionState {
+export function emptySessionState(activeContext: string | null = null): SessionState {
   return {
-    activeContext: null,
+    activeContext,
     contextLines: [],
     awaitingClick: new Map(),
     keyterms: buildKeyterms([]),
   };
-}
-
-/**
- * Scrubs a finished session in place. The state object is captured by the
- * agent's tools and turn hook, so it is mutated rather than replaced.
- *
- * A proposal outstanding from a previous session would otherwise be answered
- * by a desktop that reconnected after it, so the agent would report an outcome
- * for a change the operator never saw offered. The rest goes with it because
- * the desktop republishes rigel.state and rigel.keyterms on reconnect.
- */
-export function resetSessionState(state: SessionState): void {
-  state.activeContext = null;
-  state.contextLines = [];
-  state.awaitingClick.clear();
-  state.keyterms = buildKeyterms([]);
 }
 
 /** What a frame moved, so the caller can re-issue only what actually changed. */
@@ -52,8 +35,8 @@ export interface FrameEffect {
 const NO_EFFECT: FrameEffect = { contextChanged: false, keytermsChanged: false, speak: null };
 
 /**
- * Only `DESKTOP_IDENTITY` may steer worker state. A phone participant holds a
- * valid room token, so possession alone cannot authorize a control frame: a
+ * Only the room's own client may steer worker state. Anyone else holding a
+ * valid room token cannot authorize a control frame by possession alone: a
  * forged rigel.state would repoint every subsequent read and mutation at a
  * different cluster.
  *
@@ -63,11 +46,12 @@ const NO_EFFECT: FrameEffect = { contextChanged: false, keytermsChanged: false, 
  */
 export function applyDataFrame(
   state: SessionState,
+  client: VoiceClient,
   identity: string | undefined,
   topic: string | undefined,
   raw: string,
 ): FrameEffect {
-  if (identity !== DESKTOP_IDENTITY) return NO_EFFECT;
+  if (identity !== client.clientIdentity) return NO_EFFECT;
   try {
     const msg = JSON.parse(raw);
     if (topic === "rigel.state" && (typeof msg.activeContext === "string" || msg.activeContext === null)) {
