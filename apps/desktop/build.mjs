@@ -90,6 +90,7 @@ const permissionHookMjsBundle = build({
   format: "esm",
   target: "node22",
   allowOverwrite: true,
+  banner: requireBanner,
   logLevel: "info",
 });
 
