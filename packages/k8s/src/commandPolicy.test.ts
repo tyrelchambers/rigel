@@ -167,4 +167,38 @@ describe("classifyCommand ssh routing", () => {
     expect(classifyCommand("k=kubectl; $k delete pod x", "ctx").decision).toBe("deny");
     expect(classifyCommand("/usr/bin/k?bectl delete pod x", "ctx").decision).toBe("deny");
   });
+
+  test("denies glob and brace command heads bash would expand", () => {
+    expect(classifyCommand("/usr/bin/ss[h] evil uptime", "ctx", hosts).decision).toBe("deny");
+    expect(classifyCommand("ss[h] prod-db 'rm -rf /'", "ctx", hosts).decision).toBe("deny");
+    expect(classifyCommand("/usr/bin/s{s,x}h web-1 uptime", "ctx", hosts).decision).toBe("deny");
+    expect(classifyCommand("{ssh,} web-1 uptime", "ctx", hosts).decision).toBe("deny");
+    expect(classifyCommand("kube[c]tl delete pod x", "ctx").decision).toBe("deny");
+    expect(classifyCommand("sudo kube[c]tl delete pod x", "ctx").decision).toBe("deny");
+    expect(classifyCommand("~kubectl get pods", "ctx").decision).toBe("deny");
+  });
+
+  test("denies a glob on a bin path anywhere in the segment", () => {
+    expect(classifyCommand("cat /usr/bin/kube*", "ctx").decision).toBe("deny");
+    expect(classifyCommand("ls /opt/homebrew/bin/*", "ctx").decision).toBe("deny");
+  });
+
+  test("still allows globs on non-bin paths and quoted braces", () => {
+    expect(classifyCommand("ls /var/log/*.log", "ctx").decision).toBe("allow");
+    expect(classifyCommand("cat /etc/*release", "ctx").decision).toBe("allow");
+    expect(classifyCommand("kubectl get pods -o jsonpath='{.items[*].metadata.name}'", "ctx").decision).toBe("allow");
+    expect(classifyCommand("jq '.items[] | .x'", "ctx").decision).toBe("allow");
+    expect(classifyCommand("[ -f x ] && echo y", "ctx").decision).toBe("allow");
+  });
+
+  test("denies a path-prefixed kubectl, k or helm", () => {
+    expect(classifyCommand("/usr/bin/kubectl delete pod x", "ctx").decision).toBe("deny");
+    expect(classifyCommand("/usr/local/bin/k get pods", "ctx").decision).toBe("deny");
+    expect(classifyCommand("/usr/bin/helm uninstall app", "ctx").decision).toBe("deny");
+  });
+
+  test("denies a bare ssh word but allows ssh only as a search pattern", () => {
+    expect(classifyCommand("grep -r ssh /etc", "ctx").decision).toBe("deny");
+    expect(classifyCommand("grep -r 'ssh[ :]' /etc", "ctx").decision).toBe("allow");
+  });
 });

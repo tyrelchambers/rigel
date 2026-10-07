@@ -235,17 +235,68 @@ export const SECRET_VALUES_HINT =
   "denied: that would print a Secret's values into the transcript. Use `kubectl describe secret <name> -n <ns>`, which gives you the keys, their types and their sizes without the values.";
 
 const DYNAMIC_HEAD_HINT =
-  "Commands can't start with a variable or a glob here. Write the command name out literally, e.g. `kubectl get pods`.";
+  "A command here can't start with a variable, a glob or a brace expansion (bash would expand `ss[h]`, `s{s,x}h`, `$cmd` or `{ssh,}` before this check sees it). Write the command name out literally, e.g. `kubectl get pods`.";
 
-function hasDynamicHead(command: string): boolean {
-  try {
-    return splitSegments(tokenizeShell(command).tokens).some((s) => {
-      const head = s.words.find((w) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(w));
-      return head !== undefined && /[$*?]/.test(head);
-    });
-  } catch {
-    return false;
+const PATH_TOOL_HINT =
+  "Call `kubectl`, `k` and `helm` by their bare name, not a full path, so the policy can classify them.";
+
+const HEAD_PREFIX_WORDS = new Set([
+  "do", "then", "else", "elif", "if", "while", "until", "!", "time",
+  "nohup", "exec", "command", "builtin", "env", "sudo", "nice", "timeout", "xargs", "stdbuf", "setsid",
+]);
+const HEAD_PREFIX_NUMERIC_ARG = new Set(["timeout", "nice"]);
+const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+const SAFE_HEAD = /^[A-Za-z0-9._/+-]+$/;
+const PATH_TOOLS = new Set(["kubectl", "k", "helm"]);
+
+function dirIsBin(value: string): boolean {
+  const slash = value.lastIndexOf("/");
+  if (slash < 0) return false;
+  return value.slice(0, slash).split("/").some((seg) => seg === "bin" || seg === "sbin");
+}
+
+function headIndex(words: readonly string[]): number {
+  let i = 0;
+  while (i < words.length) {
+    const w = words[i]!;
+    if (ASSIGNMENT.test(w)) {
+      i++;
+      continue;
+    }
+    if (HEAD_PREFIX_WORDS.has(w)) {
+      i++;
+      while (i < words.length && words[i]!.startsWith("-")) i++;
+      if (HEAD_PREFIX_NUMERIC_ARG.has(w) && i < words.length && /^\d+$/.test(words[i]!)) i++;
+      continue;
+    }
+    return i;
   }
+  return -1;
+}
+
+function headVerdict(command: string): CommandVerdict | null {
+  let segments;
+  try {
+    segments = splitSegments(tokenizeShell(command).tokens);
+  } catch {
+    return null;
+  }
+  for (const seg of segments) {
+    if (seg.words.some((w, i) => seg.wordGlobs[i] && dirIsBin(w))) {
+      return { decision: "deny", reason: DYNAMIC_HEAD_HINT };
+    }
+    const hi = headIndex(seg.words);
+    if (hi < 0) continue;
+    const head = seg.words[hi]!;
+    if (head === "[" || head === "[[") continue;
+    if (seg.wordGlobs[hi] || !SAFE_HEAD.test(head)) {
+      return { decision: "deny", reason: DYNAMIC_HEAD_HINT };
+    }
+    if (head.includes("/") && PATH_TOOLS.has(head.slice(head.lastIndexOf("/") + 1))) {
+      return { decision: "deny", reason: PATH_TOOL_HINT };
+    }
+  }
+  return null;
 }
 
 function mentionsSsh(command: string): boolean {
@@ -262,7 +313,8 @@ export function classifyCommand(
   activeContext?: string | null,
   sshHosts: readonly string[] = [],
 ): CommandVerdict {
-  if (hasDynamicHead(command)) return { decision: "deny", reason: DYNAMIC_HEAD_HINT };
+  const head = headVerdict(command);
+  if (head) return head;
   let scanned = command;
   if (mentionsSsh(command)) {
     const ssh = classifyShellSsh(command, sshHosts);

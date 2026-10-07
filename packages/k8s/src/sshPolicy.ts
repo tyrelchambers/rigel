@@ -29,7 +29,8 @@ const SSH_ALLOWED_OPTIONS = new Set([
 export const SSH_INDIRECT_HINT =
   "SSH has to be the first word of its own command: `ssh <alias> '<remote command>'`. " +
   "It can't be wrapped (sh -c, xargs, a variable, a full path) and scp, sftp and rsync aren't available. " +
-  "Do NOT retry a variation; run it directly in that form.";
+  "Do NOT retry a variation; run it directly in that form. " +
+  "If ssh is only text you are searching for, write the pattern so it isn't a bare word, e.g. `grep -r 'sshd' /etc` or `grep 'ssh[ :]'`.";
 
 const INTERACTIVE_HINT =
   "Interactive SSH sessions (no remote command, -t, -N) can't run in this chat. Pass the command to run: `ssh <alias> '<command>'`.";
@@ -72,7 +73,7 @@ function positionals(args: readonly string[]): string[] {
 }
 
 function lookup<T>(table: Record<string, T>, key: string | undefined): T | undefined {
-  return key !== undefined && Object.hasOwn(table, key) ? table[key] : undefined;
+  return key !== undefined && Object.prototype.hasOwnProperty.call(table, key) ? table[key] : undefined;
 }
 
 function leadingVerb(args: readonly string[], reads: Set<string>, groups: Record<string, Set<string>>): string | null {
@@ -138,11 +139,22 @@ function crictlRead(args: readonly string[]): boolean {
   return sub !== "logs" || !hasFlag(args, ["f"], ["--follow"]);
 }
 
+function rawFlagValue(args: readonly string[]): string | null {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (a === "--raw") return args[i + 1] ?? "";
+    if (a.startsWith("--raw=")) return a.slice("--raw=".length);
+  }
+  return null;
+}
+
 function kubectlRead(args: readonly string[]): boolean {
   const verb = leadingVerb(args, KUBECTL_REMOTE_READS, KUBECTL_REMOTE_GROUP_READS);
   if (verb === null) return false;
   if (verb === "cluster-info" && args.includes("dump")) return false;
   if (verb === "view" && hasFlag(args, [], ["--raw"])) return false;
+  const rawPath = rawFlagValue(args);
+  if (rawPath !== null && /secret/i.test(rawPath)) return false;
   const cmd = ["kubectl", ...args].join(" ");
   return (
     classifyTier(cmd).tier === "read" &&
@@ -156,7 +168,7 @@ const REMOTE_READS: Record<string, (args: readonly string[]) => boolean> = {
   lspci: any, lsusb: any, lsblk: any, findmnt: any, df: any, du: any, free: any,
   ps: any, pgrep: any, lsof: any, w: any, who: any, last: any, getent: any,
   ls: any, cat: any, zcat: any, head: any, wc: any, stat: any, readlink: any,
-  realpath: any, grep: any, egrep: any, fgrep: any, zgrep: any, cut: any, jq: any,
+  realpath: any, grep: any, egrep: any, fgrep: any, cut: any, jq: any,
   md5sum: any, sha256sum: any, echo: any, pwd: any, nslookup: any, host: any, netstat: any,
   hostname: (a) => a.every((x) => HOSTNAME_FLAGS.has(x)),
   file: (a) => !hasFlag(a, ["C"], ["--compile"]),

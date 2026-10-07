@@ -1,4 +1,6 @@
-export type ShellToken = { kind: "word"; value: string } | { kind: "op"; value: string };
+export type ShellToken =
+  | { kind: "word"; value: string; unquotedGlob?: boolean }
+  | { kind: "op"; value: string };
 
 export interface ShellParse {
   tokens: ShellToken[];
@@ -7,8 +9,11 @@ export interface ShellParse {
 
 export interface ShellSegment {
   words: string[];
+  wordGlobs: boolean[];
   redirects: { op: string; target: string | null }[];
 }
+
+const GLOB_CHARS = new Set(["*", "?", "[", "]", "{", "}", "~"]);
 
 export class ShellParseError extends Error {}
 
@@ -21,11 +26,13 @@ export function tokenizeShell(input: string): ShellParse {
   let buf = "";
   let inWord = false;
   let quoted = false;
+  let hadGlob = false;
   const flush = () => {
-    if (inWord) tokens.push({ kind: "word", value: buf });
+    if (inWord) tokens.push({ kind: "word", value: buf, unquotedGlob: hadGlob });
     buf = "";
     inWord = false;
     quoted = false;
+    hadGlob = false;
   };
 
   let i = 0;
@@ -104,6 +111,7 @@ export function tokenizeShell(input: string): ShellParse {
     }
     buf += c;
     inWord = true;
+    if (GLOB_CHARS.has(c)) hadGlob = true;
     i++;
   }
   flush();
@@ -112,10 +120,10 @@ export function tokenizeShell(input: string): ShellParse {
 
 export function splitSegments(tokens: ShellToken[]): ShellSegment[] {
   const out: ShellSegment[] = [];
-  let cur: ShellSegment = { words: [], redirects: [] };
+  let cur: ShellSegment = { words: [], wordGlobs: [], redirects: [] };
   const push = () => {
     if (cur.words.length || cur.redirects.length) out.push(cur);
-    cur = { words: [], redirects: [] };
+    cur = { words: [], wordGlobs: [], redirects: [] };
   };
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i]!;
@@ -131,6 +139,7 @@ export function splitSegments(tokens: ShellToken[]): ShellSegment[] {
       continue;
     }
     cur.words.push(t.value);
+    cur.wordGlobs.push(t.unquotedGlob ?? false);
   }
   push();
   return out;
