@@ -1,8 +1,10 @@
 // The worker's only line to the local Rigel server: bootstrap config, and the
 // SAME /api/action route the ConfirmSheet uses (identical execution + guards).
 import type { SuggestedAction } from "@rigel/k8s/src/actionBlocks";
+import type { VoiceJob } from "@rigel/server/src/voiceDispatch";
 import type { RepoLink } from "@rigel/k8s/src/gitSources";
 import type { RepoFixResult } from "@rigel/k8s/src/repoFix";
+import { createSseParser } from "./dispatch.js";
 
 /** What the propose-fix route answers with, plus what adoption committed. */
 export interface ProposeFixResult extends RepoFixResult {
@@ -77,6 +79,7 @@ export interface RelatedResources {
 
 export interface ServerClient {
   agentConfig(): Promise<AgentConfig>;
+  jobs(idleMs?: number): Promise<AsyncIterable<VoiceJob>>;
   /** Every resource belonging to one app, found the way the app itself was
    *  labelled rather than by a selector the model guessed at. */
   relatedResources(
@@ -130,6 +133,31 @@ export function createServerClient(
       }
       if (!res.ok) throw new Error(`agent-config failed: ${res.status}`);
       return (await res.json()) as AgentConfig;
+    },
+    async jobs(idleMs = 45_000) {
+      const abort = new AbortController();
+      const idle = setTimeout(() => abort.abort(), idleMs);
+      const res = await fetchFn(`${base}/api/voice/dispatch`, { headers: headers(), signal: abort.signal });
+      if (!res.ok || !res.body) {
+        clearTimeout(idle);
+        throw new Error(`dispatch failed: ${res.status}`);
+      }
+      const body = res.body;
+      return (async function* () {
+        const parse = createSseParser();
+        const decoder = new TextDecoder();
+        try {
+          for await (const chunk of body) {
+            idle.refresh();
+            for (const ev of parse(decoder.decode(chunk, { stream: true }))) {
+              if (ev.event === "job") yield JSON.parse(ev.data) as VoiceJob;
+            }
+          }
+        } finally {
+          clearTimeout(idle);
+          abort.abort();
+        }
+      })();
     },
     async relatedResources(name, namespace, context, kind) {
       const query = new URLSearchParams({ name, namespace, kind: kind ?? "deployment" });

@@ -30,6 +30,49 @@ describe("createServerClient", () => {
     expect((err as Error).message).toMatch(/apiSecret, openrouterApiKey/);
   });
 
+  test("jobs holds the dispatch stream open with the worker + session headers and yields each job", async () => {
+    const job = { room: "rigel-desktop-0a1b2c3d", role: "desktop", clientIdentity: "rigel-desktop", context: "prod", config: {} };
+    const text = `: ping\n\nevent: job\ndata: ${JSON.stringify(job)}\n\n`;
+    const half = Math.floor(text.length / 2);
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(text.slice(0, half)));
+        controller.enqueue(new TextEncoder().encode(text.slice(half)));
+        controller.close();
+      },
+    });
+    const f = vi.fn(async () => new Response(body, { status: 200 })) as unknown as typeof fetch;
+    const c = createServerClient(BASE, "sess", "wt", f);
+    const seen: unknown[] = [];
+    for await (const j of await c.jobs()) seen.push(j);
+    expect(seen).toEqual([job]);
+    const [urlArg, init] = (f as unknown as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(urlArg).toBe(`${BASE}/api/voice/dispatch`);
+    expect((init as RequestInit).headers).toMatchObject({
+      "x-rigel-session": "sess",
+      "x-rigel-voice-worker": "wt",
+    });
+  });
+
+  test("jobs throws when the server refuses the stream", async () => {
+    const c = createServerClient(BASE, "sess", "wt", fakeFetch(404, { error: "voice is disabled" }));
+    await expect(c.jobs()).rejects.toThrow("404");
+  });
+
+  test("jobs gives up on a stream that goes silent past the idle limit", async () => {
+    const f = vi.fn(async (_url: string, init: RequestInit) => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          init.signal?.addEventListener("abort", () => controller.error(new Error("aborted")));
+        },
+      });
+      return new Response(body, { status: 200 });
+    }) as unknown as typeof fetch;
+    const c = createServerClient(BASE, "sess", "wt", f);
+    const jobs = await c.jobs(20);
+    await expect((async () => { for await (const _ of jobs) { /* none */ } })()).rejects.toThrow("aborted");
+  });
+
   test("previewAction posts to /api/action?preview=1 with the context header", async () => {
     const f = fakeFetch(200, { command: ["kubectl", "--context", "prod", "rollout", "restart", "deployment/web"] });
     const c = createServerClient(BASE, "sess", "wt", f);

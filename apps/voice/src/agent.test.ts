@@ -86,6 +86,9 @@ function fakeServer(overrides: Partial<ServerClient> = {}): FakeServer {
     agentConfig: async () => {
       throw new Error("not used");
     },
+    jobs: async () => {
+      throw new Error("not used");
+    },
     previewAction: async (action) => {
       previews.push(action);
       return ["kubectl", "--context", "prod", "rollout", "restart", "deployment/web"];
