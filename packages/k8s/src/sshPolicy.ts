@@ -55,29 +55,56 @@ export function parseSshHostsEnv(value: string | undefined): string[] {
 
 function hasFlag(args: readonly string[], short: string[], long: string[]): boolean {
   return args.some((a) => {
-    if (a.startsWith("--")) return long.some((l) => a === l || a.startsWith(`${l}=`));
+    if (a.startsWith("--")) {
+      const name = a.split("=", 1)[0]!;
+      return name.length > 2 && long.some((l) => l.startsWith(name));
+    }
     if (a.startsWith("-") && a.length > 1) return short.some((s) => a.slice(1).includes(s));
     return false;
   });
 }
 
-const positionals = (args: readonly string[]) => args.filter((a) => !a.startsWith("-"));
+function positionals(args: readonly string[]): string[] {
+  const end = args.indexOf("--");
+  const before = end < 0 ? args : args.slice(0, end);
+  const after = end < 0 ? [] : args.slice(end + 1);
+  return [...before.filter((a) => a === "-" || !a.startsWith("-")), ...after];
+}
+
+function lookup<T>(table: Record<string, T>, key: string | undefined): T | undefined {
+  return key !== undefined && Object.hasOwn(table, key) ? table[key] : undefined;
+}
+
+function leadingVerb(args: readonly string[], reads: Set<string>, groups: Record<string, Set<string>>): string | null {
+  const [first, second] = args;
+  if (first === undefined) return null;
+  const group = lookup(groups, first);
+  if (!group) return reads.has(first) ? first : null;
+  return second !== undefined && group.has(second) ? second : null;
+}
+
 const any = () => true;
-const noPositional = (args: readonly string[]) => positionals(args).length === 0;
-const subIn = (set: Set<string>, allowNone = false) => (args: readonly string[]) => {
-  const sub = positionals(args)[0];
-  return sub === undefined ? allowNone : set.has(sub);
-};
+const subIn = (set: Set<string>, allowNone = false) => (args: readonly string[]) =>
+  args[0] === undefined ? allowNone : set.has(args[0]);
 const countedSampler = (args: readonly string[]) => positionals(args).length !== 1;
 
 const SYSTEMCTL_READS = new Set([
   "status", "is-active", "is-enabled", "is-failed", "list-units", "list-unit-files",
   "list-timers", "list-sockets", "list-dependencies", "show", "cat",
 ]);
+const SYSTEMCTL_BARE_FLAGS = new Set(["--failed", "--all", "-a", "--no-pager", "--plain", "--no-legend"]);
+const HOSTNAME_FLAGS = new Set([
+  "-f", "-s", "-i", "-I", "-d", "-A", "--fqdn", "--short", "--long", "--all-ip-addresses", "--all-fqdns", "--domain", "--ip-address",
+]);
 const IP_OBJECTS = new Set(["addr", "address", "a", "link", "l", "route", "r", "neigh", "n", "rule", "ru"]);
+const IP_READ_VERBS = new Set(["show", "list", "ls", "get"]);
+const IP_LEADING_FLAGS = new Set([
+  "-s", "-4", "-6", "-j", "-p", "-br", "-c", "-d", "-o", "-stats", "-brief", "-json", "-details", "-color", "-pretty",
+]);
+const ZPOOL_READS = subIn(new Set(["status", "list"]));
 const FIND_ACTIONS = new Set(["-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0", "-fprintf", "-fls"]);
 const CRICTL_READS = new Set(["ps", "pods", "logs", "inspect", "inspectp", "inspecti", "images", "img", "stats", "statsp", "info", "version"]);
-const DOCKER_READS = new Set(["ps", "logs", "inspect", "images", "version", "info", "top", "port", "diff", "history"]);
+const DOCKER_READS = new Set(["ps", "logs", "inspect", "images", "version", "info", "top", "port", "diff", "history", "stats"]);
 const DOCKER_GROUP_READS: Record<string, Set<string>> = {
   container: new Set(["ls", "ps", "list", "inspect", "logs", "top", "port", "diff"]),
   image: new Set(["ls", "list", "inspect", "history"]),
@@ -87,23 +114,35 @@ const DOCKER_GROUP_READS: Record<string, Set<string>> = {
   compose: new Set(["ps", "logs", "config", "images", "ls", "top", "version"]),
 };
 
+const KUBECTL_REMOTE_READS = new Set([
+  "get", "describe", "logs", "top", "version", "api-resources", "api-versions", "cluster-info", "explain", "events",
+]);
+const KUBECTL_REMOTE_GROUP_READS: Record<string, Set<string>> = {
+  auth: new Set(["can-i", "whoami"]),
+  rollout: new Set(["status", "history"]),
+  config: new Set(["view", "get-contexts", "current-context"]),
+};
+
 function dockerRead(args: readonly string[]): boolean {
-  const [sub, sub2] = positionals(args);
-  if (sub === undefined) return false;
-  if (sub === "stats") return hasFlag(args, [], ["--no-stream"]);
-  const group = DOCKER_GROUP_READS[sub];
-  const verb = group ? sub2 : sub;
-  if (verb === undefined || !(group ? group.has(verb) : DOCKER_READS.has(verb))) return false;
-  return verb !== "logs" || !hasFlag(args, ["f"], ["--follow"]);
+  const verb = leadingVerb(args, DOCKER_READS, DOCKER_GROUP_READS);
+  if (verb === null) return false;
+  if (verb === "stats") return hasFlag(args, [], ["--no-stream"]);
+  if (verb === "logs") return !hasFlag(args, ["f"], ["--follow"]);
+  if (verb === "config") return !hasFlag(args, ["o"], ["--output"]);
+  return true;
 }
 
 function crictlRead(args: readonly string[]): boolean {
-  const sub = positionals(args)[0];
+  const sub = args[0];
   if (sub === undefined || !CRICTL_READS.has(sub)) return false;
   return sub !== "logs" || !hasFlag(args, ["f"], ["--follow"]);
 }
 
 function kubectlRead(args: readonly string[]): boolean {
+  const verb = leadingVerb(args, KUBECTL_REMOTE_READS, KUBECTL_REMOTE_GROUP_READS);
+  if (verb === null) return false;
+  if (verb === "cluster-info" && args.includes("dump")) return false;
+  if (verb === "view" && hasFlag(args, [], ["--raw"])) return false;
   const cmd = ["kubectl", ...args].join(" ");
   return (
     classifyTier(cmd).tier === "read" &&
@@ -116,10 +155,11 @@ const REMOTE_READS: Record<string, (args: readonly string[]) => boolean> = {
   uptime: any, uname: any, whoami: any, id: any, nproc: any, lscpu: any, lsmem: any,
   lspci: any, lsusb: any, lsblk: any, findmnt: any, df: any, du: any, free: any,
   ps: any, pgrep: any, lsof: any, w: any, who: any, last: any, getent: any,
-  ls: any, cat: any, zcat: any, head: any, wc: any, stat: any, file: any, readlink: any,
+  ls: any, cat: any, zcat: any, head: any, wc: any, stat: any, readlink: any,
   realpath: any, grep: any, egrep: any, fgrep: any, zgrep: any, cut: any, jq: any,
   md5sum: any, sha256sum: any, echo: any, pwd: any, nslookup: any, host: any, netstat: any,
-  hostname: noPositional,
+  hostname: (a) => a.every((x) => HOSTNAME_FLAGS.has(x)),
+  file: (a) => !hasFlag(a, ["C"], ["--compile"]),
   dig: (a) => !hasFlag(a, ["f"], []),
   mount: (a) => a.length === 0,
   date: (a) => a.every((x) => x.startsWith("+") || ["-u", "--utc", "-R", "-I", "--iso-8601"].includes(x)),
@@ -130,18 +170,20 @@ const REMOTE_READS: Record<string, (args: readonly string[]) => boolean> = {
   uniq: (a) => positionals(a).length <= 1,
   find: (a) => !a.some((x) => FIND_ACTIONS.has(x)),
   top: (a) => hasFlag(a, ["b"], []) && hasFlag(a, ["n"], []),
-  ping: (a) => hasFlag(a, ["c"], ["--count"]),
-  ss: (a) => !hasFlag(a, ["K"], ["--kill"]),
+  ping: (a) => hasFlag(a, ["c"], ["--count"]) && !hasFlag(a, ["f"], []),
+  ss: (a) => !hasFlag(a, ["K", "D"], ["--kill", "--diag"]),
   ip: (a) => {
-    const [obj, verb] = positionals(a);
-    return obj !== undefined && IP_OBJECTS.has(obj) && (verb === undefined || ["show", "list", "ls", "get"].includes(verb));
+    let i = 0;
+    while (i < a.length && IP_LEADING_FLAGS.has(a[i]!)) i++;
+    const [obj, verb] = a.slice(i);
+    return obj !== undefined && IP_OBJECTS.has(obj) && (verb === undefined || IP_READ_VERBS.has(verb));
   },
   journalctl: (a) =>
     !hasFlag(a, ["f"], [
       "--follow", "--vacuum-size", "--vacuum-time", "--vacuum-files", "--rotate", "--flush", "--sync",
-      "--relinquish-var", "--smart-relinquish-var", "--update-catalog", "--setup-keys",
+      "--relinquish-var", "--smart-relinquish-var", "--update-catalog", "--setup-keys", "--cursor-file",
     ]),
-  systemctl: subIn(SYSTEMCTL_READS, true),
+  systemctl: (a) => (a[0] !== undefined && SYSTEMCTL_READS.has(a[0])) || a.every((x) => SYSTEMCTL_BARE_FLAGS.has(x)),
   timedatectl: subIn(new Set(["status", "show"]), true),
   hostnamectl: subIn(new Set(["status", "show"]), true),
   dmesg: (a) =>
@@ -155,7 +197,7 @@ const REMOTE_READS: Record<string, (args: readonly string[]) => boolean> = {
     a[0] === "--version" || a[0] === "-v" || a[0] === "check-config" ||
     (a[0] === "kubectl" && kubectlRead(a.slice(1))) ||
     (a[0] === "crictl" && crictlRead(a.slice(1))),
-  zpool: subIn(new Set(["status", "list"])),
+  zpool: (a) => ZPOOL_READS(a) && !hasFlag(a, ["c"], []),
   zfs: subIn(new Set(["list", "get"])),
   smartctl: (a) => !hasFlag(a, ["t", "s", "o", "S", "X"], ["--test", "--smart", "--offlineauto", "--saveauto", "--abort", "--set"]),
 };
@@ -169,6 +211,14 @@ function redirectIsSafe({ op, target }: ShellSegment["redirects"][number]): bool
   return SAFE_OUTPUT_OPS.has(op) && target === "/dev/null";
 }
 
+const READ_HEAD_DIRS = new Set(["/usr/bin", "/bin", "/usr/sbin", "/sbin"]);
+
+function commandName(head: string): string | null {
+  const slash = head.lastIndexOf("/");
+  if (slash < 0) return head;
+  return READ_HEAD_DIRS.has(head.slice(0, slash)) ? head.slice(slash + 1) : null;
+}
+
 function segmentIsRead(seg: ShellSegment, depth: number): boolean {
   if (!seg.redirects.every(redirectIsSafe)) return false;
   let words = seg.words;
@@ -178,16 +228,17 @@ function segmentIsRead(seg: ShellSegment, depth: number): boolean {
   }
   const [head, ...args] = words;
   if (head === undefined || /^[A-Za-z_][A-Za-z0-9_]*=/.test(head)) return false;
-  const name = head.slice(head.lastIndexOf("/") + 1);
+  const name = commandName(head);
+  if (name === null) return false;
   if (name === "sh" || name === "bash") {
     return args.length === 2 && args[0] === "-c" && remoteIsRead(args[1]!, depth + 1);
   }
-  const rule = REMOTE_READS[name];
+  const rule = lookup(REMOTE_READS, name);
   return rule ? rule(args) : false;
 }
 
 function remoteIsRead(command: string, depth = 0): boolean {
-  if (depth > 3) return false;
+  if (depth > 3 || /[()]/.test(command)) return false;
   let parsed;
   try {
     parsed = tokenizeShell(command);
@@ -230,7 +281,11 @@ export function classifySsh(argv: readonly string[], enabledHosts: readonly stri
   const dest = argv[i];
   if (dest === undefined) return deny(INTERACTIVE_HINT);
   if (dest.includes("://")) return deny("Use the host's alias from ~/.ssh/config, not an ssh:// URL.");
-  const host = dest.slice(dest.lastIndexOf("@") + 1);
+  const at = dest.lastIndexOf("@");
+  if (at >= 0 && !/^[A-Za-z0-9._-]+$/.test(dest.slice(0, at))) {
+    return deny("The user part of an SSH destination can only contain letters, digits, dots, underscores and hyphens.");
+  }
+  const host = dest.slice(at + 1);
   if (!enabledHosts.includes(host)) return deny(hostHint(host, enabledHosts));
   const remote = argv.slice(i + 1).join(" ").trim();
   if (!remote) return deny(INTERACTIVE_HINT);
