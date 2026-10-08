@@ -85,6 +85,7 @@ export interface AiActionSubject {
   node?: string;
   namespace?: string;
   resourceKind?: string;
+  host?: string;
 }
 
 export interface AiActionInput {
@@ -126,6 +127,7 @@ const KIND_LABELS: Record<string, string> = {
   label: "Labelled",
   linkCatalogApp: "Linked",
   command: "Ran command",
+  sshCommand: "Ran on host",
   applyManifest: "Applied",
   proposeRepoFix: "Proposed fix",
 };
@@ -151,6 +153,8 @@ function targetFor(a: AiActionSubject): AiActionTarget {
       return { kind: "Namespace", name: targetName(a), namespace: "" };
     case "deletePod":
       return { kind: "Pod", name: a.pod ?? "", namespace };
+    case "sshCommand":
+      return { kind: "Host", name: a.host ?? "", namespace: "" };
     case "suspendCronJob":
     case "resumeCronJob":
     case "triggerCronJob":

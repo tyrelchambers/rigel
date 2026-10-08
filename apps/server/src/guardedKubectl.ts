@@ -11,14 +11,25 @@
 // that tells the model to raise an action block). This module is reused by every
 // future non-Claude runner — it adds NO policy of its own.
 import { spawn } from "node:child_process";
+import { existsSync, realpathSync } from "node:fs";
 import { mkdtemp, writeFile, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { classifyCommand, type CommandVerdict } from "@rigel/k8s";
+import {
+  classifyCommand,
+  classifySsh,
+  parseSshHostsEnv,
+  SSH_BATCH_ARGS,
+  SSH_INDIRECT_HINT,
+  SSH_TRANSFER_TOOLS,
+  type CommandVerdict,
+} from "@rigel/k8s";
 
 /**
- * Pure decision core. Reconstructs the command the agent asked to run as
+ * Pure decision core. ssh is classified on its exact argv by classifySsh, and the
+ * file-transfer tools (scp, rsync, …) are always denied. For kubectl/helm it
+ * reconstructs the command the agent asked to run as
  * `[logicalName, ...userArgs].join(" ")` and defers to the shared policy. The
  * reconstruction is safe here because the shim only ever receives ONE already-split
  * invocation (no pipes/chains across argv), and the policy biases to deny on any
@@ -30,35 +41,46 @@ import { classifyCommand, type CommandVerdict } from "@rigel/k8s";
  * master's classifyCommand, this becomes a one-line change (thread the active context
  * through to classifyCommand).
  */
-export function guardVerdict(logicalName: string, userArgs: string[]): CommandVerdict {
+export function guardVerdict(logicalName: string, userArgs: string[], sshHosts: readonly string[] = []): CommandVerdict {
+  if (SSH_TRANSFER_TOOLS.includes(logicalName)) return { decision: "deny", reason: SSH_INDIRECT_HINT };
+  if (logicalName === "ssh") {
+    const v = classifySsh(userArgs, sshHosts);
+    return { decision: v.decision === "read" ? "allow" : "deny", reason: v.reason };
+  }
   const cmd = [logicalName, ...userArgs].join(" ");
   return classifyCommand(cmd);
 }
 
+export function guardExecArgs(logicalName: string, userArgs: string[]): string[] {
+  return logicalName === "ssh" ? [...SSH_BATCH_ARGS, ...userArgs] : userArgs;
+}
+
 /**
- * Shim entry. argv layout = `[logicalName, realBinaryPath, ...userArgs]`:
- *   - logicalName: "kubectl" | "helm" (what the agent typed),
- *   - realBinaryPath: absolute path to the genuine binary (resolved at provision time).
+ * Shim entry. argv layout = `[logicalName, realBinaryPath, sshHosts, ...userArgs]`:
+ *   - logicalName: "kubectl" | "helm" | "ssh" | an ssh transfer tool (what the agent typed),
+ *   - realBinaryPath: absolute path to the genuine binary (resolved at provision time),
+ *   - sshHosts: the comma-joined hosts enabled for this turn, baked in at provision time
+ *     so the agent's shell can't widen them through the environment.
  * Allowed reads exec the real binary (stdio inherited, exit code forwarded); denied
  * mutations write the steering reason to stderr and exit 1 WITHOUT running anything.
  */
 export function runGuard(argv: string[]): Promise<number> {
-  const [logicalName, realBinaryPath, ...userArgs] = argv;
-  if (!logicalName || !realBinaryPath) {
+  const [logicalName, realBinaryPath, sshHosts, ...userArgs] = argv;
+  if (!logicalName || !realBinaryPath || sshHosts === undefined) {
     process.stderr.write(
-      "guarded-kubectl: usage: <logicalName> <realBinaryPath> [args…]\n",
+      "guarded-kubectl: usage: <logicalName> <realBinaryPath> <sshHosts> [args…]\n",
     );
     return Promise.resolve(2);
   }
 
-  const verdict = guardVerdict(logicalName, userArgs);
+  const verdict = guardVerdict(logicalName, userArgs, parseSshHostsEnv(sshHosts));
   if (verdict.decision === "deny") {
     process.stderr.write(verdict.reason + "\n");
     return Promise.resolve(1);
   }
 
   return new Promise<number>((resolve) => {
-    const child = spawn(realBinaryPath, userArgs, { stdio: "inherit" });
+    const child = spawn(realBinaryPath, guardExecArgs(logicalName, userArgs), { stdio: "inherit" });
     child.on("error", (err) => {
       process.stderr.write(`guarded-kubectl: failed to exec ${realBinaryPath}: ${err.message}\n`);
       resolve(127);
@@ -108,8 +130,18 @@ async function whichBinary(name: string): Promise<string | null> {
   });
 }
 
-/** One wrapper script: exec the guard entry with (logicalName, realBinaryPath, "$@"). */
-export function wrapperScript(runner: string, logicalName: string, realBinaryPath: string): string {
+export function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
+/** One wrapper script: exec the guard entry with (logicalName, realBinaryPath, sshHosts, "$@"). */
+export function wrapperScript(
+  runner: string,
+  logicalName: string,
+  realBinaryPath: string,
+  sshHosts: readonly string[],
+): string {
+  const hosts = shellQuote(sshHosts.filter((h) => !h.includes(",")).join(","));
   // logicalName + realBinaryPath are single-quoted so spaces in install paths
   // (e.g. "/Applications/My App.app/…", "Application Support") don't word-split.
   // ${runner} stays unquoted — it is intentionally multi-word (e.g.
@@ -118,18 +150,19 @@ export function wrapperScript(runner: string, logicalName: string, realBinaryPat
   return `#!/bin/sh
 # Auto-generated guarded shim for \`${logicalName}\` — routes through Rigel's command
 # policy (apps/server/src/guardedKubectl.ts). Reads run; cluster mutations are denied.
-exec ${runner} '${logicalName}' '${realBinaryPath}' "$@"
+exec ${runner} '${logicalName}' '${realBinaryPath}' ${hosts} "$@"
 `;
 }
 
 /**
- * Materialize the guarded shim dir. Writes executable `kubectl` (and `helm` if it's
- * installed) wrappers into a fresh OS-temp dir (NOT inside any workspace). The Codex
- * runner prepends the returned dir to its subprocess PATH so every kubectl/helm the
- * agent execs resolves to a wrapper. Throws if kubectl can't be found — without it
- * there's nothing to guard. helm is optional and only wrapped when present.
+ * Materialize the guarded shim dir. Writes an executable `kubectl` wrapper, plus
+ * `helm`, `ssh` and the ssh transfer tools when installed, into a fresh OS-temp
+ * dir (NOT inside any workspace). The Codex runner prepends the returned dir to
+ * its subprocess PATH so every guarded binary the agent execs resolves to a
+ * wrapper. Throws if kubectl can't be found — without it there's nothing to
+ * guard. helm, ssh and the transfer tools are optional and only wrapped when present.
  */
-export async function provisionGuardBin(): Promise<string> {
+export async function provisionGuardBin(sshHosts: readonly string[]): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "rigel-guard-"));
   const runner = guardRunnerCommand();
 
@@ -139,10 +172,15 @@ export async function provisionGuardBin(): Promise<string> {
       "guarded-kubectl: `kubectl` was not found on PATH — cannot provision the guarded shim.",
     );
   }
-  await writeWrapper(dir, runner, "kubectl", kubectlReal);
+  await writeWrapper(dir, runner, "kubectl", kubectlReal, sshHosts);
 
   const helmReal = await whichBinary("helm");
-  if (helmReal) await writeWrapper(dir, runner, "helm", helmReal);
+  if (helmReal) await writeWrapper(dir, runner, "helm", helmReal, sshHosts);
+
+  for (const name of ["ssh", ...SSH_TRANSFER_TOOLS]) {
+    const real = await whichBinary(name);
+    if (real) await writeWrapper(dir, runner, name, real, sshHosts);
+  }
 
   return dir;
 }
@@ -152,14 +190,15 @@ async function writeWrapper(
   runner: string,
   logicalName: string,
   realBinaryPath: string,
+  sshHosts: readonly string[],
 ): Promise<void> {
   const path = join(dir, logicalName);
-  await writeFile(path, wrapperScript(runner, logicalName, realBinaryPath));
+  await writeFile(path, wrapperScript(runner, logicalName, realBinaryPath, sshHosts));
   await chmod(path, 0o755);
 }
 
 // Run as the shim only when executed directly (not when imported by tests).
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+if (process.argv[1] && existsSync(process.argv[1]) && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])) {
   runGuard(process.argv.slice(2)).then(
     (code) => process.exit(code),
     (err) => {

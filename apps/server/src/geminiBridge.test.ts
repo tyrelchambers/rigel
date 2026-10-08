@@ -305,3 +305,8 @@ describe("runGemini (fake gemini on PATH)", () => {
     await rm(emptyDir, { recursive: true, force: true });
   });
 });
+
+test("buildGeminiArgs passes enabled ssh hosts into the system prompt", () => {
+  const argv = buildGeminiArgs("hi", "prod", { sshHosts: ["web-1"] });
+  expect(argv.some((a) => a.includes("SSH HOSTS") && a.includes("`web-1`"))).toBe(true);
+});

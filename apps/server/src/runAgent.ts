@@ -7,6 +7,7 @@ import { runGemini } from "./geminiBridge";
 import { runOpencode } from "./opencodeBridge";
 import { getAgent } from "./agentRegistry";
 import { readAgentsConfig } from "./agentConfig";
+import { enabledSshHosts } from "./ssh";
 
 export async function* runAgent(
   prompt: string,
@@ -16,24 +17,25 @@ export async function* runAgent(
 ): AsyncGenerator<ChatEvent> {
   const { activeAgentId } = await readAgentsConfig(context);
   const agent = getAgent(activeAgentId);
+  const runOpts: RunClaudeOpts = { ...opts, sshHosts: await enabledSshHosts() };
 
   if (agent?.id === "claude") {
-    yield* runClaude(prompt, context, signal, opts);
+    yield* runClaude(prompt, context, signal, runOpts);
     return;
   }
 
   if (agent?.id === "codex") {
-    yield* runCodex(prompt, context, signal, opts);
+    yield* runCodex(prompt, context, signal, runOpts);
     return;
   }
 
   if (agent?.id === "gemini") {
-    yield* runGemini(prompt, context, signal, opts);
+    yield* runGemini(prompt, context, signal, runOpts);
     return;
   }
 
   if (agent?.id === "opencode") {
-    yield* runOpencode(prompt, context, signal, opts);
+    yield* runOpencode(prompt, context, signal, runOpts);
     return;
   }
 

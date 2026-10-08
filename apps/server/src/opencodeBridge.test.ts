@@ -312,3 +312,8 @@ describe("runOpencode (fake opencode on PATH)", () => {
     await rm(fakeDir, { recursive: true, force: true });
   });
 });
+
+test("buildOpencodeArgs passes enabled ssh hosts into the system prompt", () => {
+  const argv = buildOpencodeArgs("hi", "prod", { sshHosts: ["web-1"] }, "/tmp/rigel-opencode-fake");
+  expect(argv[argv.length - 1]).toContain("`web-1`");
+});

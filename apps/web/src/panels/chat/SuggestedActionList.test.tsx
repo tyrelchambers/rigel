@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import type { SuggestedAction } from "@/lib/actionBlocks";
 import { SuggestedActionList } from "./SuggestedActionList";
+import { isBatchable } from "./chatLogic";
 
 afterEach(cleanup);
 
@@ -48,5 +49,27 @@ describe("SuggestedActionList batch selection", () => {
     render(<SuggestedActionList actions={[act("A"), act("B")]} onAction={onAction} onRunBatch={() => {}} />);
     fireEvent.click(screen.getByText("A"));
     expect(onAction).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("isBatchable", () => {
+  const ssh = (sudo?: boolean) =>
+    ({ kind: "sshCommand", label: "Upgrade", host: "web-1", command: "apt-get upgrade -y", sudo }) as SuggestedAction;
+
+  test.each([
+    [act("A"), true],
+    [ssh(), true],
+    [ssh(false), true],
+    [ssh(true), false],
+    [{ kind: "purge", name: "x", namespace: "default" } as SuggestedAction, false],
+    [{ kind: "applyManifest" } as SuggestedAction, false],
+    [{ kind: "proposeRepoFix" } as SuggestedAction, false],
+  ])("%j is batchable: %s", (action, expected) => {
+    expect(isBatchable(action)).toBe(expected);
+  });
+
+  test("a sudo ssh action gets no batch checkbox, since its password is typed in its own confirm dialog", () => {
+    render(<SuggestedActionList actions={[act("A"), act("B"), ssh(true)]} onAction={() => {}} onRunBatch={() => {}} />);
+    expect(screen.getAllByLabelText("Deselect from batch")).toHaveLength(2);
   });
 });

@@ -126,6 +126,16 @@ export function toActionBlock(action: SuggestedAction): ActionBlock {
   return action;
 }
 
+// purge (typed-name PurgeSheet), applyManifest (different endpoint),
+// proposeRepoFix (opens a PR, not a kubectl run) and a sudo sshCommand (its
+// password is typed in its own confirm dialog) can't join a sequential batch,
+// so they stay single-only.
+const NON_BATCHABLE = new Set(["purge", "applyManifest", "proposeRepoFix"]);
+
+export function isBatchable(action: SuggestedAction): boolean {
+  return !NON_BATCHABLE.has(action.kind) && !(action.kind === "sshCommand" && action.sudo === true);
+}
+
 /** Append a system message carrying a running tool-activity card. */
 export function appendToolActivity(
   messages: ChatMessage[],

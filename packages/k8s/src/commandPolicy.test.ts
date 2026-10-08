@@ -128,3 +128,151 @@ describe("printsSecretValues", () => {
     expect(classifyCommand("kubectl get secret db -o yaml", null)).toMatchObject({ decision: "allow" });
   });
 });
+
+describe("classifyCommand ssh routing and command heads", () => {
+  const hosts = ["web-1"];
+
+  test("denies ssh entirely when no hosts are passed", () => {
+    expect(classifyCommand("ssh web-1 'df -h'", "ctx").decision).toBe("deny");
+  });
+
+  test("routes a remote write to the sshCommand hint, not the kubectl hint", () => {
+    const v = classifyCommand("ssh web-1 'kubectl delete pod x'", "ctx", hosts);
+    expect(v.decision).toBe("deny");
+    expect(v.reason).toContain("sshCommand");
+  });
+
+  test.each([
+    "ssh web-1 'df -h'",
+    "ssh web-1 'docker ps' | grep api",
+    "cat ~/.ssh/config",
+    "kubectl get secrets --field-selector type=kubernetes.io/ssh-auth",
+    "echo $HOME",
+    "ls /var/log/*.log",
+    "cat /etc/*release",
+    "kubectl get pods -o jsonpath='{.items[*].metadata.name}'",
+    "jq '.items[] | .x'",
+    "[ -f x ] && echo y",
+    "grep -r 'ssh[ :]' /etc",
+    `timeout 20 ssh -o BatchMode=yes -o ConnectTimeout=10 web-1 'echo OK; id; uname -srm; sudo -n true 2>&1 && echo "SUDO:passwordless" || echo "SUDO:needs-password"' 2>&1`,
+    "timeout -s KILL 20 ssh web-1 uptime",
+    "nice -n 5 ssh web-1 uptime",
+    `ssh web-1 'cat /var/lib/dpkg/status' 2>&1 | awk -v RS='' '/^Package:/ { pkg=""; st=""; split($0,L,"\\n"); for(i in L){ if(L[i]~/^Package: /){pkg=substr(L[i],10)} if(L[i]~/^Status: /){st=substr(L[i],9)} } if(st!="install ok installed" && st!="deinstall ok config-files" && st!="") print st" | "pkg }'`,
+    "ssh web-1 'df -h' | awk '{print $5, $6}'",
+    "time ssh web-1 uptime",
+  ])("allows %s", (cmd) => {
+    expect(classifyCommand(cmd, "ctx", hosts).decision).toBe("allow");
+  });
+
+  test.each([
+    "kubectl --context ctx delete pod x && ssh web-1 uptime",
+    "\\ssh web-1 'rm -rf /'",
+    "s\\sh web-1 'rm -rf /'",
+    `s""sh web-1 'rm -rf /'`,
+    "k=kubectl; $k delete pod x",
+    "/usr/bin/k?bectl delete pod x",
+    "/usr/bin/ss[h] evil uptime",
+    "ss[h] prod-db 'rm -rf /'",
+    "/usr/bin/s{s,x}h web-1 uptime",
+    "{ssh,} web-1 uptime",
+    "kube[c]tl delete pod x",
+    "sudo kube[c]tl delete pod x",
+    "~kubectl get pods",
+    "cat /usr/bin/kube*",
+    "ls /opt/homebrew/bin/*",
+    "/usr/bin/kubectl delete pod x",
+    "/usr/local/bin/k get pods",
+    "/usr/bin/helm uninstall app",
+    "grep -r ssh /etc",
+    "timeout 20 ssh web-1 'rm -rf /tmp/x'",
+    "timeout 20 ssh prod-db uptime",
+    "timeout 20 ssh -L 80:localhost:80 web-1 uptime",
+    "sudo ssh web-1 uptime",
+    "env FOO=1 ssh web-1 uptime",
+    "SSH_AUTH_SOCK=/tmp/x ssh web-1 uptime",
+    "xargs ssh web-1",
+    "nohup ssh web-1 uptime",
+    "timeout 20 kube[c]tl delete pod x",
+    'ssh web-1 uptime; x=ss; eval "${x}h prod-db rm -rf /"',
+    "ssh web-1 uptime; eval $CMD",
+    'ssh web-1 uptime | awk "{print $1}"',
+  ])("denies %s", (cmd) => {
+    expect(classifyCommand(cmd, "ctx", hosts).decision).toBe("deny");
+  });
+
+  test.each(["ssh web-1 'uptime", "echo 'oops", 'kubectl get pods -l "a', "echo trailing\\"])(
+    "denies %s because it doesn't parse",
+    (cmd) => {
+      const v = classifyCommand(cmd, "ctx", hosts);
+      expect(v.decision).toBe("deny");
+      expect(v.reason).toContain("couldn't be parsed");
+    },
+  );
+});
+
+describe("unknown flag before a kubectl or helm verb", () => {
+  test.each([
+    "kubectl get pods -A",
+    "kubectl --context ctx get pods",
+    "kubectl -n x get pods -o wide",
+    "kubectl get pods --all-namespaces",
+    "kubectl --insecure-skip-tls-verify get nodes",
+    "kubectl --request-timeout=5s get pods",
+    "helm list -A",
+    "helm --kube-context ctx status x",
+  ])("%s stays a read", (cmd) => {
+    expect(classifyCommand(cmd, "ctx").decision).toBe("allow");
+  });
+
+  test.each([
+    "kubectl --field-selector get delete pod x",
+    "kubectl --foo get delete pod x",
+    "helm --foo list uninstall app",
+  ])("%s needs approval", (cmd) => {
+    const v = classifyCommand(cmd, "ctx");
+    expect(v.decision).toBe("deny");
+    expect(v.reason).toContain("can't run unattended");
+  });
+
+  test("tiers as destructive so tier-based callers never auto-run it", () => {
+    expect(classifyTier("kubectl --field-selector get delete pod x").tier).toBe("destructive");
+  });
+});
+
+describe("shell grouping and prefix commands", () => {
+  test.each([
+    "kubectl get pods -o name | xargs -I {} kubectl describe {} -n web",
+    "kubectl get pods -o name | xargs -n 1 kubectl describe",
+    "{ kubectl get pods; kubectl get svc; } | head",
+    "( kubectl get pods ) | head",
+    ":",
+    "sudo -u root kubectl get pods",
+    "timeout 5s kubectl get pods",
+    "nice -n 5 kubectl get pods",
+  ])("allows %s", (cmd) => {
+    expect(classifyCommand(cmd, "ctx", ["web-1"]).decision).toBe("allow");
+  });
+
+  test.each([
+    "(ssh web-1 uptime)",
+    "( ssh web-1 uptime )",
+    "{ ssh web-1 uptime; }",
+    "( kube[c]tl delete pod x )",
+    "{ kube[c]tl delete pod x; }",
+    "xargs -I {} ss[h] web-1 uptime",
+    "xargs -i kube[c]tl delete pod {}",
+    "xargs --replace kube[c]tl delete pod {}",
+    "{ kubectl delete pod x; }",
+    "( kubectl delete pod x )",
+    "sudo -u root kube[c]tl delete pod x",
+    "timeout 5s kube[c]tl delete pod x",
+    "timeout -s KILL 5 kube[c]tl delete pod x",
+    "nice -n 5 kube[c]tl delete pod x",
+    "env -u X kube[c]tl delete pod x",
+    "stdbuf -o L kube[c]tl delete pod x",
+    "env -S 'kubectl delete pod x'",
+    "env - kube[c]tl delete pod x",
+  ])("denies %s", (cmd) => {
+    expect(classifyCommand(cmd, "ctx", ["web-1"]).decision).toBe("deny");
+  });
+});

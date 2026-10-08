@@ -5,6 +5,7 @@ import { useAgents, useAssistantAction, type AssistantRequest } from "@/lib/api"
 import { useAssistant } from "../../assistant/useAssistant";
 import { AssistantConfigSection } from "../../assistant/agents/AssistantConfigSection";
 import { AgentsTab as ConnectAgents } from "../agents/AgentsTab";
+import { SshHostsSection } from "../SshHostsSection";
 import { VoiceSection } from "../VoiceSection";
 
 export function AiAgentsTab() {
@@ -29,6 +30,8 @@ export function AiAgentsTab() {
   return (
     <div className="space-y-8">
       <ConnectAgents />
+
+      <SshHostsSection />
 
       <section className="space-y-4">
         <div className="space-y-1">

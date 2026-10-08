@@ -17,7 +17,7 @@ Action JSON (`SuggestedAction`):
   `pause`, `resume`, `deletePod`, `deleteWorkload`, `cordon`, `uncordon`,
   `drain`, `suspendCronJob`, `resumeCronJob`, `triggerCronJob`,
   `createNamespace`, `deleteNamespace`, `deleteResource`, `annotate`, `label`,
-  `purge`, `command`.
+  `purge`, `command`, `sshCommand`.
 - Target fields (presence depends on kind):
   - `name` — controller / cronjob / namespace / resource target.
     (`deployment` is accepted as a back-compat alias; `target = name ?? deployment`.)
@@ -37,6 +37,14 @@ Action JSON (`SuggestedAction`):
   - `destructive` (bool) — `command` only: Claude's hint. App also infers from
     destructive verbs in `args` and takes the STRICTER of the two (a `false` can
     never downgrade an obviously destructive command).
+  - `host` (string) — `sshCommand` only: an SSH alias the user enabled in
+    Settings > AI agents > SSH hosts.
+  - `command` (string) — `sshCommand` only: the exact remote command. It may not
+    start with `-`.
+  - `sudo` (bool) — `sshCommand` only: run `command` as root. With `sudo: true`
+    the `command` must NOT start with `sudo ` (the app adds it); the user types
+    their sudo password in the confirm dialog (or leaves it empty when sudo
+    doesn't ask on that host). The model never supplies a password.
 
 Special kinds:
 - `purge` — full app removal. Emit `{"kind":"purge","name":<root-deployment>,"namespace":<ns>}`.
@@ -75,6 +83,27 @@ is keyed on the ACTION, not on what it hears:
   actual command tiers destructive.
 
 Additional kinds:
+- `sshCommand` — run one command on an enabled SSH host. Fields `host`,
+  `command`, optional `destructive`, optional `sudo`. The app runs
+  `ssh -T -o BatchMode=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -- <host> <command>` after the confirm sheet and
+  records it (with the exit code) in the AI action ledger. Never
+  auto-runnable: it is not in `AUTO_RUNNABLE_KINDS`, so voice always surfaces
+  it for approval.
+  With `sudo: true` the remote command is one quoted word for the login shell:
+  `sh -c 'sudo -S -p <prompt-marker> -v && printf %s <ok-marker> >&2 && exec </dev/null && sudo -n -- sh -c <command>'`.
+  `sudo -v` authenticates first and is the only process that can read the
+  password; stdin is then pointed at `/dev/null` before the command runs, so
+  nothing on the host holds the pipe afterwards. The password travels only in
+  the `action.run` WS frame's separate `secret` field (never in the action,
+  the ledger, progress frames or chat feedback) and is optional. The server
+  writes it to ssh's stdin once, only when the prompt marker appears before
+  the ok marker and before any stdout; otherwise (or with no password) stdin
+  is closed, so sudo fails with its own message. Both markers are cut from the
+  output. A sudo action runs only from the chat confirm dialog: REST
+  `/api/action` (and so voice) refuses to execute it, and batch runs skip it.
+  Caveats: hosts with sudo `timestamp_timeout=0` fail the `sudo -n` step, and
+  `sudo -v` asks for a password unless every sudoers entry for the user is
+  NOPASSWD, so a host that is NOPASSWD only for some commands still needs one.
 - `applyManifest` — install/self-host a new app. The `action` block is
   IMMEDIATELY followed by a ` ```yaml ` block; the parser attaches it as
   `manifest` and the app applies it via `kubectl apply -f -`.

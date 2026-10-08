@@ -50,8 +50,8 @@ describe("ActionProgressToast", () => {
   test("appends progress lines and they render in the output panel", () => {
     render(<ActionProgressToast id="r1" label="Delete X" />);
 
-    emit("r1", { type: "action.progress", id: "r1", line: "line one" });
-    emit("r1", { type: "action.progress", id: "r1", line: "line two" });
+    emit("r1", { type: "action.progress", id: "r1", line: "line one", stream: "stdout" });
+    emit("r1", { type: "action.progress", id: "r1", line: "line two", stream: "stdout" });
 
     expect(screen.getByText("line one")).toBeDefined();
     expect(screen.getByText("line two")).toBeDefined();
@@ -75,8 +75,8 @@ describe("ActionProgressToast", () => {
   test("action.done code 0 → done state with check and line count", () => {
     render(<ActionProgressToast id="r1" label="Delete X" />);
 
-    emit("r1", { type: "action.progress", id: "r1", line: "step 1" });
-    emit("r1", { type: "action.progress", id: "r1", line: "step 2" });
+    emit("r1", { type: "action.progress", id: "r1", line: "step 1", stream: "stdout" });
+    emit("r1", { type: "action.progress", id: "r1", line: "step 2", stream: "stdout" });
     emit("r1", { type: "action.done", id: "r1", code: 0 });
 
     expect(screen.getByText("Delete X")).toBeDefined();
@@ -89,7 +89,7 @@ describe("ActionProgressToast", () => {
   test("action.error → error state shows the message", () => {
     render(<ActionProgressToast id="r2" label="Drain node" />);
 
-    emit("r2", { type: "action.progress", id: "r2", line: "starting drain" });
+    emit("r2", { type: "action.progress", id: "r2", line: "starting drain", stream: "stdout" });
     emit("r2", { type: "action.error", id: "r2", message: "node not found" });
 
     expect(screen.getByText("Drain node")).toBeDefined();
@@ -104,6 +104,20 @@ describe("ActionProgressToast", () => {
 
     expect(screen.getByText("Scale down")).toBeDefined();
     expect(screen.getByText(/Exited with code 1/)).toBeDefined();
+  });
+
+  test("an error handed in as a prop shows the error state, with or without a prior mount", () => {
+    const { rerender } = render(<ActionProgressToast id="r5" label="Upgrade" />);
+    expect(screen.getByText("Running…")).toBeDefined();
+
+    rerender(<ActionProgressToast id="r5" label="Upgrade" error="Rigel lost its connection; run it again." />);
+    expect(screen.getByText("Rigel lost its connection; run it again.")).toBeDefined();
+    expect(screen.queryByText("Running…")).toBeNull();
+    cleanup();
+
+    render(<ActionProgressToast id="r6" label="Upgrade" error="boom" />);
+    expect(screen.getByText("boom")).toBeDefined();
+    expect(screen.queryByText(/streaming…/)).toBeNull();
   });
 
   test("dismiss button closes this toast via sonner", () => {
@@ -126,7 +140,7 @@ describe("ActionProgressToast", () => {
   test("done state: 1 line uses singular 'line'", () => {
     render(<ActionProgressToast id="r4" label="Restart" />);
 
-    emit("r4", { type: "action.progress", id: "r4", line: "restarted" });
+    emit("r4", { type: "action.progress", id: "r4", line: "restarted", stream: "stdout" });
     emit("r4", { type: "action.done", id: "r4", code: 0 });
 
     expect(screen.getByText(/Done · 1 line$/)).toBeDefined();

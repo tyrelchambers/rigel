@@ -28,6 +28,7 @@
     --color-input: var(--input);
     --color-border: var(--border);
     --color-destructive: var(--destructive);
+    --color-sudo: var(--accent-sudo);
     --color-accent-foreground: var(--accent-foreground);
     --color-accent: var(--accent);
     --color-muted-foreground: var(--muted-foreground);
@@ -61,6 +62,7 @@
  * Accent:   #38BDF8 (sky), hover #0EA5E9, soft #7DD3FC, dim = 15% alpha
  *           — accent is lighter than the surfaces, so text ON accent is dark (inverse).
  * Status:   running #10B981, pending #F59E0B, failed #EF4444
+ * Sudo:     #E879F9 (fuchsia), actions that run as root
  * Radius:   sm 4px (~0.25rem), md 6px (~0.375rem), lg 8px (~0.5rem)
  */
 :root {
@@ -106,6 +108,7 @@
     --status-running: #10b981;
     --status-pending: #f59e0b;
     --status-failed: #ef4444;
+    --accent-sudo: #e879f9;
 
     /* sidebar (nav strip) */
     --sidebar: var(--surface-sunken);
@@ -150,6 +153,7 @@
     --status-running: #10b981;
     --status-pending: #f59e0b;
     --status-failed: #ef4444;
+    --accent-sudo: #e879f9;
     --sidebar: var(--surface-sunken);
     --sidebar-foreground: var(--fg-primary);
     --sidebar-primary: var(--accent-primary);
