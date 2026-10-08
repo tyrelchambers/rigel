@@ -7,7 +7,7 @@
 // Wired via `--settings` in claudeBridge.ts (matcher: Bash). Output contract:
 //   {"hookSpecificOutput":{"hookEventName":"PreToolUse",
 //     "permissionDecision":"allow"|"deny","permissionDecisionReason":"..."}}
-import { classifyCommand, printsSecretValues, SECRET_VALUES_HINT } from "@rigel/k8s";
+import { classifyCommand, parseSshHostsEnv, printsSecretValues, SECRET_VALUES_HINT } from "@rigel/k8s";
 
 function emit(decision: "allow" | "deny", reason: string): void {
   process.stdout.write(
@@ -51,7 +51,11 @@ async function main() {
     return;
   }
 
-  const verdict = classifyCommand(command, process.env.KUBECONFIG_CONTEXT ?? null);
+  const verdict = classifyCommand(
+    command,
+    process.env.KUBECONFIG_CONTEXT ?? null,
+    parseSshHostsEnv(process.env.RIGEL_SSH_HOSTS),
+  );
   emit(verdict.decision, verdict.reason);
 }
 

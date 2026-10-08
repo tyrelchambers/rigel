@@ -42,6 +42,10 @@ vi.mock("./geminiBridge", () => ({
   }),
 }));
 
+vi.mock("./ssh", () => ({
+  enabledSshHosts: vi.fn(async () => ["web-1"]),
+}));
+
 let fake: FakeClusterConfig;
 /** The agents config lives in the cluster, so routing reads it per context. */
 const CTX = "test-cluster";
@@ -82,7 +86,7 @@ test("active agent codex routes to the codex runner, not the 'not available' pat
   // spy because `codex` can be resolvable on this machine, so a real spawn would
   // not reliably produce a spawn error to match on.
   expect(runCodex).toHaveBeenCalledTimes(1);
-  expect(runCodex).toHaveBeenCalledWith("hi", CTX, undefined, undefined);
+  expect(runCodex).toHaveBeenCalledWith("hi", CTX, undefined, { sshHosts: ["web-1"] });
   // And it did NOT short-circuit to the "isn't available yet" fallback.
   expect(events.some((ev) => /isn't available/i.test(ev.text ?? ""))).toBe(false);
 });
@@ -93,7 +97,7 @@ test("active agent gemini routes to the gemini runner, not the 'not available' p
   for await (const ev of runAgent("hi", CTX)) events.push(ev);
   // POSITIVE assertion: it genuinely entered the gemini runner (asserted via the spy).
   expect(runGemini).toHaveBeenCalledTimes(1);
-  expect(runGemini).toHaveBeenCalledWith("hi", CTX, undefined, undefined);
+  expect(runGemini).toHaveBeenCalledWith("hi", CTX, undefined, { sshHosts: ["web-1"] });
   expect(events.some((ev) => /isn't available/i.test(ev.text ?? ""))).toBe(false);
 });
 
@@ -105,7 +109,7 @@ test("active agent opencode routes to the opencode runner, not the 'not availabl
   // spy because `opencode` IS resolvable on this machine, so a real spawn would not
   // reliably produce a spawn error to match on.
   expect(runOpencode).toHaveBeenCalledTimes(1);
-  expect(runOpencode).toHaveBeenCalledWith("hi", CTX, undefined, undefined);
+  expect(runOpencode).toHaveBeenCalledWith("hi", CTX, undefined, { sshHosts: ["web-1"] });
   // And it did NOT short-circuit to the "isn't available yet" fallback.
   expect(events.some((ev) => /isn't available/i.test(ev.text ?? ""))).toBe(false);
 });

@@ -136,6 +136,13 @@ const variants = [
     kind: z.literal("command"),
     args: z.array(z.string()).describe("kubectl args, no binary or --context"),
   }),
+  z.object({
+    ...base,
+    kind: z.literal("sshCommand"),
+    host: z.string().describe("an enabled SSH alias"),
+    command: z.string().describe("exact remote command"),
+    sudo: z.boolean().optional().describe("true when it needs root; command then omits sudo"),
+  }),
   z.object({ ...base, kind: z.literal("applyManifest"), manifest: z.string().describe("complete manifest YAML") }),
   z.object({
     ...namespaced,

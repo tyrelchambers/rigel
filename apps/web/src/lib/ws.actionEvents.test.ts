@@ -72,10 +72,10 @@ describe("onActionEvent / routing", () => {
     const received: ActionEvent[] = [];
     const unsub = onActionEvent("run-1", (e) => received.push(e));
 
-    mockWs.onmessage!({ data: JSON.stringify({ type: "action.progress", id: "run-1", line: "hello" }) });
+    mockWs.onmessage!({ data: JSON.stringify({ type: "action.progress", id: "run-1", line: "hello", stream: "stdout" }) });
 
     expect(received).toHaveLength(1);
-    expect(received[0]).toEqual({ type: "action.progress", id: "run-1", line: "hello" });
+    expect(received[0]).toEqual({ type: "action.progress", id: "run-1", line: "hello", stream: "stdout" });
     unsub();
   });
 
@@ -152,6 +152,18 @@ describe("runAction", () => {
     expect(frame).toEqual({ type: "action.run", id: "run-42", action: testAction });
   });
 
+  it("carries a sudo secret beside the action only when one is given", () => {
+    const sudoAction: ActionBlock = { kind: "sshCommand", host: "web-1", command: "apt-get upgrade -y", sudo: true };
+    mockWs.sent = [];
+    runAction("run-43", sudoAction, "hunter2");
+    runAction("run-44", testAction);
+
+    const [withSecret, without] = mockWs.sent.map((raw) => JSON.parse(raw));
+    expect(withSecret).toEqual({ type: "action.run", id: "run-43", action: sudoAction, secret: "hunter2" });
+    expect(withSecret.action).not.toHaveProperty("secret");
+    expect(without).not.toHaveProperty("secret");
+  });
+
   it("buffers the frame if the socket is not yet OPEN and sends it on connect", () => {
     // Simulate a socket in CONNECTING state (readyState 0).
     mockWs.readyState = 0;
@@ -173,5 +185,23 @@ describe("runAction", () => {
     });
     expect(actionFrames).toHaveLength(1);
     expect(JSON.parse(actionFrames[0]!)).toEqual({ type: "action.run", id: "run-buf", action: testAction });
+  });
+
+  it("never queues a frame carrying a secret: with the socket down the run fails locally", () => {
+    const sudoAction: ActionBlock = { kind: "sshCommand", host: "web-1", command: "apt-get upgrade -y", sudo: true };
+    const received: ActionEvent[] = [];
+    const unsub = onActionEvent("run-sudo", (e) => received.push(e));
+    mockWs.readyState = 0;
+    mockWs.sent = [];
+
+    runAction("run-sudo", sudoAction, "hunter2");
+    mockWs.readyState = 1;
+    mockWs.onopen?.();
+
+    expect(received).toEqual([
+      { type: "action.error", id: "run-sudo", message: "Rigel lost its connection; run it again." },
+    ]);
+    expect(mockWs.sent.join("")).not.toContain("hunter2");
+    unsub();
   });
 });

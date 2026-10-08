@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { decideMicPermission } from "./micPermission";
+import { decidePermission } from "./permission";
 
 const OWN_ORIGIN = "http://127.0.0.1:5173";
 
-function req(overrides: Partial<Parameters<typeof decideMicPermission>[0]> = {}) {
-  return decideMicPermission({
+function req(overrides: Partial<Parameters<typeof decidePermission>[0]> = {}) {
+  return decidePermission({
     permission: "media",
     requestingUrl: `${OWN_ORIGIN}/`,
     mediaTypes: ["audio"],
@@ -14,7 +14,7 @@ function req(overrides: Partial<Parameters<typeof decideMicPermission>[0]> = {})
   });
 }
 
-describe("decideMicPermission", () => {
+describe("decidePermission: microphone", () => {
   it("grants an audio-only request from the app's own origin with voice enabled", () => {
     expect(req()).toBe(true);
   });
@@ -47,5 +47,19 @@ describe("decideMicPermission", () => {
 
   it("denies when the origin merely contains the prefix as a substring, not a real prefix match on a different port", () => {
     expect(req({ requestingUrl: "http://127.0.0.1:51730/" })).toBe(false);
+  });
+});
+
+describe("decidePermission: clipboard", () => {
+  it.each([
+    { permission: "clipboard-sanitized-write", requestingUrl: `${OWN_ORIGIN}/chat`, voiceEnabled: false, expected: true },
+    { permission: "clipboard-sanitized-write", requestingUrl: `${OWN_ORIGIN}/`, voiceEnabled: true, expected: true },
+    { permission: "clipboard-sanitized-write", requestingUrl: "https://evil.example.com/", voiceEnabled: false, expected: false },
+    { permission: "clipboard-sanitized-write", requestingUrl: "http://127.0.0.1:51730/", voiceEnabled: false, expected: false },
+    { permission: "clipboard-sanitized-write", requestingUrl: undefined, voiceEnabled: false, expected: false },
+    { permission: "clipboard-read", requestingUrl: `${OWN_ORIGIN}/`, voiceEnabled: false, expected: false },
+    { permission: "clipboard-read", requestingUrl: `${OWN_ORIGIN}/`, voiceEnabled: true, expected: false },
+  ])("$permission from $requestingUrl (voice $voiceEnabled) is $expected", ({ permission, requestingUrl, voiceEnabled, expected }) => {
+    expect(req({ permission, requestingUrl, voiceEnabled, mediaTypes: undefined })).toBe(expected);
   });
 });

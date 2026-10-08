@@ -64,6 +64,14 @@ import { parseIssueMutes } from "@rigel/k8s/src/issues/mutes";
 import { checkWorkerToken, isVoiceWorkerRequest, maskedVoiceConfig, voiceConfigPatch, voiceTokenResponse, VOICE_WORKER_HEADER, type VoiceRole } from "./voiceRoutes";
 import { createVoiceDispatch, voiceDispatchStream } from "./voiceDispatch";
 import { recordAiAction } from "./aiActionLedger";
+import {
+  enabledSshHosts,
+  listSshConfigAliases,
+  listSshHosts,
+  setEnabledSshHosts,
+  sshActionDetail,
+  sshActionResponse,
+} from "./ssh";
 import { buildAiActionEntry, summarizeActionDetail } from "@rigel/k8s/src/aiActionLedger";
 import { agentsView, setAgentAuth, setActiveAgent } from "./agentConfig";
 import { agentModels } from "./agentModels";
@@ -518,6 +526,26 @@ async function handler(req: Request): Promise<Response> {
         });
       }
 
+      if (body.kind === "sshCommand") {
+        return sshActionResponse(
+          body,
+          await enabledSshHosts(),
+          url.searchParams.get("preview") === "1",
+          ({ host, command, result }) => {
+            void recordAiAction(
+              context,
+              buildAiActionEntry({
+                action: { ...body, host },
+                source: isVoiceWorkerRequest(req) ? "voice" : "chat",
+                command,
+                outcome: result.code === 0 ? "success" : "failure",
+                detail: sshActionDetail(result.code, result.stdout, result.stderr),
+              }),
+            );
+          },
+        );
+      }
+
       let argv: string[];
       try {
         argv = buildCommand(body);
@@ -622,6 +650,24 @@ async function handler(req: Request): Promise<Response> {
         return Response.json({ error: errorText(err) }, { status: 503 });
       }
       return Response.json({ mutes });
+    }
+
+    if (url.pathname === "/api/ssh/hosts" && req.method === "GET") {
+      return Response.json({ hosts: await listSshHosts() });
+    }
+    if (url.pathname === "/api/ssh/hosts" && req.method === "PUT") {
+      let body: { enabled?: unknown };
+      try {
+        body = (await req.json()) as typeof body;
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      if (!Array.isArray(body.enabled) || !body.enabled.every((h) => typeof h === "string")) {
+        return Response.json({ error: "enabled must be a list of aliases" }, { status: 422 });
+      }
+      const known = await listSshConfigAliases();
+      await setEnabledSshHosts((body.enabled as string[]).filter((h) => known.includes(h)));
+      return Response.json({ hosts: await listSshHosts() });
     }
 
     // POST /api/voice/token: mint a fresh room for the renderer (or a phone,

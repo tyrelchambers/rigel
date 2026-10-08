@@ -68,7 +68,7 @@ export function buildOpencodeArgs(
   // OpenCode has no append-system-prompt flag, so we PREPEND our system prompt to
   // the user prompt as a single positional. It teaches the same read-only kubectl +
   // action/question/alert block contract as the other runners.
-  const fullPrompt = `${systemPrompt(context)}\n\n# User request\n${prompt}`;
+  const fullPrompt = `${systemPrompt(context, undefined, opts?.sshHosts ?? [])}\n\n# User request\n${prompt}`;
 
   // Flags shared by the fresh and resume forms. Order is irrelevant for the flags;
   // the message stays the trailing positional.
@@ -232,7 +232,7 @@ export async function* runOpencode(
   // run temp dir would leak. guardBin is only removed if it was created.
   let guardBin: string | undefined;
   try {
-    guardBin = await provisionGuardBin();
+    guardBin = await provisionGuardBin(opts?.sshHosts ?? []);
 
     const env: Record<string, string> = {
       ...(process.env as Record<string, string>),

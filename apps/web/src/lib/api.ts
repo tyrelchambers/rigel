@@ -41,6 +41,12 @@ export interface ActionBlock {
   /** linkCatalogApp only: catalog app id the workload is bound to. */
   appID?: string;
   args?: string[];
+  /** sshCommand only: an alias the user enabled from ~/.ssh/config. */
+  host?: string;
+  /** sshCommand only: the exact remote command. */
+  command?: string;
+  /** sshCommand only: run `command` as root; the confirm dialog asks for the sudo password. */
+  sudo?: boolean;
   destructive?: boolean;
   /** applyManifest only — manifest YAML applied via /api/apply. */
   manifest?: string;
@@ -1647,6 +1653,46 @@ export function useSaveVoiceConfig() {
       qc.setQueryData(["voice-config", context], data);
       qc.setQueryData(["voice-status", context], data.status);
     },
+  });
+}
+
+export interface SshHostView {
+  alias: string;
+  hostName: string;
+  user: string;
+  port: string;
+  enabled: boolean;
+}
+
+export function useSshHosts({ enabled = true }: { enabled?: boolean } = {}) {
+  return useQuery<SshHostView[], Error>({
+    queryKey: ["ssh-hosts"] as const,
+    enabled,
+    queryFn: async () => {
+      const res = await apiFetch("/api/ssh/hosts");
+      if (!res.ok) throw new Error(`ssh hosts failed: ${res.status}`);
+      return ((await res.json()) as { hosts: SshHostView[] }).hosts;
+    },
+    staleTime: 30_000,
+  });
+}
+
+export function useSetSshHosts() {
+  const qc = useQueryClient();
+  return useMutation<SshHostView[], Error, string[]>({
+    mutationFn: async (enabled) => {
+      const res = await apiFetch("/api/ssh/hosts", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(err.error ?? "failed to save SSH hosts");
+      }
+      return ((await res.json()) as { hosts: SshHostView[] }).hosts;
+    },
+    onSuccess: (hosts) => qc.setQueryData(["ssh-hosts"], hosts),
   });
 }
 

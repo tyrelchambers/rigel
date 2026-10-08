@@ -326,6 +326,46 @@ test("action.run without a context falls back to the connection's boot context",
   runSpy.mockRestore();
 });
 
+test("a malformed frame is ignored without throwing or logging its text", async () => {
+  const runSpy = vi.spyOn(ActionRunManager.prototype, "run").mockImplementation(() => {});
+  const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+  const handlers = makeWsHandlers(fakeMgr() as any, "boot-ctx");
+  const ws = fakeWs();
+  handlers.open(ws);
+
+  expect(() => handlers.message(ws, '{"type":"action.run","secret":"hunter2"')).not.toThrow();
+  expect(() => handlers.message(ws, "null")).not.toThrow();
+  await flush();
+
+  expect(runSpy).not.toHaveBeenCalled();
+  const logged = JSON.stringify([...errorSpy.mock.calls, ...warnSpy.mock.calls, ...logSpy.mock.calls]);
+  expect(logged).not.toContain("hunter2");
+  runSpy.mockRestore();
+  errorSpy.mockRestore();
+  warnSpy.mockRestore();
+  logSpy.mockRestore();
+});
+
+test("action.run hands a sudo secret to the manager beside the action, never inside it", async () => {
+  const runSpy = vi.spyOn(ActionRunManager.prototype, "run").mockImplementation(() => {});
+  const mgr = fakeMgr();
+  const handlers = makeWsHandlers(mgr as any, "boot-ctx");
+  const ws = fakeWs();
+  handlers.open(ws);
+
+  const action = { kind: "sshCommand", host: "web-1", command: "apt-get upgrade -y", sudo: true };
+  handlers.message(ws, JSON.stringify({ type: "action.run", id: "r1", action, secret: "hunter2" }));
+  handlers.message(ws, JSON.stringify({ type: "action.run", id: "r2", action, secret: 42 }));
+  await flush();
+
+  expect(runSpy).toHaveBeenNthCalledWith(1, { id: "r1", action, context: "boot-ctx", secret: "hunter2" });
+  expect(runSpy.mock.calls[1]![0].secret).toBeUndefined();
+  expect(JSON.stringify(runSpy.mock.calls[0]![0].action)).not.toContain("hunter2");
+  runSpy.mockRestore();
+});
+
 test("chat with an explicit context feeds it to runAgent instead of the boot context", async () => {
   runAgentMock.mockClear();
   const mgr = fakeMgr();

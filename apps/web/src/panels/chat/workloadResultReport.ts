@@ -37,6 +37,8 @@ export function chatFeedback(commandString: string, result: ActionResult): strin
     `Exit code: ${result.code}`,
     "Error:",
     clip(result.stderr, "(no stderr)"),
+    "Output:",
+    clip(result.stdout, "(no output)"),
     "",
     "Diagnose the failure and propose a corrected next step.",
   ].join("\n");
@@ -82,7 +84,9 @@ export function batchFeedback(ran: BatchRun[], skipped: string[]): string {
     if (result.code === 0) {
       lines.push(`• success: ${commandString}\n  output: ${clip(result.stdout, "(no output)")}`);
     } else {
-      lines.push(`• FAILED (exit ${result.code}): ${commandString}\n  error: ${clip(result.stderr, "(no stderr)")}`);
+      lines.push(
+        `• FAILED (exit ${result.code}): ${commandString}\n  error: ${clip(result.stderr, "(no stderr)")}\n  output: ${clip(result.stdout, "(no output)")}`,
+      );
     }
   }
   if (skipped.length > 0) {

@@ -356,3 +356,9 @@ test("buildClaudeArgs allowlists the Skill tool and the rigel-audit CLI", () => 
   expect(values).toContain("Skill");
   expect(values).toContain("Bash(rigel-audit *)");
 });
+
+test("buildClaudeArgs passes enabled ssh hosts into the system prompt", () => {
+  const argv = buildClaudeArgs("hi", "ctx", { sshHosts: ["web-1"] });
+  const prompt = argv[argv.indexOf("--append-system-prompt") + 1]!;
+  expect(prompt).toContain("`web-1`");
+});

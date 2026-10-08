@@ -25,6 +25,24 @@ describe("chatFeedback (model-facing, mirrors Swift WorkloadResultReport)", () =
     expect(chatFeedback("kubectl delete svc x", fail(2, ""))).toContain("(no stderr)");
   });
 
+  test("failure: includes stdout too, since apt and many ssh commands print errors there", () => {
+    const msg = chatFeedback("ssh host apt-get upgrade", {
+      code: 100,
+      stdout: "E: Could not get lock /var/lib/dpkg/lock-frontend",
+      stderr: "",
+    });
+    expect(msg).toContain("Output:\nE: Could not get lock /var/lib/dpkg/lock-frontend");
+    expect(msg).toContain("Error:\n(no stderr)");
+    expect(chatFeedback("kubectl x", fail(1, "boom"))).toContain("Output:\n(no output)");
+  });
+
+  test("failure: clips stdout and stderr at 4000 chars each", () => {
+    const msg = chatFeedback("ssh host x", { code: 1, stdout: "o".repeat(5000), stderr: "e".repeat(5000) });
+    expect(msg).not.toContain("o".repeat(4001));
+    expect(msg).not.toContain("e".repeat(4001));
+    expect(msg.match(/…\(truncated\)/g)).toHaveLength(2);
+  });
+
   test("clips output at 4000 chars", () => {
     const big = "x".repeat(5000);
     const msg = chatFeedback("kubectl get pods", ok(big));
@@ -78,6 +96,14 @@ describe("batchFeedback (mirrors Swift WorkloadResultReport.batchFeedback)", () 
     expect(msg).toContain("• kubectl rollout restart deploy/c");
     expect(msg).toContain("Diagnose the failure");
     expect(msg).not.toContain("Continue the task");
+  });
+
+  test("a failed action reports its stdout as well as its stderr", () => {
+    const msg = batchFeedback(
+      [{ commandString: "ssh host apt-get upgrade", result: { code: 100, stdout: "E: dpkg was interrupted", stderr: "" } }],
+      [],
+    );
+    expect(msg).toContain("• FAILED (exit 100): ssh host apt-get upgrade\n  error: (no stderr)\n  output: E: dpkg was interrupted");
   });
 
   test("empty stderr on failure falls back to (no stderr)", () => {
