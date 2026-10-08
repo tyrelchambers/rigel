@@ -9,6 +9,8 @@ interface Props {
   label: string;
   /** sonner toast id — lets the dismiss button close this specific toast. */
   toastId?: string | number;
+  /** A failure the runner saw, possibly before this toast mounted and subscribed. */
+  error?: string;
 }
 
 type Status = "running" | "done" | "error";
@@ -33,10 +35,10 @@ const CHIP_BG: Record<Status, string> = {
  * persists until dismissed. The component only mirrors event state; result
  * reporting is owned by actionRunner's own subscription.
  */
-export function ActionProgressToast({ id, label, toastId }: Props) {
+export function ActionProgressToast({ id, label, toastId, error }: Props) {
   const [lines, setLines] = useState<string[]>([]);
-  const [status, setStatus] = useState<Status>("running");
-  const [errorMsg, setErrorMsg] = useState<string>("");
+  const [status, setStatus] = useState<Status>(error ? "error" : "running");
+  const [errorMsg, setErrorMsg] = useState<string>(error ?? "");
   const [expanded, setExpanded] = useState(true);
   const outputRef = useRef<HTMLDivElement>(null);
 
@@ -59,6 +61,12 @@ export function ActionProgressToast({ id, label, toastId }: Props) {
     });
     return unsub;
   }, [id]);
+
+  useEffect(() => {
+    if (!error) return;
+    setStatus("error");
+    setErrorMsg(error);
+  }, [error]);
 
   // Auto-scroll to the newest line whenever lines change.
   useEffect(() => {

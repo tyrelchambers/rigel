@@ -252,6 +252,8 @@ export interface RunClaudeOpts {
   /** Contexts the model may run READ-ONLY kubectl against this turn (fan-out).
    *  Active-first; defaults to just the active context. */
   readContexts?: string[];
+  /** SSH aliases the user enabled for chat; empty = no ssh access this turn. */
+  sshHosts?: string[];
 }
 
 /**
@@ -267,7 +269,7 @@ export function buildClaudeArgs(
   const readContexts = opts?.readContexts ?? (context ? [context] : []);
   // Teach the model the action/question button contract (parity with Swift) and
   // block AskUserQuestion (no UI here — it uses ```question blocks instead).
-  argv.push("--append-system-prompt", systemPrompt(context, readContexts));
+  argv.push("--append-system-prompt", systemPrompt(context, readContexts, opts?.sshHosts ?? []));
   argv.push("--disallowedTools", "AskUserQuestion");
   // Denylist permissioning: a PreToolUse hook (commandPolicy) auto-allows every
   // non-mutating Bash command — so reads run regardless of flag order — and DENIES
@@ -314,6 +316,7 @@ export async function* runClaude(
     // server holds it), so an upgrade takes effect on the next audit run with no
     // restart. Empty string = free (no audits unlocked).
     RIGEL_UNLOCKED_AUDITS: unlockedAuditsEnv(),
+    RIGEL_SSH_HOSTS: (opts?.sshHosts ?? []).join(","),
     // Audit skills (HELM-20): when the packaged app ships a `rigel-audit`
     // binary, its dir is prepended to PATH so the CLI resolves without a
     // system-wide install. Optional — unset in dev/Docker, where behavior is

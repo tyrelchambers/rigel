@@ -3,6 +3,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowRight, faCheck } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { type SuggestedAction, isDestructiveAction } from "@/lib/actionBlocks";
 import { iconForKind } from "./actionIcons";
+import { isBatchable } from "./chatLogic";
 
 interface Props {
   actions: SuggestedAction[];
@@ -12,11 +13,6 @@ interface Props {
   onRunBatch?: (actions: SuggestedAction[]) => void;
 }
 
-// purge (typed-name PurgeSheet), applyManifest (different endpoint), and
-// proposeRepoFix (opens a PR, not a kubectl run) can't join a sequential batch,
-// so they stay single-only.
-const NON_BATCHABLE = new Set(["purge", "applyManifest", "proposeRepoFix"]);
-const isBatchable = (a: SuggestedAction) => !NON_BATCHABLE.has(a.kind);
 
 /**
  * SuggestedActionList — one button per parsed action, shown below an assistant

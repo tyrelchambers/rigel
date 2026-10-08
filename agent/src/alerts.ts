@@ -168,16 +168,15 @@ function podHasCrashLoop(pod: Pod): boolean {
   });
 }
 
-function podHasOom(pod: Pod): boolean {
+function podHasOomSince(pod: Pod, sinceMs: number): boolean {
   const status = pod.status as Record<string, unknown> | undefined;
   const containerStatuses = (status?.containerStatuses as Record<string, unknown>[] | undefined) ?? [];
-  return containerStatuses.some((cs) => {
-    const lastState = cs["lastState"] as Record<string, unknown> | undefined;
-    const lastTerminated = lastState?.["terminated"] as Record<string, unknown> | undefined;
-    const state = cs["state"] as Record<string, unknown> | undefined;
-    const terminated = state?.["terminated"] as Record<string, unknown> | undefined;
-    return (lastTerminated?.["reason"] ?? terminated?.["reason"]) === "OOMKilled";
-  });
+  return containerStatuses.some((cs) =>
+    (["lastState", "state"] as const).some((k) => {
+      const terminated = (cs[k] as Record<string, unknown> | undefined)?.["terminated"] as Record<string, unknown> | undefined;
+      return terminated?.["reason"] === "OOMKilled" && Date.parse(terminated["finishedAt"] as string) > sinceMs;
+    }),
+  );
 }
 
 function pendingForMs(pod: Pod, now: number): number {
@@ -339,12 +338,13 @@ function evaluateCondition(
     return hit;
   }
 
+  const oomSince = Math.max(Date.parse(prev.lastFiredAt[rule.id] ?? "") || -Infinity, Date.parse(rule.createdAt) || -Infinity);
   for (const p of matched) {
     const meta = p.metadata as Record<string, unknown> | undefined;
     const ns = (meta?.["namespace"] as string | undefined) ?? "default";
     const loc = `${ns}/${meta?.["name"]}`;
     if (c.type === "crashLoop" && podHasCrashLoop(p)) return `${loc} is crash-looping`;
-    if (c.type === "oomKilled" && podHasOom(p)) return `${loc} was OOM-killed`;
+    if (c.type === "oomKilled" && podHasOomSince(p, oomSince)) return `${loc} was OOM-killed`;
     if (c.type === "pendingTooLong") {
       const ms = pendingForMs(p, now);
       if (ms >= c.minutes * 60_000) return `${loc} has been Pending for >${c.minutes}m`;

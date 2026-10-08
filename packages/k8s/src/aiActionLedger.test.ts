@@ -384,3 +384,14 @@ describe("a request the vocabulary cannot express", () => {
     expect(entry.trigger).toContain("adding manifests");
   });
 });
+
+it("records an ssh action against its host", () => {
+  const e = buildAiActionEntry({
+    action: { kind: "sshCommand", host: "web-1", label: "Restart k3s" },
+    source: "chat",
+    command: "ssh -T -o BatchMode=yes -- web-1 sudo systemctl restart k3s",
+    outcome: "success",
+  });
+  expect(e.kind).toBe("Ran on host");
+  expect(e.target).toEqual({ kind: "Host", name: "web-1", namespace: "" });
+});

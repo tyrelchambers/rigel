@@ -132,6 +132,61 @@ describe("runActionInBackground — streaming path", () => {
     );
   });
 
+  it("forwards a sudo secret to runAction beside the action, never inside it", () => {
+    const sudoAction: ActionBlock = { kind: "sshCommand", host: "web-1", command: "apt-get upgrade -y", sudo: true };
+    runActionInBackground({ action: sudoAction, label: "Upgrade", commandString: "ssh ...", secret: "hunter2" });
+
+    expect(mockRunAction.mock.calls[0]![1]).toBe(sudoAction);
+    expect(mockRunAction.mock.calls[0]![2]).toBe("hunter2");
+    expect(JSON.stringify(sudoAction)).not.toContain("hunter2");
+    expect(JSON.stringify(toastCustom.mock.calls)).not.toContain("hunter2");
+  });
+
+  it("passes the streamed stdout and stderr lines to onResult on action.done (fromChat)", () => {
+    const onResult = vi.fn();
+    runActionInBackground({
+      action: streamingAction,
+      label: "Run command",
+      commandString: "kubectl ...",
+      fromChat: true,
+      onResult,
+    });
+
+    const runId = mockRunAction.mock.calls[0]![0] as string;
+    const cb = actionEventCallbacks.get(runId)!;
+    cb({ type: "action.progress", id: runId, line: "Reading package lists...", stream: "stdout" });
+    cb({ type: "action.progress", id: runId, line: "W: something odd", stream: "stderr" });
+    cb({ type: "action.progress", id: runId, line: "Done", stream: "stdout" });
+    cb({ type: "action.done", id: runId, code: 0 });
+
+    expect(onResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        result: { code: 0, stdout: "Reading package lists...\nDone\n", stderr: "W: something odd\n" },
+      }),
+    );
+  });
+
+  it("caps the collected output so a chatty run can't grow without bound", () => {
+    const onResult = vi.fn();
+    runActionInBackground({
+      action: streamingAction,
+      label: "Run command",
+      commandString: "kubectl ...",
+      fromChat: true,
+      onResult,
+    });
+
+    const runId = mockRunAction.mock.calls[0]![0] as string;
+    const cb = actionEventCallbacks.get(runId)!;
+    const line = "x".repeat(1000);
+    for (let i = 0; i < 50; i++) cb({ type: "action.progress", id: runId, line, stream: "stdout" });
+    cb({ type: "action.done", id: runId, code: 0 });
+
+    const { result } = onResult.mock.calls[0]![0] as { result: { stdout: string } };
+    expect(result.stdout.length).toBeGreaterThanOrEqual(4000);
+    expect(result.stdout.length).toBeLessThanOrEqual(8000);
+  });
+
   it("fires onResult with code 1 when action.done fires with non-zero code (fromChat)", () => {
     const onResult = vi.fn();
     runActionInBackground({
@@ -149,6 +204,18 @@ describe("runActionInBackground — streaming path", () => {
     expect(onResult).toHaveBeenCalledWith(
       expect.objectContaining({ result: { code: 2, stdout: "", stderr: "" } }),
     );
+  });
+
+  it("shows an action.error in the progress toast even if it arrived before the toast mounted", () => {
+    runActionInBackground({ action: streamingAction, label: "Run command", commandString: "kubectl ..." });
+
+    const runId = mockRunAction.mock.calls[0]![0] as string;
+    actionEventCallbacks.get(runId)!({ type: "action.error", id: runId, message: "Rigel lost its connection; run it again." });
+
+    expect(toastCustom).toHaveBeenCalledTimes(2);
+    expect(toastCustom.mock.calls[1]![1]).toMatchObject({ id: "toast-custom-1", duration: Infinity });
+    const render = toastCustom.mock.calls[1]![0] as (t: string) => React.ReactElement<{ error?: string }>;
+    expect(render("toast-custom-1").props.error).toBe("Rigel lost its connection; run it again.");
   });
 
   it("fires onResult on action.error (fromChat)", () => {

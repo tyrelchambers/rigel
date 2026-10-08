@@ -70,7 +70,7 @@ export function buildCodexArgs(
   // Codex has no append-system-prompt flag (unlike `claude --append-system-prompt`),
   // so we PREPEND our system prompt to the user prompt as a single positional. It
   // teaches the same read-only kubectl + action/question/alert block contract.
-  const fullPrompt = `${systemPrompt(context)}\n\n# User request\n${prompt}`;
+  const fullPrompt = `${systemPrompt(context, undefined, opts?.sshHosts ?? [])}\n\n# User request\n${prompt}`;
 
   // The flag set shared by both the fresh and resume forms — all `-c`/`--json`/
   // `--skip-git-repo-check`/`-m`, every one of which `codex exec resume` accepts too.
@@ -257,7 +257,7 @@ export async function* runCodex(
   // the workspace temp dir would leak. guardBin is only removed if it was created.
   let guardBin: string | undefined;
   try {
-    guardBin = await provisionGuardBin();
+    guardBin = await provisionGuardBin(opts?.sshHosts ?? []);
 
     const env: Record<string, string> = {
       ...(process.env as Record<string, string>),

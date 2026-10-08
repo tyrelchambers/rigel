@@ -22,7 +22,7 @@ import { createPollLoop } from "./pollLoop";
 import { createBillingClient, type EntitlementPayload } from "./billingClient";
 import { createEntitlementProvider, type EntitlementProvider } from "./entitlementProvider";
 import { decideRestart } from "./restartPolicy";
-import { decideMicPermission } from "./micPermission";
+import { decidePermission } from "./permission";
 import {
   initAutoUpdater,
   getUpdateState,
@@ -32,7 +32,7 @@ import {
   DOWNLOAD_URL,
 } from "./appUpdater";
 
-app.setName("Rigel");
+app.setName(app.isPackaged ? "Rigel" : "Rigel Dev");
 
 // The accounts + billing backend base. Overridable so a dev/test build can point
 // at a test signups deployment (test Stripe keys) — release builds stay on live
@@ -341,6 +341,7 @@ function forkServer(port: number): UtilityProcess {
     const hookMjs = join(serverDir, "permissionHook.mjs");
     const shq = (p: string) => `'${p.replace(/'/g, "'\\''")}'`;
     env.HELMSMAN_HOOK_CMD = `ELECTRON_RUN_AS_NODE=1 ${shq(process.execPath)} ${shq(hookMjs)}`;
+    env.RIGEL_GUARD_CMD = `env ELECTRON_RUN_AS_NODE=1 ${shq(process.execPath)} ${shq(join(serverDir, "guardedKubectl.mjs"))}`;
   } else {
     // ── DEV branch ─────────────────────────────────────────────────────────
     // Fork the desktop-bundled server (dist/server.mjs). cwd = apps/desktop so
@@ -555,21 +556,22 @@ async function waitForHealth(port: number, timeoutMs = 15_000): Promise<void> {
   throw new Error(`server health timeout after ${timeoutMs}ms${lastErr ? `: ${String(lastErr)}` : ""}`);
 }
 
-// ── Media permission (voice) ────────────────────────────────────────────────
+// ── Permissions (voice mic, clipboard writes) ──────────────────────────────
 // Electron denies every permission request by default. The voice assistant's
 // `room.localParticipant.setMicrophoneEnabled(true)` goes through
-// `getUserMedia`, which Chromium routes through both of these handlers: the
-// check handler for synchronous permission-state queries, the request handler
-// for the actual prompt. Registered once on the default session (the one
-// `createWindow` uses); the allow/deny decision itself lives in
-// micPermission.ts so it's unit-testable without mocking `session`.
-function configureMicPermissionHandlers(): void {
+// `getUserMedia`, and copy buttons go through `navigator.clipboard.writeText`
+// (`clipboard-sanitized-write`); Chromium routes both through these handlers:
+// the check handler for synchronous permission-state queries, the request
+// handler for the actual prompt. Registered once on the default session (the
+// one `createWindow` uses); the allow/deny decision itself lives in
+// permission.ts so it's unit-testable without mocking `session`.
+function configurePermissionHandlers(): void {
   const ses = session.defaultSession;
   const ownOrigin = () => `http://127.0.0.1:${serverPort}`;
 
   ses.setPermissionRequestHandler((_webContents, permission, callback, details) => {
     callback(
-      decideMicPermission({
+      decidePermission({
         permission,
         requestingUrl: details.requestingUrl,
         mediaTypes: "mediaTypes" in details ? details.mediaTypes : undefined,
@@ -580,7 +582,7 @@ function configureMicPermissionHandlers(): void {
   });
 
   ses.setPermissionCheckHandler((_webContents, permission, _requestingOrigin, details) =>
-    decideMicPermission({
+    decidePermission({
       permission,
       requestingUrl: details.requestingUrl,
       mediaTypes: details.mediaType ? [details.mediaType] : undefined,
@@ -603,7 +605,7 @@ function createWindow(port: number): BrowserWindow {
     height: 900,
     minWidth: 960,
     minHeight: 640,
-    title: "Rigel",
+    title: app.name,
     ...titleBar,
     show: !SMOKE, // headless smoke run keeps the window hidden
     backgroundColor: "#0b0f14",
@@ -840,7 +842,7 @@ async function boot(): Promise<void> {
 
   serverPort = await resolveServerPort();
   savePreferredPort(serverPort); // remember it so the origin stays stable next launch
-  configureMicPermissionHandlers(); // needs serverPort resolved (own-origin check)
+  configurePermissionHandlers(); // needs serverPort resolved (own-origin check)
   console.log(`[rigel] starting server on 127.0.0.1:${serverPort}`);
   serverProc = forkServer(serverPort);
 
@@ -931,7 +933,7 @@ function ptyUnderElectron(port: number): Promise<void> {
 // gated by another running instance.
 let gotLock = true;
 if (!SMOKE) {
-  app.setAsDefaultProtocolClient("rigel");
+  if (app.isPackaged) app.setAsDefaultProtocolClient("rigel");
   gotLock = app.requestSingleInstanceLock();
   if (!gotLock) {
     app.quit();

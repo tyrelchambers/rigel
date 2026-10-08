@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
+  faCheck,
   faCopy,
   faPenToSquare,
   faClock,
@@ -60,6 +61,7 @@ import {
   type ChatHandoffOpts,
 } from "@/lib/chatHandoff";
 import { useCommand } from "@/lib/shortcuts/useCommand";
+import { useCopyToClipboard } from "@/lib/useCopyToClipboard";
 import { useCluster } from "@/store/cluster";
 import { MessageBubble } from "@/panels/chat/MessageBubble";
 import { ThinkingPane } from "@/panels/chat/ThinkingPane";
@@ -106,6 +108,7 @@ import {
   transcript,
   shortSessionId,
   toActionBlock,
+  isBatchable,
 } from "@/panels/chat/chatLogic";
 import type { ChatEvent, ChatMessage } from "@/panels/chat/types";
 import { RigelMark } from "@/components/RigelMark";
@@ -563,6 +566,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   function startNewChat() {
     // The previous conversation stays saved; this just begins a fresh one.
     resetConversation();
+    setAutoFocusComposer(true);
   }
 
   // ── Chat history modal ─────────────────────────────────────────────────────
@@ -589,14 +593,7 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
     if (e.id === conversationId) startNewChat();
   }
 
-  async function copyConversation() {
-    const text = transcript(messages, stripActionBlocks);
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      /* clipboard unavailable */
-    }
-  }
+  const { copied: conversationCopied, copy: copyText } = useCopyToClipboard();
 
   // ── Action blocks → ConfirmSheet / PurgeSheet ─────────────────────────────
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
@@ -647,11 +644,9 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
   const [pendingBatch, setPendingBatch] = useState<ActionBlock[] | null>(null);
 
   function handleRunBatch(suggestions: SuggestedAction[]) {
-    // purge/applyManifest can't join a sequential batch (already excluded in the
-    // list UI; filter defensively).
-    const blocks = suggestions
-      .map(toActionBlock)
-      .filter((b) => b.kind !== "purge" && b.kind !== "applyManifest");
+    // Non-batchable actions (purge, applyManifest, proposeRepoFix, a sudo
+    // sshCommand) are already excluded in the list UI; filter defensively.
+    const blocks = suggestions.filter(isBatchable).map(toActionBlock);
     if (blocks.length === 0) return;
     setPendingBatch(blocks);
   }
@@ -787,13 +782,13 @@ export default function ChatPane({ handleRef }: ChatPaneProps) {
 
           {/* Copy conversation */}
           <button
-            onClick={copyConversation}
+            onClick={() => copyText(transcript(messages, stripActionBlocks))}
             disabled={messages.length === 0}
-            title="Copy conversation"
+            title={conversationCopied ? "Copied" : "Copy conversation"}
             style={headerBtnStyle}
-            aria-label="Copy conversation"
+            aria-label={conversationCopied ? "Copied" : "Copy conversation"}
           >
-            <FontAwesomeIcon icon={faCopy} className="size-[11px]" />
+            <FontAwesomeIcon icon={conversationCopied ? faCheck : faCopy} className="size-[11px]" />
           </button>
 
           {/* New chat */}

@@ -8,11 +8,27 @@ import {
 } from "@rigel/k8s/src/aiActionLedger";
 import { recordAiAction } from "./aiActionLedger";
 import { buildCommand, PurgeActionError, type ActionBlock } from "./actions";
+import {
+  enabledSshHosts,
+  SSH_ACTION_TIMEOUT_MS,
+  sshActionArgv,
+  sshActionDetail,
+  SUDO_OK_MARKER,
+  SUDO_PROMPT_MARKER,
+  validateSshAction,
+} from "./ssh";
 
 interface JsonSink { send(data: string): unknown }
 
+interface SudoGate {
+  prompt(): void;
+  disarm(): void;
+}
+
 /** Enough of each stream to summarize the run in the ledger; not a log store. */
 const OUTPUT_CAPTURE_MAX = 2000;
+const SUDO_RS_PROMPT_OPEN = "[sudo: ";
+const SUDO_RS_PROMPT_CLOSE = /^\] Password: ?/;
 
 export type AiActionRecorder = (context: string | null, entry: AiActionEntry) => void;
 
@@ -26,6 +42,12 @@ export interface ActionRunRequest {
   action: ActionBlock;
   /** Per-request context override; falls back to the connection's boot context. */
   context?: string | null;
+  /**
+   * A `sudo` sshCommand's password, typed in the confirm dialog. Kept apart from
+   * `action` so it never reaches the ledger, frames or command string; it is only
+   * written to ssh's stdin when sudo prompts.
+   */
+  secret?: string;
 }
 
 interface InFlightRun {
@@ -42,13 +64,16 @@ interface InFlightRun {
  * Per-connection action-run manager. Mirrors ClusterCreateManager but for
  * chat action-block execution: receives an `action.run` WS message, builds
  * the kubectl argv via the same `buildCommand` the REST route uses (preserving
- * all guards), spawns kubectl, and streams output line-by-line as
- * `action.progress` frames. Multiple concurrent runs are allowed (each
- * identified by the caller's `id`). Every completed run is appended to the
- * AI-action ledger (HELM-18), best-effort.
+ * all guards), or for `sshCommand` the same validated ssh argv the REST route
+ * runs, spawns it, and streams output line-by-line as
+ * `action.progress` frames. A `sudo` sshCommand also gets a piped stdin that
+ * receives the request's `secret` once, when sudo's marker prompt appears
+ * before any sign the command has started.
+ * Multiple concurrent runs are allowed (each identified by the caller's `id`).
+ * Every completed run is appended to the AI-action ledger (HELM-18), best-effort.
  *
  * Frame types emitted:
- *   { type: "action.progress", id, line }   — one stdout/stderr line
+ *   { type: "action.progress", id, line, stream } — one stdout/stderr line
  *   { type: "action.done",     id, code }   — process exited
  *   { type: "action.error",    id, message} — invalid action or spawn failure
  */
@@ -60,6 +85,7 @@ export class ActionRunManager {
     private context: string | null,
     private spawnFn: typeof spawn = spawn,
     private record: AiActionRecorder = defaultRecorder,
+    private sshHosts: () => Promise<string[]> = enabledSshHosts,
   ) {}
 
   run(req: ActionRunRequest): void {
@@ -75,6 +101,11 @@ export class ActionRunManager {
     // overwrote it — reject the duplicate instead.
     if (this.runs.has(id)) {
       return this.error(id, `action run '${id}' is already in progress`);
+    }
+
+    if (action.kind === "sshCommand") {
+      void this.runSsh(id, action, req.context ?? this.context, req.secret);
+      return;
     }
 
     // Guard: purge is a client-side flow — never reaches kubectl.
@@ -103,13 +134,48 @@ export class ActionRunManager {
 
     // Prepend --context exactly as the REST route does (via buildKubectlArgs).
     const context = req.context ?? this.context;
-    const fullArgv = buildKubectlArgs(context, argv);
+    this.start(id, action, context, "kubectl", buildKubectlArgs(context, argv), {});
+  }
 
-    let proc: ChildProcess;
+  private async runSsh(id: string, action: ActionBlock, context: string | null, secret?: string): Promise<void> {
+    let enabled: string[];
     try {
-      proc = this.spawnFn("kubectl", fullArgv, {
-        stdio: ["ignore", "pipe", "pipe"],
+      enabled = await this.sshHosts();
+    } catch (err) {
+      return this.error(id, err instanceof Error ? err.message : String(err));
+    }
+    const valid = validateSshAction(action, enabled);
+    if ("error" in valid) return this.error(id, valid.error);
+    if (this.runs.has(id)) return this.error(id, `action run '${id}' is already in progress`);
+    const [bin, ...args] = sshActionArgv(valid.host, valid.command, valid.sudo);
+    this.start(
+      id,
+      { ...action, host: valid.host },
+      context,
+      bin!,
+      args,
+      { timeout: SSH_ACTION_TIMEOUT_MS },
+      valid.sudo ? { secret: secret || null } : undefined,
+    );
+  }
+
+  private start(
+    id: string,
+    action: ActionBlock,
+    context: string | null,
+    bin: string,
+    args: string[],
+    opts: { timeout?: number },
+    sudo?: { secret: string | null },
+  ): void {
+    let proc: ChildProcess;
+    let armed = sudo !== undefined;
+    let pendingSecret = sudo?.secret ?? null;
+    try {
+      proc = this.spawnFn(bin, args, {
+        stdio: [sudo ? "pipe" : "ignore", "pipe", "pipe"],
         env: spawnEnv(),
+        ...opts,
       });
     } catch (err) {
       return this.error(id, err instanceof Error ? err.message : String(err));
@@ -117,20 +183,39 @@ export class ActionRunManager {
     const inFlight: InFlightRun = {
       proc,
       action,
-      command: ["kubectl", ...fullArgv].join(" "),
+      command: [bin, ...args].join(" "),
       context,
       stdout: "",
       stderr: "",
     };
     this.runs.set(id, inFlight);
 
-    this.pump(id, proc.stdout, "stdout");
-    this.pump(id, proc.stderr, "stderr");
+    proc.stdin?.on("error", () => {});
+    const finishStdin = () => {
+      armed = false;
+      pendingSecret = null;
+      proc.stdin?.end();
+    };
+    const gate: SudoGate | undefined = sudo && {
+      prompt: () => {
+        if (!armed) return;
+        if (pendingSecret !== null) proc.stdin?.write(`${pendingSecret}\n`);
+        finishStdin();
+      },
+      disarm: () => {
+        if (armed) finishStdin();
+      },
+    };
+
+    this.pump(id, proc.stdout, "stdout", gate);
+    this.pump(id, proc.stderr, "stderr", gate);
     proc.on("error", (err: Error) => {
+      finishStdin();
       this.runs.delete(id);
       this.error(id, err.message);
     });
     proc.on("close", (code) => {
+      finishStdin();
       if (this.runs.get(id) !== inFlight) return;
       this.runs.delete(id);
       this.ws.send(JSON.stringify({ type: "action.done", id, code: code ?? -1 }));
@@ -151,13 +236,25 @@ export class ActionRunManager {
         source: "chat",
         command: run.command,
         outcome,
-        detail: summarizeActionDetail(outcome, run.stdout, run.stderr),
+        detail: run.action.kind === "sshCommand"
+          ? sshActionDetail(code, run.stdout, run.stderr)
+          : summarizeActionDetail(outcome, run.stdout, run.stderr),
       }),
     );
   }
 
-  /** Forward a stream's lines as action.progress frames. */
-  private pump(id: string, stream: NodeJS.ReadableStream | null, channel: "stdout" | "stderr"): void {
+  /**
+   * Forward a stream's lines as action.progress frames. With a sudo `gate`, any
+   * stdout disarms it, and on stderr each SUDO_PROMPT_MARKER (prompt) and
+   * SUDO_OK_MARKER (disarm) is acted on in order and cut from the text before it
+   * is forwarded or captured.
+   */
+  private pump(
+    id: string,
+    stream: NodeJS.ReadableStream | null,
+    channel: "stdout" | "stderr",
+    gate?: SudoGate,
+  ): void {
     if (!stream) return;
     let buf = "";
     const capture = (text: string) => {
@@ -167,19 +264,34 @@ export class ActionRunManager {
     };
     stream.on("data", (chunk: Buffer) => {
       buf += chunk.toString("utf8");
+      if (gate && channel === "stdout" && chunk.length > 0) gate.disarm();
+      while (gate && channel === "stderr") {
+        const prompt = buf.indexOf(SUDO_PROMPT_MARKER);
+        const ok = buf.indexOf(SUDO_OK_MARKER);
+        if (prompt < 0 && ok < 0) break;
+        if (ok >= 0 && (prompt < 0 || ok < prompt)) {
+          buf = buf.slice(0, ok) + buf.slice(ok + SUDO_OK_MARKER.length);
+          gate.disarm();
+        } else {
+          const start = buf.slice(0, prompt).endsWith(SUDO_RS_PROMPT_OPEN) ? prompt - SUDO_RS_PROMPT_OPEN.length : prompt;
+          const rest = buf.slice(prompt + SUDO_PROMPT_MARKER.length);
+          buf = buf.slice(0, start) + rest.replace(SUDO_RS_PROMPT_CLOSE, "");
+          gate.prompt();
+        }
+      }
       let nl: number;
       while ((nl = buf.indexOf("\n")) >= 0) {
         const line = buf.slice(0, nl);
         buf = buf.slice(nl + 1);
         capture(`${line}\n`);
-        if (line.length > 0) this.ws.send(JSON.stringify({ type: "action.progress", id, line }));
+        if (line.length > 0) this.ws.send(JSON.stringify({ type: "action.progress", id, line, stream: channel }));
       }
     });
     // Flush a final line with no trailing newline (e.g. `rollout pause` output).
     stream.on("end", () => {
       if (buf.length > 0) {
         capture(buf);
-        this.ws.send(JSON.stringify({ type: "action.progress", id, line: buf }));
+        this.ws.send(JSON.stringify({ type: "action.progress", id, line: buf, stream: channel }));
         buf = "";
       }
     });
