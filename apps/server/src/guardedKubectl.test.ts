@@ -79,7 +79,7 @@ describe("guardVerdict ssh", () => {
 
 describe("guardExecArgs", () => {
   test("forces batch mode and no tty for ssh", () => {
-    expect(guardExecArgs("ssh", ["web-1", "uptime"])).toEqual(["-T", "-o", "BatchMode=yes", "web-1", "uptime"]);
+    expect(guardExecArgs("ssh", ["web-1", "uptime"])).toEqual(["-T", "-o", "BatchMode=yes", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4", "web-1", "uptime"]);
   });
 
   test("passes kubectl args through", () => {
@@ -105,7 +105,7 @@ describe("runGuard — dispatch (fake real binary = /bin/echo, never a cluster)"
   test("an ssh read on an enabled host execs the real binary in batch mode", async () => {
     const r = await runEntry(["ssh", "/bin/echo", "web-1", "web-1", "uptime"]);
     expect(r.code).toBe(0);
-    expect(r.stdout).toContain("-T -o BatchMode=yes web-1 uptime");
+    expect(r.stdout).toContain("-T -o BatchMode=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=4 web-1 uptime");
   });
 
   test("an ssh change is denied without exec and steers to an sshCommand action", async () => {
@@ -236,6 +236,6 @@ describe("wrapperScript — spaced install paths don't word-split (packaged macO
 
     const allowed = await run(["web-1", "uptime"]);
     expect(allowed.code).toBe(0);
-    expect(allowed.stdout).toContain("-T -o BatchMode=yes web-1 uptime");
+    expect(allowed.stdout).toContain("-T -o BatchMode=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=4 web-1 uptime");
   });
 });

@@ -85,7 +85,7 @@ is keyed on the ACTION, not on what it hears:
 Additional kinds:
 - `sshCommand` — run one command on an enabled SSH host. Fields `host`,
   `command`, optional `destructive`, optional `sudo`. The app runs
-  `ssh -T -o BatchMode=yes -- <host> <command>` after the confirm sheet and
+  `ssh -T -o BatchMode=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -- <host> <command>` after the confirm sheet and
   records it (with the exit code) in the AI action ledger. Never
   auto-runnable: it is not in `AUTO_RUNNABLE_KINDS`, so voice always surfaces
   it for approval.

@@ -70,7 +70,7 @@ describe("enabled host store", () => {
 describe("sshActionArgv", () => {
   it("ends options before the host so the command can't inject flags", () => {
     expect(sshActionArgv("web-1", "systemctl restart k3s")).toEqual([
-      "ssh", "-T", "-o", "BatchMode=yes", "--", "web-1", "systemctl restart k3s",
+      "ssh", "-T", "-o", "BatchMode=yes", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4", "--", "web-1", "systemctl restart k3s",
     ]);
   });
 
@@ -78,7 +78,7 @@ describe("sshActionArgv", () => {
     expect(SUDO_PROMPT_MARKER).toBe("[rigel-sudo-prompt]");
     expect(SUDO_OK_MARKER).toBe("[rigel-sudo-ok]");
     expect(sshActionArgv("web-1", "apt-get upgrade -y", true)).toEqual([
-      "ssh", "-T", "-o", "BatchMode=yes", "--", "web-1",
+      "ssh", "-T", "-o", "BatchMode=yes", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4", "--", "web-1",
       "sh -c 'sudo -S -p '\\''[rigel-sudo-prompt]'\\'' -v && printf %s '\\''[rigel-sudo-ok]'\\'' >&2 && exec </dev/null && sudo -n -- sh -c '\\''apt-get upgrade -y'\\'''",
     ]);
   });
@@ -187,7 +187,7 @@ describe("sshActionResponse (REST /api/action)", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(ok);
     expect(run).toHaveBeenCalledWith("web-1", "uptime");
-    expect(record).toHaveBeenCalledWith({ host: "web-1", command: "ssh -T -o BatchMode=yes -- web-1 uptime", result: ok });
+    expect(record).toHaveBeenCalledWith({ host: "web-1", command: "ssh -T -o BatchMode=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -- web-1 uptime", result: ok });
   });
 
   it("previews a sudo command with its wrapper", async () => {

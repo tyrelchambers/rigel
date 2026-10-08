@@ -473,7 +473,7 @@ test("an sshCommand runs ssh in batch mode against the enabled host and is recor
 
   expect(spawns).toHaveLength(1);
   expect(spawns[0]!.bin).toBe("ssh");
-  expect(spawns[0]!.args).toEqual(["-T", "-o", "BatchMode=yes", "--", "k8s-truenas", "apt list --upgradable"]);
+  expect(spawns[0]!.args).toEqual(["-T", "-o", "BatchMode=yes", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4", "--", "k8s-truenas", "apt list --upgradable"]);
   expect(spawns[0]!.opts.stdio[0]).toBe("ignore");
   expect(spawns[0]!.opts.timeout).toBe(30 * 60_000);
 
@@ -488,7 +488,7 @@ test("an sshCommand runs ssh in batch mode against the enabled host and is recor
     source: "chat",
     kind: "Ran on host",
     target: { kind: "Host", name: "k8s-truenas", namespace: "" },
-    command: "ssh -T -o BatchMode=yes -- k8s-truenas apt list --upgradable",
+    command: "ssh -T -o BatchMode=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -- k8s-truenas apt list --upgradable",
     outcome: "success",
     detail: "exit 0: curl/questing-updates 8.14.1 amd64",
   });
@@ -671,7 +671,7 @@ test("the secret never reaches the spawn args, frames, or ledger entry", async (
   expect(JSON.stringify(ws.sent)).not.toContain(SECRET);
   expect(JSON.stringify(recorded)).not.toContain(SECRET);
   expect(recorded[0]!.entry).toMatchObject({
-    command: `ssh -T -o BatchMode=yes -- k8s-truenas ${spawns[0]!.args.at(-1)}`,
+    command: `ssh -T -o BatchMode=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -- k8s-truenas ${spawns[0]!.args.at(-1)}`,
     outcome: "failure",
     detail: "exit 1: sudo: 1 incorrect password attempt",
   });

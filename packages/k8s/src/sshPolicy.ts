@@ -19,7 +19,7 @@ export type ShellSshVerdict =
   | { decision: "allow"; reason: string; local: string }
   | { decision: "deny"; reason: string };
 
-export const SSH_BATCH_ARGS = ["-T", "-o", "BatchMode=yes"] as const;
+export const SSH_BATCH_ARGS = ["-T", "-o", "BatchMode=yes", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4"] as const;
 
 export const SSH_TRANSFER_TOOLS: readonly string[] = ["scp", "sftp", "rsync", "sshfs", "sshpass", "autossh", "mosh"];
 
