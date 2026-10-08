@@ -158,4 +158,11 @@ describe("systemPrompt ssh section", () => {
     expect(p).toContain("without the sudo prefix");
     expect(p).toContain("password in the confirm dialog");
   });
+  it("teaches long or network-disrupting jobs to run detached while their journal streams", () => {
+    const p = systemPrompt("ctx", ["ctx"], ["web-1"]);
+    expect(p).toContain("--no-block");
+    expect(p).toContain("journalctl -f");
+    expect(p).toContain("keeps running on the host");
+    expect(p).not.toContain("--service-type=oneshot sh -c '<work>' &&");
+  });
 });
