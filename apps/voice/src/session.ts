@@ -97,6 +97,7 @@ export async function runSession(job: VoiceJob, server: ServerClient): Promise<v
       // ended in narration every time. Each step is one tool call, and the tools
       // are policy-gated, so the ceiling is about patience rather than safety.
       maxToolSteps: 8,
+      connOptions: { llmConnOptions: { timeoutMs: 30_000 } },
       keytermsOptions: { keyterms: state.keyterms },
     });
 

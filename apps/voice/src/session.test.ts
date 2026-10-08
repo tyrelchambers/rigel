@@ -43,7 +43,7 @@ const h = vi.hoisted(() => {
     updateOptions = vi.fn(() => {
       if (this._closing) throw new Error("AgentSession is closing");
     });
-    constructor() {
+    constructor(public opts?: { connOptions?: { llmConnOptions?: { timeoutMs?: number; maxRetry?: number } } }) {
       super();
       if (behavior.failConstruct) throw new Error("bad model");
       sessions.push(this);
@@ -168,6 +168,13 @@ describe("runSession data frames", () => {
     expect(session.say).toHaveBeenCalledTimes(1);
     expect(error).toHaveBeenCalled();
     error.mockRestore();
+  });
+});
+
+describe("runSession model timeout", () => {
+  test("a slow first token gets 30 s instead of the SDK's 10 s, keeping the retries", async () => {
+    await liveSession();
+    expect(h.sessions[0]!.opts?.connOptions?.llmConnOptions).toEqual({ timeoutMs: 30_000 });
   });
 });
 
