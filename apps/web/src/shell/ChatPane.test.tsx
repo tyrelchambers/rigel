@@ -51,7 +51,7 @@ const opencode: AgentView = {
   installUrl: "https://x", installLabel: "Install OpenCode",
 };
 
-const CLAUDE_MODELS: AgentModels = { models: ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-fable-5"], efforts: ["low", "medium", "high", "xhigh", "max"] };
+const CLAUDE_MODELS: AgentModels = { models: ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5-20251001", "claude-fable-5-1"], efforts: ["low", "medium", "high", "xhigh", "max"] };
 const OPENCODE_MODELS: AgentModels = { models: ["anthropic/claude-sonnet-4-6", "openai/gpt-5", "google/gemini-2.5-pro"], efforts: [] };
 
 /**
@@ -147,12 +147,12 @@ describe("ChatPane agent-aware model picker", () => {
     renderPane({ activeAgentId: "claude", agents: [claudeConnected, codex] }, { claude: CLAUDE_MODELS });
 
     // Chip pretty-prints the default Claude model.
-    expect(screen.getByRole("button", { name: /choose model/i })).toHaveTextContent("Opus 4.8");
+    expect(screen.getByRole("button", { name: /choose model/i })).toHaveTextContent("Opus 5");
 
     const listbox = openModelPicker();
     // Pretty Claude names as options.
-    expect(within(listbox).getByRole("option", { name: /Opus 4\.8/ })).toBeInTheDocument();
-    expect(within(listbox).getByRole("option", { name: /Sonnet 4\.6/ })).toBeInTheDocument();
+    expect(within(listbox).getByRole("option", { name: /Opus 5/ })).toBeInTheDocument();
+    expect(within(listbox).getByRole("option", { name: /Sonnet 5/ })).toBeInTheDocument();
     // Effort segment is present for Claude.
     expect(within(listbox).getByText(/reasoning effort/i)).toBeInTheDocument();
     expect(within(listbox).getByRole("button", { name: "High" })).toBeInTheDocument();
@@ -182,13 +182,13 @@ describe("ChatPane agent-aware model picker", () => {
   it("selecting a model updates the chip and the config that gets sent", () => {
     renderPane({ activeAgentId: "claude", agents: [claudeConnected, codex] }, { claude: CLAUDE_MODELS });
 
-    fireEvent.click(within(openModelPicker()).getByRole("option", { name: /Sonnet 4\.6/ }));
-    expect(screen.getByRole("button", { name: /choose model/i })).toHaveTextContent("Sonnet 4.6");
+    fireEvent.click(within(openModelPicker()).getByRole("option", { name: /Sonnet 5/ }));
+    expect(screen.getByRole("button", { name: /choose model/i })).toHaveTextContent("Sonnet 5");
 
     // Send a message and assert the chosen model/effort flow through to sendChat.
     fireEvent.change(composer(), { target: { value: "hi" } });
     fireEvent.keyDown(composer(), { key: "Enter" });
-    expect(sendChat).toHaveBeenCalledWith("hi", expect.objectContaining({ model: "claude-sonnet-4-6", effort: "high" }));
+    expect(sendChat).toHaveBeenCalledWith("hi", expect.objectContaining({ model: "claude-sonnet-5-5", effort: "high" }));
   });
 
   it("keeps a per-agent selection (the stored choice is restored on next render)", () => {

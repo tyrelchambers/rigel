@@ -21,10 +21,10 @@ beforeEach(() => {
 
 describe("modelLabel / modelName", () => {
   it("pretty-prints Claude model ids and shows the raw id for other agents", () => {
-    expect(modelLabel("claude", "claude-opus-4-8")).toBe("Opus 4.8");
-    expect(modelLabel("claude", "claude-sonnet-4-6")).toBe("Sonnet 4.6");
+    expect(modelLabel("claude", "claude-opus-5-5")).toBe("Opus 5.5");
+    expect(modelLabel("claude", "claude-sonnet-5-5")).toBe("Sonnet 5.5");
     expect(modelLabel("claude", "claude-haiku-4-5-20251001")).toBe("Haiku 4.5");
-    expect(modelLabel("claude", "claude-fable-5")).toBe("Fable 5");
+    expect(modelLabel("claude", "claude-fable-5-1")).toBe("Fable 5.1");
     // Unknown Claude id falls back to the raw id.
     expect(modelLabel("claude", "weird")).toBe("weird");
     // Other agents always show the raw id.

@@ -46,11 +46,10 @@ describe("agentModels", () => {
   test("claude → the full Claude model ids + the five effort levels", async () => {
     const r = await agentModels("claude");
     expect(r.models).toEqual([
-      "claude-opus-5",
-      "claude-opus-4-8",
-      "claude-sonnet-4-6",
+      "claude-opus-5-5",
+      "claude-sonnet-5-5",
       "claude-haiku-4-5-20251001",
-      "claude-fable-5",
+      "claude-fable-5-1",
     ]);
     expect(r.efforts).toEqual(["low", "medium", "high", "xhigh", "max"]);
   });

@@ -19,11 +19,10 @@ import type { AgentId } from "@/lib/api";
  * model id. Keep these ids in sync with ALLOWED_MODELS.
  */
 export const CLAUDE_MODELS = [
-  { id: "claude-opus-5", name: "Opus 5" },
-  { id: "claude-opus-4-8", name: "Opus 4.8" },
-  { id: "claude-sonnet-4-6", name: "Sonnet 4.6" },
+  { id: "claude-opus-5-5", name: "Opus 5.5" },
+  { id: "claude-sonnet-5-5", name: "Sonnet 5.5" },
   { id: "claude-haiku-4-5-20251001", name: "Haiku 4.5" },
-  { id: "claude-fable-5", name: "Fable 5" },
+  { id: "claude-fable-5-1", name: "Fable 5.1" },
 ] as const;
 export type ClaudeModelId = (typeof CLAUDE_MODELS)[number]["id"];
 
@@ -48,7 +47,7 @@ export interface ModelConfig {
 }
 
 /** Claude's defaults — used when an agent has no stored choice and is Claude. */
-export const DEFAULT_MODEL_CONFIG: ModelConfig = { model: "claude-opus-5", effort: "high" };
+export const DEFAULT_MODEL_CONFIG: ModelConfig = { model: "claude-opus-5-5", effort: "high" };
 
 /** "Opus 5" for a known Claude model id; the raw id for any other agent. */
 export function modelName(agentId: AgentId | undefined, model: string): string {
@@ -139,7 +138,7 @@ export function saveModelConfig(agentId: AgentId, config: ModelConfig): void {
  * currently-advertised models/efforts:
  *  - use the stored model when it's still in the agent's list;
  *  - otherwise default to the first model in the list (Claude keeps its
- *    claude-opus-5 default when present);
+ *    claude-opus-5-5 default when present);
  *  - effort applies only when the agent has efforts (Claude): keep the stored or
  *    default effort, else omit it.
  * Returns `null` while the model list is still empty/unknown (nothing to pick).

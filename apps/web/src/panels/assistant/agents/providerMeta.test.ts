@@ -18,8 +18,8 @@ describe("providerMeta", () => {
   });
 
   test("role defaults match the out-of-box assistant", () => {
-    expect(DEFAULT_WORKER).toEqual({ provider: "claude", model: "claude-sonnet-4-6", effort: "high" });
-    expect(DEFAULT_SUPERVISOR).toEqual({ provider: "claude", model: "claude-opus-5", effort: "high" });
+    expect(DEFAULT_WORKER).toEqual({ provider: "claude", model: "claude-sonnet-5-5", effort: "high" });
+    expect(DEFAULT_SUPERVISOR).toEqual({ provider: "claude", model: "claude-opus-5-5", effort: "high" });
   });
 
   test("limit defaults mirror the server DEFAULT_INSTALL_CONFIG (no drift)", () => {
