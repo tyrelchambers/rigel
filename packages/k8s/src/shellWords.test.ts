@@ -67,10 +67,22 @@ describe("parseShell", () => {
     expect(parseShell(cmd)!.segments[0]!.wordGlobs).toEqual(globs);
   });
 
+  it.each([
+    ["awk '{print $0}'", [false, false]],
+    ["echo $HOME", [false, true]],
+    ['echo "$HOME"', [false, true]],
+    ["echo \\$HOME", [false, false]],
+    ['echo "\\$HOME"', [false, false]],
+    ["echo a'$b'", [false, false]],
+    ['echo a"$b"', [false, true]],
+  ])("%s marks words with a shell-expanded $ as %j", (cmd, expands) => {
+    expect(parseShell(cmd)!.segments[0]!.wordExpands).toEqual(expands);
+  });
+
   it("returns null instead of throwing on a parse error", () => {
     expect(parseShell("echo 'oops")).toBeNull();
     expect(parseShell("echo ok")).toEqual({
-      segments: [{ words: ["echo", "ok"], wordGlobs: [false, false], redirects: [] }],
+      segments: [{ words: ["echo", "ok"], wordGlobs: [false, false], wordExpands: [false, false], redirects: [] }],
       substitution: false,
     });
   });

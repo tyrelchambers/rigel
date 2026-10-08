@@ -327,7 +327,7 @@ export function classifyShellSsh(parsed: ParsedShell, enabledHosts: readonly str
       if (v.decision !== "read") return { decision: "deny", reason: v.reason };
       continue;
     }
-    if (seg.words.some((w) => SSH_FAMILY.test(w) || w.includes("$"))) {
+    if (seg.words.some((w, i) => SSH_FAMILY.test(w) || seg.wordExpands[i])) {
       return { decision: "deny", reason: SSH_INDIRECT_HINT };
     }
     local.push(seg.words.join(" "));

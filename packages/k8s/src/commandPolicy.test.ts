@@ -157,6 +157,8 @@ describe("classifyCommand ssh routing and command heads", () => {
     `timeout 20 ssh -o BatchMode=yes -o ConnectTimeout=10 web-1 'echo OK; id; uname -srm; sudo -n true 2>&1 && echo "SUDO:passwordless" || echo "SUDO:needs-password"' 2>&1`,
     "timeout -s KILL 20 ssh web-1 uptime",
     "nice -n 5 ssh web-1 uptime",
+    `ssh web-1 'cat /var/lib/dpkg/status' 2>&1 | awk -v RS='' '/^Package:/ { pkg=""; st=""; split($0,L,"\\n"); for(i in L){ if(L[i]~/^Package: /){pkg=substr(L[i],10)} if(L[i]~/^Status: /){st=substr(L[i],9)} } if(st!="install ok installed" && st!="deinstall ok config-files" && st!="") print st" | "pkg }'`,
+    "ssh web-1 'df -h' | awk '{print $5, $6}'",
     "time ssh web-1 uptime",
   ])("allows %s", (cmd) => {
     expect(classifyCommand(cmd, "ctx", hosts).decision).toBe("allow");
@@ -191,6 +193,9 @@ describe("classifyCommand ssh routing and command heads", () => {
     "xargs ssh web-1",
     "nohup ssh web-1 uptime",
     "timeout 20 kube[c]tl delete pod x",
+    'ssh web-1 uptime; x=ss; eval "${x}h prod-db rm -rf /"',
+    "ssh web-1 uptime; eval $CMD",
+    'ssh web-1 uptime | awk "{print $1}"',
   ])("denies %s", (cmd) => {
     expect(classifyCommand(cmd, "ctx", hosts).decision).toBe("deny");
   });
