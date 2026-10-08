@@ -20,7 +20,7 @@ const run = vi.fn();
 
 function ctx(): AssistantContextValue {
   return {
-    d: { allNamespaceNames: ["default"], roles: { worker: { provider: "claude", model: "claude-sonnet-5", effort: "high" }, supervisor: { provider: "claude", model: "claude-opus-5", effort: "high" } }, limits: {} },
+    d: { allNamespaceNames: ["default"], roles: { worker: { provider: "claude", model: "claude-sonnet-5-5", effort: "high" }, supervisor: { provider: "claude", model: "claude-opus-5-5", effort: "high" } }, limits: {} },
     working: false,
     run,
     actionError: null,
@@ -48,7 +48,7 @@ beforeEach(() => {
   mockOrgs = [];
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     if (url.includes("/api/chat-config")) return new Response(JSON.stringify({ configured: false, source: null }));
-    if (url.includes("/api/agents/claude/models")) return new Response(JSON.stringify({ models: ["claude-sonnet-5", "claude-opus-5"], efforts: ["low", "medium", "high"] }));
+    if (url.includes("/api/agents/claude/models")) return new Response(JSON.stringify({ models: ["claude-sonnet-5-5", "claude-opus-5-5"], efforts: ["low", "medium", "high"] }));
     if (url.includes("/api/agents")) return new Response(JSON.stringify({ activeAgentId: "claude", agents: [
       { id: "claude", label: "Claude", vendor: "Anthropic", status: "available", connection: "connected", authMethods: ["subscription", "apiKey"], authMethod: "subscription", installUrl: "x", installLabel: "i" },
       { id: "codex", label: "Codex", vendor: "OpenAI", status: "available", connection: "notSignedIn", authMethods: ["apiKey"], authMethod: "apiKey", installUrl: "x", installLabel: "i" },
@@ -65,19 +65,19 @@ describe("InstallView (multi-provider)", () => {
     wrap();
     expect(screen.getByText("Worker")).toBeInTheDocument();
     expect(screen.getByText("Supervisor")).toBeInTheDocument();
-    expect(await screen.findAllByText("claude-sonnet-5")).toBeTruthy();
+    expect(await screen.findAllByText("claude-sonnet-5-5")).toBeTruthy();
   });
 
   it("installs with worker/supervisor selections + a pasted token folded into credentials", async () => {
     wrap();
-    await screen.findAllByText("claude-sonnet-5");
+    await screen.findAllByText("claude-sonnet-5-5");
     await userEvent.type(screen.getByPlaceholderText(/CLAUDE_CODE_OAUTH_TOKEN/i), "tok-abc");
     await userEvent.click(screen.getByRole("button", { name: /^install$/i }));
     expect(run).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "install",
-        worker: expect.objectContaining({ provider: "claude", model: "claude-sonnet-5" }),
-        supervisor: expect.objectContaining({ provider: "claude", model: "claude-opus-5" }),
+        worker: expect.objectContaining({ provider: "claude", model: "claude-sonnet-5-5" }),
+        supervisor: expect.objectContaining({ provider: "claude", model: "claude-opus-5-5" }),
         credentials: expect.objectContaining({ claudeToken: "tok-abc" }),
       }),
       expect.any(Function),
@@ -87,7 +87,7 @@ describe("InstallView (multi-provider)", () => {
   it("mints an install-scoped agent token for the personal org and threads it into credentials", async () => {
     mockOrgs = [{ id: "org-personal", kind: "personal", name: "Me", role: "owner" }];
     wrap();
-    await screen.findAllByText("claude-sonnet-5");
+    await screen.findAllByText("claude-sonnet-5-5");
     await userEvent.type(screen.getByPlaceholderText(/CLAUDE_CODE_OAUTH_TOKEN/i), "tok-abc");
     await userEvent.click(screen.getByRole("button", { name: /^install$/i }));
     expect(agentToken).toHaveBeenCalledWith("org-personal");
@@ -101,7 +101,7 @@ describe("InstallView (multi-provider)", () => {
     mockOrgs = [{ id: "org-personal", kind: "personal", name: "Me", role: "owner" }];
     agentToken.mockResolvedValue(null);
     wrap();
-    await screen.findAllByText("claude-sonnet-5");
+    await screen.findAllByText("claude-sonnet-5-5");
     await userEvent.type(screen.getByPlaceholderText(/CLAUDE_CODE_OAUTH_TOKEN/i), "tok-abc");
     await userEvent.click(screen.getByRole("button", { name: /^install$/i }));
     expect(run).toHaveBeenCalledTimes(1);

@@ -11,12 +11,12 @@ export const PROVIDER_IDS: AgentId[] = ["claude", "codex", "gemini", "opencode"]
 /** Out-of-box defaults — keep the fresh-install experience unchanged. */
 export const DEFAULT_WORKER: AssistantRoleSelection = {
   provider: "claude",
-  model: "claude-sonnet-5",
+  model: "claude-sonnet-5-5",
   effort: "high",
 };
 export const DEFAULT_SUPERVISOR: AssistantRoleSelection = {
   provider: "claude",
-  model: "claude-opus-5",
+  model: "claude-opus-5-5",
   effort: "high",
 };
 

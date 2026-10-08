@@ -64,8 +64,8 @@ function str(name: string, fallback: string): string {
 
 export function loadConfig(): Config {
   return {
-    workerModel: str("WORKER_MODEL", "claude-sonnet-5"),
-    supervisorModel: str("SUPERVISOR_MODEL", "claude-opus-5"),
+    workerModel: str("WORKER_MODEL", "claude-sonnet-5-5"),
+    supervisorModel: str("SUPERVISOR_MODEL", "claude-opus-5-5"),
     pollIntervalMs: num("POLL_INTERVAL_MS", 30_000),
     maxPerResourcePerHour: num("MAX_PER_RESOURCE_PER_HOUR", 3),
     maxPerNight: num("MAX_PER_NIGHT", 20),

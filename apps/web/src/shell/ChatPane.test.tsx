@@ -51,7 +51,7 @@ const opencode: AgentView = {
   installUrl: "https://x", installLabel: "Install OpenCode",
 };
 
-const CLAUDE_MODELS: AgentModels = { models: ["claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5-20251001", "claude-fable-5-1"], efforts: ["low", "medium", "high", "xhigh", "max"] };
+const CLAUDE_MODELS: AgentModels = { models: ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5-20251001", "claude-fable-5-1"], efforts: ["low", "medium", "high", "xhigh", "max"] };
 const OPENCODE_MODELS: AgentModels = { models: ["anthropic/claude-sonnet-4-6", "openai/gpt-5", "google/gemini-2.5-pro"], efforts: [] };
 
 /**
@@ -188,7 +188,7 @@ describe("ChatPane agent-aware model picker", () => {
     // Send a message and assert the chosen model/effort flow through to sendChat.
     fireEvent.change(composer(), { target: { value: "hi" } });
     fireEvent.keyDown(composer(), { key: "Enter" });
-    expect(sendChat).toHaveBeenCalledWith("hi", expect.objectContaining({ model: "claude-sonnet-5", effort: "high" }));
+    expect(sendChat).toHaveBeenCalledWith("hi", expect.objectContaining({ model: "claude-sonnet-5-5", effort: "high" }));
   });
 
   it("keeps a per-agent selection (the stored choice is restored on next render)", () => {
