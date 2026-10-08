@@ -59,10 +59,12 @@ const h = vi.hoisted(() => {
       return this;
     }
   }
+  class VoiceAgentUnavailableError extends Error {}
   return {
     rooms,
     pendingDisconnects,
     FakeRoom,
+    VoiceAgentUnavailableError,
     behavior,
     status: { data: undefined as { enabled: boolean; configured: boolean } | undefined },
     fetchVoiceToken: vi.fn(async () => ({ url: "wss://example", token: "jwt" })),
@@ -76,6 +78,7 @@ const h = vi.hoisted(() => {
 vi.mock("@/lib/api", () => ({
   useVoiceStatus: () => ({ data: h.status.data }),
   fetchVoiceToken: h.fetchVoiceToken,
+  VoiceAgentUnavailableError: h.VoiceAgentUnavailableError,
 }));
 vi.mock("livekit-client", () => ({
   Room: h.FakeRoom,
@@ -192,6 +195,18 @@ test("a failed token request surfaces the retry copy instead of hanging on Conne
   render(<VoiceControl />);
   await userEvent.click(screen.getByLabelText("Voice assistant"));
   expect(await screen.findByText(/Could not connect/)).toBeTruthy();
+});
+
+test("a worker that isn't running reads as Agent unavailable at once, without joining a room", async () => {
+  h.status.data = { enabled: true, configured: true };
+  h.fetchVoiceToken.mockRejectedValueOnce(new h.VoiceAgentUnavailableError("The voice agent isn't running."));
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  render(<VoiceControl />);
+  await userEvent.click(screen.getByLabelText("Voice assistant"));
+  expect(await screen.findByText(/Agent unavailable/)).toBeTruthy();
+  expect(screen.queryByText(/Could not connect/)).toBeNull();
+  expect(h.rooms).toHaveLength(0);
+  vi.mocked(console.error).mockRestore();
 });
 
 test("Room.connect rejecting lands on error and stays there once the deferred Disconnected fires", async () => {
@@ -593,6 +608,11 @@ test("notReadyMessage distinguishes unconfigured, failed and in-flight", () => {
   expect(notReadyMessage(true, "error", "connect")).toMatch(/Could not connect/);
   expect(notReadyMessage(true, "connecting", null)).toBe("Connecting…");
   expect(notReadyMessage(true, "idle", null)).toBe("Connecting…");
+});
+
+test("an unavailable agent is not blamed on the keys", () => {
+  expect(notReadyMessage(true, "error", "agent-unavailable")).toMatch(/^Agent unavailable/);
+  expect(notReadyMessage(true, "error", "agent-unavailable")).not.toMatch(/keys/);
 });
 
 test("a denied microphone points at the system settings, not the voice keys", () => {

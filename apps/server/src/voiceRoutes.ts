@@ -1,16 +1,23 @@
 // Voice room tokens. The LiveKit API secret never reaches the renderer: it
 // only receives short-lived JWTs. The worker is a local process forked by
 // Electron at the same trust level as the server, and its one route for
-// this, /api/voice/agent-config, is gated by both the global session secret
-// and the worker token, so it can receive the secret directly (it needs to
-// sign its own requests to LiveKit's inference gateway).
+// this, /api/voice/dispatch, is gated by both the global session secret and
+// the worker token, so it can receive the secret directly (it needs to sign
+// its own requests to LiveKit's inference gateway).
 import { randomBytes } from "node:crypto";
 import { AccessToken } from "livekit-server-sdk";
-import { envVoiceFields, voiceConfig, voiceStatus, VOICE_FIELDS, type VoiceConfig, type VoiceStatus } from "./voiceConfig";
+import {
+  envVoiceFields,
+  missingVoiceFields,
+  voiceConfig,
+  voiceStatus,
+  VOICE_FIELDS,
+  type VoiceConfig,
+  type VoiceStatus,
+} from "./voiceConfig";
 import type { ClusterConfigStatus } from "./clusterConfigStore";
+import type { VoiceDispatch } from "./voiceDispatch";
 import { checkSessionSecret } from "./sessionAuth";
-
-export const VOICE_ROOM = "rigel-voice";
 
 export type VoiceRole = "desktop" | "agent" | "phone";
 
@@ -20,12 +27,16 @@ export function identityFor(role: VoiceRole): string {
   return `rigel-phone-${randomBytes(4).toString("hex")}`;
 }
 
+export function newVoiceRoom(role: VoiceRole): string {
+  return `rigel-${role}-${randomBytes(4).toString("hex")}`;
+}
+
 /**
  * The `kind` claim, not the `agent` video grant, is what makes LiveKit report a
  * participant as `ParticipantKind.AGENT`. The grant only says "allowed to
  * register as an Agent Framework worker", which is a different permission and
- * one this worker never uses, since it joins the room directly instead of being
- * dispatched. `@livekit/agents` mints its own agent-participant tokens the same
+ * one this worker never uses, since it joins each room directly instead of
+ * being dispatched by LiveKit. `@livekit/agents` mints its own agent-participant tokens the same
  * way (see `workflows/warm_transfer.js`: `token.kind = "agent"`).
  *
  * `canUpdateOwnMetadata` is the other half: `@livekit/agents` reports its state
@@ -41,10 +52,12 @@ export function identityFor(role: VoiceRole): string {
 export async function mintVoiceToken(
   role: VoiceRole,
   context: string | null,
-): Promise<{ url: string; token: string } | null> {
+  room: string,
+): Promise<{ url: string; token: string; identity: string } | null> {
   const { config: c } = await voiceConfig(context);
   if (!c.url || !c.apiKey || !c.apiSecret) return null;
-  const at = new AccessToken(c.apiKey, c.apiSecret, { identity: identityFor(role), ttl: "6h" });
+  const identity = identityFor(role);
+  const at = new AccessToken(c.apiKey, c.apiSecret, { identity, ttl: "1h" });
   if (role === "agent") at.kind = "agent";
   // phone excluded: the desktop and the worker trust data-channel frames
   // (rigel.state / rigel.context) to carry the active kubectl context. A
@@ -52,14 +65,14 @@ export async function mintVoiceToken(
   // a different cluster.
   at.addGrant({
     roomJoin: true,
-    room: VOICE_ROOM,
+    room,
     canPublish: true,
     canSubscribe: true,
     canPublishData: role !== "phone",
     canUpdateOwnMetadata: role !== "phone",
     agent: role === "agent",
   });
-  return { url: c.url, token: await at.toJwt() };
+  return { url: c.url, token: await at.toJwt(), identity };
 }
 
 export interface AgentConfigResponse {
@@ -73,12 +86,13 @@ export interface AgentConfigResponse {
   openrouterApiKey: string;
 }
 
-export async function agentConfigResponse(context: string | null): Promise<AgentConfigResponse | null> {
+export async function agentConfigResponse(context: string | null, room: string): Promise<AgentConfigResponse | null> {
   const { config: c } = await voiceConfig(context);
-  const minted = await mintVoiceToken("agent", context);
+  const minted = await mintVoiceToken("agent", context, room);
   if (!minted || !c.openrouterApiKey) return null;
   return {
-    ...minted,
+    url: minted.url,
+    token: minted.token,
     model: c.model,
     sttModel: c.sttModel,
     ttsModel: c.ttsModel,
@@ -86,6 +100,23 @@ export async function agentConfigResponse(context: string | null): Promise<Agent
     apiSecret: c.apiSecret,
     openrouterApiKey: c.openrouterApiKey,
   };
+}
+
+export async function voiceTokenResponse(
+  role: VoiceRole,
+  context: string | null,
+  hub: VoiceDispatch,
+): Promise<Response> {
+  const room = newVoiceRoom(role);
+  const client = await mintVoiceToken(role, context, room);
+  const config = await agentConfigResponse(context, room);
+  if (!client || !config) {
+    const { config: c } = await voiceConfig(context);
+    return Response.json({ error: "voice is not configured", missing: missingVoiceFields(c) }, { status: 409 });
+  }
+  const delivered = hub.dispatch({ room, role, clientIdentity: client.identity, context, config });
+  if (!delivered) return Response.json({ error: "The voice agent isn't running." }, { status: 503 });
+  return Response.json({ url: client.url, token: client.token, room });
 }
 
 /**
@@ -141,7 +172,7 @@ export function voiceConfigPatch(body: unknown): Partial<VoiceConfig> {
   return patch;
 }
 
-/** Gate for /api/voice/agent-config. This is layered ON TOP of the global
+/** Gate for /api/voice/dispatch. This is layered ON TOP of the global
  * `/api/*` session-secret gate in index.ts, not a substitute for it — the
  * session secret alone is not enough here because the renderer also holds
  * it, and this route returns provider keys the renderer must never see. An

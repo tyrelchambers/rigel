@@ -2,10 +2,12 @@ import { initializeLogger, llm, voice } from "@livekit/agents";
 import { ACTION_KINDS, type SuggestedAction } from "@rigel/k8s/src/actionBlocks";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import type * as z from "zod";
-import { buildAgent, CONTEXT_HEADING, refreshInstructions, SENT_TO_DESKTOP } from "./agent.js";
-import type { PublishRoom } from "./publish.js";
+import { buildAgent, CONTEXT_HEADING, NO_DESKTOP, refreshInstructions, SENT_TO_DESKTOP } from "./agent.js";
+import type { PublishRoom, VoiceClient } from "./publish.js";
 import type { ServerClient } from "./serverClient.js";
-import { DESKTOP_IDENTITY, applyDataFrame, emptySessionState, type SessionState } from "./state.js";
+import { applyDataFrame, emptySessionState, type SessionState } from "./state.js";
+
+const DESKTOP: VoiceClient = { role: "desktop", clientIdentity: "rigel-desktop" };
 
 initializeLogger({ pretty: false, level: "silent" });
 
@@ -14,7 +16,7 @@ interface Frame {
   payload: Record<string, unknown>;
 }
 
-function fakeRoom(identities: string[] = [DESKTOP_IDENTITY]): { room: PublishRoom; frames: Frame[] } {
+function fakeRoom(identities: string[] = [DESKTOP.clientIdentity]): { room: PublishRoom; frames: Frame[] } {
   const frames: Frame[] = [];
   return {
     frames,
@@ -83,7 +85,7 @@ function fakeServer(overrides: Partial<ServerClient> = {}): FakeServer {
       proposals.push(action);
       return { ok: true, prUrl: "https://github.com/owner/repo/pull/7", number: 7, branch: "rigel/fix-x", repoSlug: "owner/repo", message: "ok" };
     },
-    agentConfig: async () => {
+    jobs: async () => {
       throw new Error("not used");
     },
     previewAction: async (action) => {
@@ -147,7 +149,7 @@ async function startSession(
   room: PublishRoom,
   responses: voice.testing.FakeLLMResponse[] = [],
 ) {
-  const agent = buildAgent(state, server, room);
+  const agent = buildAgent(state, server, room, DESKTOP);
   const session = new voice.AgentSession({ llm: new voice.testing.FakeLLM(responses) });
   const said: string[] = [];
   const realSay = session.say.bind(session);
@@ -168,7 +170,7 @@ afterEach(() => {
 });
 
 describe("buildAgent", () => {
-  const agentOf = (state = emptySessionState()) => buildAgent(state, fakeServer(), fakeRoom().room);
+  const agentOf = (state = emptySessionState()) => buildAgent(state, fakeServer(), fakeRoom().room, DESKTOP);
 
   // The guard is what a command does, not the shape the request may take. A
   // closed verb set here is what left the agent unable to read YAML at all.
@@ -189,7 +191,7 @@ describe("buildAgent", () => {
     const agent = agentOf(state);
     expect(agent.instructions).toContain("No kubectl context is selected");
 
-    applyDataFrame(state, DESKTOP_IDENTITY, "rigel.state", JSON.stringify({ activeContext: "kind-rigel" }));
+    applyDataFrame(state, DESKTOP, DESKTOP.clientIdentity, "rigel.state", JSON.stringify({ activeContext: "kind-rigel" }));
     await refreshInstructions(agent, state);
     expect(agent.instructions).toContain("kind-rigel");
     expect(agent.instructions).not.toContain("No kubectl context is selected");
@@ -240,7 +242,7 @@ describe("proposeMutation routing", () => {
     const { room, frames } = fakeRoom();
     const { opts } = toolOpts("call-42");
 
-    const out = await propose(buildAgent(state, server, room), restart, opts);
+    const out = await propose(buildAgent(state, server, room, DESKTOP), restart, opts);
 
     expect(server.previews).toEqual([restart]);
     expect(server.runs).toEqual([restart]);
@@ -267,7 +269,7 @@ describe("proposeMutation routing", () => {
     });
     const { room, frames } = fakeRoom();
 
-    const out = await propose(buildAgent(emptySessionState(), server, room), restart, toolOpts().opts);
+    const out = await propose(buildAgent(emptySessionState(), server, room, DESKTOP), restart, toolOpts().opts);
 
     expect(out).toMatch(/^That failed: Error from server/);
     expect(frames[1]!.payload).toMatchObject({ ok: false });
@@ -281,7 +283,7 @@ describe("proposeMutation routing", () => {
     });
     const { room, frames } = fakeRoom();
 
-    const out = await propose(buildAgent(emptySessionState(), server, room), restart, toolOpts().opts);
+    const out = await propose(buildAgent(emptySessionState(), server, room, DESKTOP), restart, toolOpts().opts);
 
     expect(out).toMatch(/nothing changed/);
     expect(frames[1]!.payload).toMatchObject({ ok: false });
@@ -293,7 +295,7 @@ describe("proposeMutation routing", () => {
     const { room, frames } = fakeRoom();
     const del: SuggestedAction = { kind: "deleteResource", label: "Delete svc web", name: "web", resourceKind: "service" };
 
-    const out = await propose(buildAgent(state, server, room), del, toolOpts("call-9").opts);
+    const out = await propose(buildAgent(state, server, room, DESKTOP), del, toolOpts("call-9").opts);
 
     expect(server.runs).toEqual([]);
     expect(out).toBe(SENT_TO_DESKTOP);
@@ -308,7 +310,7 @@ describe("proposeMutation routing", () => {
     const { room, frames } = fakeRoom();
     const del: SuggestedAction = { kind: "deletePod", label: "Delete web-1", pod: "web-1" };
 
-    const out = await propose(buildAgent(state, server, room), del, toolOpts().opts);
+    const out = await propose(buildAgent(state, server, room, DESKTOP), del, toolOpts().opts);
 
     expect(out).toMatch(/desktop/);
     expect(frames[0]!.payload.action).toEqual(del);
@@ -324,7 +326,7 @@ describe("proposeMutation routing", () => {
       },
     });
     const { room, frames } = fakeRoom();
-    const agent = buildAgent(emptySessionState(), server, room);
+    const agent = buildAgent(emptySessionState(), server, room, DESKTOP);
 
     const unpreviewable = [
       { kind: "purge", label: "Purge memos", name: "memos", namespace: "default" },
@@ -341,12 +343,59 @@ describe("proposeMutation routing", () => {
     expect(frames.map((f) => f.payload.command)).toEqual([null, null, null]);
   });
 
+  test("a phone room never proposes a click, even with the phone in the room", async () => {
+    const phone: VoiceClient = { role: "phone", clientIdentity: "rigel-phone-abc" };
+    const state = emptySessionState();
+    const { room, frames } = fakeRoom([phone.clientIdentity]);
+
+    const out = await propose(
+      buildAgent(state, fakeServer(), room, phone),
+      { kind: "deleteNamespace", label: "Delete staging", name: "staging" },
+      toolOpts().opts,
+    );
+
+    expect(out).toMatch(/^Refused:.*no desktop session/);
+    expect(frames).toEqual([]);
+    expect(state.awaitingClick.size).toBe(0);
+  });
+
+  test("a phone room refuses the unpreviewable kinds too", async () => {
+    const phone: VoiceClient = { role: "phone", clientIdentity: "rigel-phone-abc" };
+    const { room, frames } = fakeRoom([phone.clientIdentity]);
+    const out = await propose(
+      buildAgent(emptySessionState(), fakeServer(), room, phone),
+      { kind: "purge", label: "Purge memos", name: "memos", namespace: "default" },
+      toolOpts().opts,
+    );
+    expect(out).toBe(NO_DESKTOP);
+    expect(frames).toEqual([]);
+  });
+
+  test("a phone room still runs what destroys nothing, and tells the phone", async () => {
+    const phone: VoiceClient = { role: "phone", clientIdentity: "rigel-phone-abc" };
+    const server = fakeServer();
+    const destinations: string[][] = [];
+    const room: PublishRoom = {
+      localParticipant: {
+        publishData: async (_data, options) => {
+          destinations.push(options.destination_identities);
+        },
+      },
+      remoteParticipants: new Map([[phone.clientIdentity, { identity: phone.clientIdentity }]]),
+    };
+
+    await propose(buildAgent(emptySessionState(), server, room, phone), restart, toolOpts().opts);
+
+    expect(server.runs).toEqual([restart]);
+    expect(destinations).toEqual([[phone.clientIdentity], [phone.clientIdentity]]);
+  });
+
   test("no desktop in the room is refused and publishes nothing", async () => {
     const state = emptySessionState();
     const { room, frames } = fakeRoom(["phone-1"]);
 
     const out = await propose(
-      buildAgent(state, fakeServer(), room),
+      buildAgent(state, fakeServer(), room, DESKTOP),
       { kind: "deleteNamespace", label: "Delete staging", name: "staging" },
       toolOpts().opts,
     );
@@ -362,7 +411,7 @@ describe("proposeMutation routing", () => {
     const server = fakeServer({ previewAction: async () => ["kubectl", "port-forward", "svc/web", "8080:80"] });
     const { room, frames } = fakeRoom();
 
-    const out = await propose(buildAgent(state, server, room), restart, toolOpts().opts);
+    const out = await propose(buildAgent(state, server, room, DESKTOP), restart, toolOpts().opts);
 
     expect(out).toMatch(/^Refused:/);
     expect(frames).toEqual([]);
@@ -380,7 +429,7 @@ describe("proposeMutation routing", () => {
     });
     const { room, frames } = fakeRoom();
 
-    const out = await propose(buildAgent(emptySessionState(), server, room), { kind: "patch", label: "Patch web" }, toolOpts().opts);
+    const out = await propose(buildAgent(emptySessionState(), server, room, DESKTOP), { kind: "patch", label: "Patch web" }, toolOpts().opts);
 
     expect(out).toMatch(/^Invalid arguments for proposeMutation/);
     for (const kind of ACTION_KINDS) expect(out).toContain(kind);
@@ -395,7 +444,7 @@ describe("proposeMutation routing", () => {
     });
     const state = emptySessionState();
 
-    const out = await propose(buildAgent(state, server, fakeRoom().room), restart, toolOpts().opts);
+    const out = await propose(buildAgent(state, server, fakeRoom().room, DESKTOP), restart, toolOpts().opts);
 
     expect(out).toMatch(/^Refused: the app could not build that command/);
     expect(state.awaitingClick.size).toBe(0);
@@ -443,7 +492,7 @@ describe("checkGitLink", () => {
     agent.toolCtx.getFunctionTool("checkGitLink")!.execute(args as never, {} as never) as Promise<string>;
 
   test("says which repository a linked workload is managed from", async () => {
-    const out = await ask(buildAgent(emptySessionState(), fakeServer(), fakeRoom().room), {
+    const out = await ask(buildAgent(emptySessionState(), fakeServer(), fakeRoom().room, DESKTOP), {
       name: "web",
       namespace: "shop",
     });
@@ -460,7 +509,7 @@ describe("checkGitLink", () => {
         return { linked: true, link: LINK };
       },
     });
-    await ask(buildAgent(emptySessionState(), server, fakeRoom().room), {
+    await ask(buildAgent(emptySessionState(), server, fakeRoom().room, DESKTOP), {
       kind: "statefulset",
       name: "web",
       namespace: "shop",
@@ -470,7 +519,7 @@ describe("checkGitLink", () => {
 
   test("an unlinked workload is stated plainly, not as an error", async () => {
     const server = fakeServer({ repoLink: async () => ({ linked: false, link: null }) });
-    const out = await ask(buildAgent(emptySessionState(), server, fakeRoom().room), { name: "web" });
+    const out = await ask(buildAgent(emptySessionState(), server, fakeRoom().room, DESKTOP), { name: "web" });
     expect(out).toMatch(/not/i);
     expect(out).toContain("pull request");
   });
@@ -481,7 +530,7 @@ describe("checkGitLink", () => {
         throw new Error("socket hang up");
       },
     });
-    await expect(ask(buildAgent(emptySessionState(), server, fakeRoom().room), { name: "web" })).resolves.toContain(
+    await expect(ask(buildAgent(emptySessionState(), server, fakeRoom().room, DESKTOP), { name: "web" })).resolves.toContain(
       "socket hang up",
     );
   });
@@ -493,7 +542,7 @@ describe("proposeRepoFix from voice", () => {
     const server = fakeServer();
     const { room, frames } = fakeRoom();
 
-    const out = await propose(buildAgent(state, server, room), FIX, toolOpts("call-7").opts);
+    const out = await propose(buildAgent(state, server, room, DESKTOP), FIX, toolOpts("call-7").opts);
 
     expect(server.proposals).toEqual([FIX]);
     expect(server.previews).toEqual([]); // a PR is not a kubectl command
@@ -518,14 +567,14 @@ describe("proposeRepoFix from voice", () => {
 
   test("carries no diff on the wire, because the pull request shows the change", async () => {
     const { room, frames } = fakeRoom();
-    await propose(buildAgent(emptySessionState(), fakeServer(), room), FIX, toolOpts().opts);
+    await propose(buildAgent(emptySessionState(), fakeServer(), room, DESKTOP), FIX, toolOpts().opts);
     expect(JSON.stringify(frames)).not.toContain("diff");
   });
 
   test("opens the pull request even with no desktop connected", async () => {
     const server = fakeServer();
     const { room, frames } = fakeRoom(["phone-1"]);
-    const out = await propose(buildAgent(emptySessionState(), server, room), FIX, toolOpts().opts);
+    const out = await propose(buildAgent(emptySessionState(), server, room, DESKTOP), FIX, toolOpts().opts);
     expect(server.proposals).toEqual([FIX]);
     expect(out).toMatch(/^Done:/);
     // The frames are display only, so they go up regardless; nothing waits.
@@ -538,7 +587,7 @@ describe("proposeRepoFix from voice", () => {
     });
     const { room, frames } = fakeRoom();
 
-    const out = await propose(buildAgent(emptySessionState(), server, room), FIX, toolOpts().opts);
+    const out = await propose(buildAgent(emptySessionState(), server, room, DESKTOP), FIX, toolOpts().opts);
 
     expect(out).toContain("No manifest under k8s");
     expect(out).not.toMatch(/^Done:/);
@@ -553,7 +602,7 @@ describe("proposeRepoFix from voice", () => {
     });
     const { room, frames } = fakeRoom();
 
-    const out = await propose(buildAgent(emptySessionState(), server, room), FIX, toolOpts().opts);
+    const out = await propose(buildAgent(emptySessionState(), server, room, DESKTOP), FIX, toolOpts().opts);
 
     expect(out).toContain("unknown source");
     expect(out).toMatch(/nothing was pushed/i);
@@ -563,7 +612,7 @@ describe("proposeRepoFix from voice", () => {
   test("a proposal missing what a pull request needs names every missing field", async () => {
     const server = fakeServer();
     const { room, frames } = fakeRoom();
-    const agent = buildAgent(emptySessionState(), server, room);
+    const agent = buildAgent(emptySessionState(), server, room, DESKTOP);
 
     const out = await propose(agent, { kind: "proposeRepoFix", label: "Open a PR" }, toolOpts().opts);
 
@@ -584,7 +633,7 @@ describe("proposeRepoFix from voice", () => {
   // server accepts.
   test("sourceId is refused naming source, and nothing else", async () => {
     const server = fakeServer();
-    const agent = buildAgent(emptySessionState(), server, fakeRoom().room);
+    const agent = buildAgent(emptySessionState(), server, fakeRoom().room, DESKTOP);
     const { source: _drop, ...rest } = FIX;
 
     const out = await propose(agent, { ...rest, sourceId: FIX.source }, toolOpts().opts);
@@ -596,7 +645,7 @@ describe("proposeRepoFix from voice", () => {
 
   test("an edit sent as an array is refused naming edit", async () => {
     const server = fakeServer();
-    const agent = buildAgent(emptySessionState(), server, fakeRoom().room);
+    const agent = buildAgent(emptySessionState(), server, fakeRoom().room, DESKTOP);
 
     const out = await propose(agent, { ...FIX, edit: [FIX.edit] }, toolOpts().opts);
 
@@ -607,7 +656,7 @@ describe("proposeRepoFix from voice", () => {
 
   test("the workload named as deployment is refused naming name", async () => {
     const server = fakeServer();
-    const agent = buildAgent(emptySessionState(), server, fakeRoom().room);
+    const agent = buildAgent(emptySessionState(), server, fakeRoom().room, DESKTOP);
     const { name: _drop, ...rest } = FIX;
 
     const out = await propose(agent, { ...rest, deployment: "web" }, toolOpts().opts);
@@ -617,7 +666,7 @@ describe("proposeRepoFix from voice", () => {
   });
 
   test("a field it never sent is named, and the ones it got right are not", async () => {
-    const agent = buildAgent(emptySessionState(), fakeServer(), fakeRoom().room);
+    const agent = buildAgent(emptySessionState(), fakeServer(), fakeRoom().room, DESKTOP);
     const { title: _drop, ...rest } = FIX;
 
     const out = await propose(agent, rest, toolOpts().opts);
@@ -631,7 +680,7 @@ describe("proposeRepoFix from voice", () => {
     const server = fakeServer();
     const { room, frames } = fakeRoom();
 
-    const out = await propose(buildAgent(state, server, room), { ...FIX, destructive: true }, toolOpts("call-3").opts);
+    const out = await propose(buildAgent(state, server, room, DESKTOP), { ...FIX, destructive: true }, toolOpts("call-3").opts);
 
     expect(server.proposals).toEqual([]);
     expect(out).toBe(SENT_TO_DESKTOP);
@@ -648,7 +697,7 @@ describe("queryRigel", () => {
   // empty lists and said nothing was found, in a cluster whose real selector is
   // workload.user.cattle.io/workloadselector. The server already knows.
   test("related names every resource belonging to an app, without a selector", async () => {
-    const out = await ask(buildAgent(emptySessionState(), fakeServer(), fakeRoom().room), {
+    const out = await ask(buildAgent(emptySessionState(), fakeServer(), fakeRoom().room, DESKTOP), {
       query: "related",
       name: "reddex-deploy",
       namespace: "default",
@@ -663,7 +712,7 @@ describe("queryRigel", () => {
     const server = fakeServer({
       relatedResources: async (name, namespace) => ({ name, namespace, resources: [] }),
     });
-    const out = await ask(buildAgent(emptySessionState(), server, fakeRoom().room), {
+    const out = await ask(buildAgent(emptySessionState(), server, fakeRoom().room, DESKTOP), {
       query: "related",
       name: "ghost",
     });
@@ -678,7 +727,7 @@ describe("queryRigel", () => {
       },
     });
     await expect(
-      ask(buildAgent(emptySessionState(), server, fakeRoom().room), { query: "related", name: "web" }),
+      ask(buildAgent(emptySessionState(), server, fakeRoom().room, DESKTOP), { query: "related", name: "web" }),
     ).resolves.toContain("socket hang up");
   });
 });
@@ -693,7 +742,7 @@ describe("reportUnsupported", () => {
   test("records the request and tells the agent to say so plainly", async () => {
     const server = fakeServer();
     const out = await report(
-      buildAgent(emptySessionState(), server, fakeRoom().room),
+      buildAgent(emptySessionState(), server, fakeRoom().room, DESKTOP),
       server,
       "commit manifests for reddex-deploy and its related resources to the repo",
     );
@@ -710,7 +759,7 @@ describe("reportUnsupported", () => {
         throw new Error("configmap write forbidden");
       },
     });
-    const out = await report(buildAgent(emptySessionState(), server, fakeRoom().room), server, "do a thing");
+    const out = await report(buildAgent(emptySessionState(), server, fakeRoom().room, DESKTOP), server, "do a thing");
     expect(out).toMatch(/cannot/i);
   });
 });
@@ -725,7 +774,7 @@ describe("an action sent as a JSON string", () => {
     state.activeContext = "prod";
     const server = fakeServer();
     const out = await propose(
-      buildAgent(state, server, fakeRoom().room),
+      buildAgent(state, server, fakeRoom().room, DESKTOP),
       JSON.stringify(restart) as unknown as SuggestedAction,
       toolOpts().opts,
     );
@@ -735,7 +784,7 @@ describe("an action sent as a JSON string", () => {
 
   test("a string that is not JSON at all is still refused by the schema", async () => {
     const out = await propose(
-      buildAgent(emptySessionState(), fakeServer(), fakeRoom().room),
+      buildAgent(emptySessionState(), fakeServer(), fakeRoom().room, DESKTOP),
       "restart the web deployment" as unknown as SuggestedAction,
       toolOpts().opts,
     );
@@ -744,7 +793,7 @@ describe("an action sent as a JSON string", () => {
 
   test("the parsed object is held to the same schema", async () => {
     const out = await propose(
-      buildAgent(emptySessionState(), fakeServer(), fakeRoom().room),
+      buildAgent(emptySessionState(), fakeServer(), fakeRoom().room, DESKTOP),
       JSON.stringify({ kind: "patch", label: "x" }) as unknown as SuggestedAction,
       toolOpts().opts,
     );
@@ -782,7 +831,7 @@ describe("adoptWorkload", () => {
     });
     const { room, frames } = fakeRoom();
 
-    const out = await propose(buildAgent(emptySessionState(), server, room), ADOPT, toolOpts("call-9").opts);
+    const out = await propose(buildAgent(emptySessionState(), server, room, DESKTOP), ADOPT, toolOpts("call-9").opts);
 
     expect(out).toMatch(/^Done:/);
     expect(out).toContain("12");
@@ -793,7 +842,7 @@ describe("adoptWorkload", () => {
 
   test("carries no edit, because the server builds every file", async () => {
     const server = fakeServer();
-    await propose(buildAgent(emptySessionState(), server, fakeRoom().room), ADOPT, toolOpts().opts);
+    await propose(buildAgent(emptySessionState(), server, fakeRoom().room, DESKTOP), ADOPT, toolOpts().opts);
     expect(server.proposals[0]!.edit).toBeUndefined();
   });
 
@@ -801,7 +850,7 @@ describe("adoptWorkload", () => {
     const server = fakeServer({
       proposeFix: async () => ({ ok: false, message: "reddex-deploy is a Helm release (sh.helm.release.v1.reddex.v3)." }),
     });
-    const out = await propose(buildAgent(emptySessionState(), server, fakeRoom().room), ADOPT, toolOpts().opts);
+    const out = await propose(buildAgent(emptySessionState(), server, fakeRoom().room, DESKTOP), ADOPT, toolOpts().opts);
     expect(out).toContain("Helm release");
     expect(out).not.toMatch(/^Done:/);
   });
@@ -821,7 +870,7 @@ describe("merging a pull request", () => {
     const server = fakeServer();
     const { room, frames } = fakeRoom();
 
-    const out = await propose(buildAgent(state, server, room), merge, toolOpts("call-5").opts);
+    const out = await propose(buildAgent(state, server, room, DESKTOP), merge, toolOpts("call-5").opts);
 
     expect(out).toBe(SENT_TO_DESKTOP);
     expect(server.runs).toEqual([]);
@@ -831,7 +880,7 @@ describe("merging a pull request", () => {
 
   test("with no desktop connected it is refused rather than run", async () => {
     const out = await propose(
-      buildAgent(emptySessionState(), fakeServer(), fakeRoom(["phone-1"]).room),
+      buildAgent(emptySessionState(), fakeServer(), fakeRoom(["phone-1"]).room, DESKTOP),
       merge,
       toolOpts().opts,
     );
@@ -839,7 +888,7 @@ describe("merging a pull request", () => {
   });
 
   test("the agent can find which pull request to merge", async () => {
-    const out = (await buildAgent(emptySessionState(), fakeServer(), fakeRoom().room)
+    const out = (await buildAgent(emptySessionState(), fakeServer(), fakeRoom().room, DESKTOP)
       .toolCtx.getFunctionTool("queryRigel")!
       .execute({ query: "pullRequests" } as never, {} as never)) as string;
     expect(out).toContain("#12");

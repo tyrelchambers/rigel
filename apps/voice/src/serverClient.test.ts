@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { createServerClient, VoiceNotConfiguredError } from "./serverClient.js";
+import { createServerClient } from "./serverClient.js";
 
 function fakeFetch(status: number, body: unknown) {
   return vi.fn(async () => ({ ok: status < 400, status, json: async () => body })) as unknown as typeof fetch;
@@ -8,26 +8,47 @@ function fakeFetch(status: number, body: unknown) {
 const BASE = "http://127.0.0.1:4321";
 
 describe("createServerClient", () => {
-  test("agentConfig sends the worker + session headers", async () => {
-    const f = fakeFetch(200, { url: "wss://x", token: "t", model: "m", sttModel: "deepgram/nova-3", ttsModel: "cartesia/sonic-2", apiKey: "k", apiSecret: "s", openrouterApiKey: "o" });
+  test("jobs holds the dispatch stream open with the worker + session headers and yields each job", async () => {
+    const job = { room: "rigel-desktop-0a1b2c3d", role: "desktop", clientIdentity: "rigel-desktop", context: "prod", config: {} };
+    const text = `: ping\n\nevent: job\ndata: ${JSON.stringify(job)}\n\n`;
+    const half = Math.floor(text.length / 2);
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(text.slice(0, half)));
+        controller.enqueue(new TextEncoder().encode(text.slice(half)));
+        controller.close();
+      },
+    });
+    const f = vi.fn(async () => new Response(body, { status: 200 })) as unknown as typeof fetch;
     const c = createServerClient(BASE, "sess", "wt", f);
-    const cfg = await c.agentConfig();
-    expect(cfg.url).toBe("wss://x");
+    const seen: unknown[] = [];
+    for await (const j of await c.jobs()) seen.push(j);
+    expect(seen).toEqual([job]);
     const [urlArg, init] = (f as unknown as ReturnType<typeof vi.fn>).mock.calls[0]!;
-    expect(urlArg).toBe(`${BASE}/api/voice/agent-config`);
+    expect(urlArg).toBe(`${BASE}/api/voice/dispatch`);
     expect((init as RequestInit).headers).toMatchObject({
       "x-rigel-session": "sess",
       "x-rigel-voice-worker": "wt",
     });
   });
 
-  test("agentConfig throws VoiceNotConfiguredError naming the missing fields on 409", async () => {
-    const f = fakeFetch(409, { error: "voice is not configured", missing: ["apiSecret", "openrouterApiKey"] });
+  test("jobs throws when the server refuses the stream", async () => {
+    const c = createServerClient(BASE, "sess", "wt", fakeFetch(404, { error: "voice is disabled" }));
+    await expect(c.jobs()).rejects.toThrow("404");
+  });
+
+  test("jobs gives up on a stream that goes silent past the idle limit", async () => {
+    const f = vi.fn(async (_url: string, init: RequestInit) => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          init.signal?.addEventListener("abort", () => controller.error(new Error("aborted")));
+        },
+      });
+      return new Response(body, { status: 200 });
+    }) as unknown as typeof fetch;
     const c = createServerClient(BASE, "sess", "wt", f);
-    const err = await c.agentConfig().catch((e) => e);
-    expect(err).toBeInstanceOf(VoiceNotConfiguredError);
-    expect((err as VoiceNotConfiguredError).missing).toEqual(["apiSecret", "openrouterApiKey"]);
-    expect((err as Error).message).toMatch(/apiSecret, openrouterApiKey/);
+    const jobs = await c.jobs(20);
+    await expect((async () => { for await (const _ of jobs) { /* none */ } })()).rejects.toThrow("aborted");
   });
 
   test("previewAction posts to /api/action?preview=1 with the context header", async () => {

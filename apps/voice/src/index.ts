@@ -1,54 +1,15 @@
-// Voice worker entry. Fetches its bootstrap from the local server (retrying
-// while the server comes up), dials the LiveKit room, and starts the pipeline.
-// No LiveKit worker registration/dispatch: this process serves exactly one room.
+// Voice worker entry. Holds the local server's dispatch stream open (retrying
+// while the server comes up or restarts) and joins a fresh LiveKit room for
+// each job it hands down, one AgentSession per client connection. No LiveKit
+// worker registration: the server is what dispatches.
 //
 // Log lines carry no prefix of their own. Electron's main process prefixes this
 // child's whole stdout/stderr stream with "[voice] " (see forkVoiceWorker in
 // apps/desktop/src/main.ts), which also covers the agents SDK's own pino output.
-import { voice, inference, initializeLogger } from "@livekit/agents";
-import { ParticipantKind, Room, RoomEvent } from "@livekit/rtc-node";
-import * as openai from "@livekit/agents-plugin-openai";
-import { buildAgent, refreshInstructions } from "./agent.js";
-import { VOICE_SAMPLE_RATE, voiceOutputOptions } from "./audio.js";
-import { attachSessionDiagnostics } from "./diagnostics.js";
-import { announceAgentState, endDesktopSession } from "./lifecycle.js";
-import { createServerClient, VoiceNotConfiguredError, type AgentConfig, type ServerClient } from "./serverClient.js";
-import { applyDataFrame, DESKTOP_IDENTITY, emptySessionState } from "./state.js";
-
-/**
- * Node terminates a utility process on an unhandled rejection, so every
- * fire-and-forget promise in the room handlers below needs a catch: a single
- * transient failure would otherwise take the whole worker down, and voice with
- * it.
- */
-function logRejection(what: string): (err: unknown) => void {
-  return (err) => console.error(`${what} failed:`, err);
-}
-
-async function bootstrap(server: ServerClient): Promise<AgentConfig> {
-  for (let i = 0; i < 30; i++) {
-    try {
-      return await server.agentConfig();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(`agent-config attempt ${i + 1}/30 failed: ${message}`);
-      if (i === 29) throw err;
-      await new Promise((r) => setTimeout(r, 1000));
-    }
-  }
-  throw new Error("unreachable");
-}
-
-/**
- * sysexits.h EX_CONFIG: "something was found in an unconfigured or
- * misconfigured state". forkVoiceWorker's exit handler in
- * apps/desktop/src/main.ts checks for this exact code (no shared package
- * between these two processes to hold the constant) to retry a missing
- * config patiently instead of feeding it to the crash-loop guard: unlike an
- * actual crash, respawning faster cannot fix "not configured", only the user
- * finishing Settings can.
- */
-const NOT_CONFIGURED_EXIT_CODE = 78;
+import { initializeLogger } from "@livekit/agents";
+import { listenForJobs } from "./dispatch.js";
+import { createServerClient } from "./serverClient.js";
+import { logRejection, runSession } from "./session.js";
 
 async function main(): Promise<void> {
   // Every agents-SDK class logs from a field initializer, so constructing one
@@ -61,158 +22,13 @@ async function main(): Promise<void> {
     process.env.RIGEL_SESSION_SECRET ?? "",
     process.env.RIGEL_VOICE_WORKER_TOKEN ?? "",
   );
-  const cfg = await bootstrap(server);
-
-  const room = new Room();
-  await room.connect(cfg.url, cfg.token, { autoSubscribe: true, dynacast: true });
-  // Diagnostic. kind must read AGENT for the renderer's useVoiceAssistant to
-  // find this participant at all, and it is set by the `kind` claim on the
-  // token minted in apps/server/src/voiceRoutes.ts, not by the `agent` grant.
-  const local = room.localParticipant;
-  console.log(
-    `connected to room as ${local?.identity} kind=${local ? (ParticipantKind[local.kind] ?? local.kind) : "?"}`,
-  );
-
-  const state = emptySessionState();
-  const agent = buildAgent(state, server, room);
-
-  const session = new voice.AgentSession({
-    stt: new inference.STT({
-      model: cfg.sttModel,
-      apiKey: cfg.apiKey,
-      apiSecret: cfg.apiSecret,
-    }),
-    llm: new openai.LLM({
-      baseURL: "https://openrouter.ai/api/v1",
-      apiKey: cfg.openrouterApiKey,
-      model: cfg.model,
-    }),
-    tts: new inference.TTS({
-      model: cfg.ttsModel,
-      apiKey: cfg.apiKey,
-      apiSecret: cfg.apiSecret,
-      sampleRate: VOICE_SAMPLE_RATE,
-    }),
-    // No `vad:` on purpose. AgentSession auto-provisions the bundled
-    // inference.VAD({ model: "silero" }), which runs in-process via
-    // @livekit/local-inference. Passing one here would only duplicate it.
-    turnHandling: {
-      turnDetection: new inference.TurnDetector({
-        version: "v1",
-        apiKey: cfg.apiKey,
-        apiSecret: cfg.apiSecret,
-      }),
-      // Deterministic VAD, not the adaptive detector, which classifies a short
-      // utterance near the agent's speech as a backchannel and discards it.
-      // "stop" and "no" over a long answer are exactly that shape, and being
-      // unable to cut the agent off is the worse failure.
-      //
-      // resumeFalseInterruption is the SDK's default and it is wrong here: an
-      // interruption with no user transcript within two seconds is treated as
-      // false, and the answer the operator just stopped starts playing again.
-      // In the field that read as the interruption not working, and closing the
-      // popover and reopening it found the agent still finishing a reply that
-      // had been cut off. An operator who interrupts meant it, and asking again
-      // is cheaper than being talked over.
-      //
-      // minDuration is halved from 500ms for the same reason: the cost of a
-      // cough stopping the agent is one repeated question, and the cost of
-      // missing a real interruption is talking over the person.
-      interruption: { mode: "vad", resumeFalseInterruption: false, minDuration: 250 },
-      // A streaming turn detector silently opts the session into
-      // streamingEndpointingOptions, whose minDelay is 300ms. Half a second of
-      // thought mid-sentence read as the end of the turn, and the agent
-      // answered a question the operator had not finished asking. These are the
-      // deliberate values: dynamic, so a speaker who pauses is learned rather
-      // than talked over, with a floor well clear of an ordinary breath and a
-      // ceiling that still ends a turn the detector never calls. Preemptive
-      // generation absorbs most of what the floor costs time to first token.
-      endpointing: { mode: "dynamic", minDelay: 900, maxDelay: 4000 },
-    },
-    // The SDK default is 3, which is not a budget for work: a model that makes
-    // one recoverable mistake, or that reads three resources before acting, has
-    // nothing left and the turn ends in narration. Field-tested at 3 and it
-    // ended in narration every time. Each step is one tool call, and the tools
-    // are policy-gated, so the ceiling is about patience rather than safety.
-    maxToolSteps: 8,
-    keytermsOptions: { keyterms: state.keyterms },
+  await listenForJobs(server, (job) => {
+    console.log(`job: ${job.role} room ${job.room}`);
+    void runSession(job, server).catch(logRejection(`${job.room}: running the session`));
   });
-
-  attachSessionDiagnostics(session);
-
-  console.log(`models: llm=${cfg.model} stt=${cfg.sttModel} tts=${cfg.ttsModel}`);
-
-  const decoder = new TextDecoder();
-  room.on(RoomEvent.DataReceived, (payload: Uint8Array, participant, _kind, topic?: string) => {
-    const effect = applyDataFrame(state, participant?.identity, topic, decoder.decode(payload));
-    if (effect.contextChanged) void refreshInstructions(agent, state).catch(logRejection("refreshing instructions"));
-    if (effect.keytermsChanged) session.updateOptions({ keyterms: state.keyterms });
-    // The desktop ran (or refused) a click-tier change. say() defaults to
-    // addToChatCtx, so the agent both tells the operator and stops treating
-    // the proposal as outstanding.
-    if (effect.speak) session.say(effect.speak);
-    // A rigel.state frame is the first thing the renderer publishes once its
-    // own handlers are mounted, and the only proof this side gets of that.
-    // ParticipantConnected fires earlier, so the announce there can land in a
-    // renderer that is not listening yet and simply be dropped.
-    if (participant?.identity === DESKTOP_IDENTITY && topic === "rigel.state") {
-      void announceAgentState(room, session.agentState);
-    }
-  });
-
-  session.on(voice.AgentSessionEventTypes.AgentStateChanged, (ev) => {
-    console.log(`agent state ${ev.oldState} -> ${ev.newState}`);
-    void announceAgentState(room, ev.newState);
-  });
-
-  room.on(RoomEvent.ParticipantConnected, (participant) => {
-    if (participant.identity !== DESKTOP_IDENTITY) return;
-    console.log("desktop joined");
-    void announceAgentState(room, session.agentState);
-  });
-
-  room.on(RoomEvent.ParticipantDisconnected, (participant) => {
-    if (participant.identity !== DESKTOP_IDENTITY) return;
-    console.log("desktop left, scrubbing the session");
-    void endDesktopSession(state, agent, session)
-      .then(() => refreshInstructions(agent, state))
-      .catch(logRejection("scrubbing the session"));
-  });
-
-  // Diagnostic. Confirms whether the SDK's own lk.agent.state write lands:
-  // rtc-node's setAttributes resolves whether or not the server accepted it,
-  // so a missing canUpdateOwnMetadata grant is invisible at the call site.
-  room.on(RoomEvent.ParticipantAttributesChanged, (changed, participant) => {
-    console.log(`attributes changed for ${participant.identity}:`, changed);
-  });
-
-  await session.start({
-    agent,
-    room,
-    // Without these the desktop closing the popover kills the AgentSession for
-    // the life of the worker process: RoomIO closes it on a CLIENT_INITIATED
-    // disconnect and nothing ever starts another, so every later connection
-    // joins a room holding an agent that will never transcribe again. Keeping
-    // the session and relinking on rejoin is what the option is for, and it
-    // also skips a pipeline cold start on every reconnect. What a session must
-    // NOT keep is handled explicitly in endDesktopSession.
-    //
-    // participantIdentity pins the linked participant to the desktop. A phone
-    // in the room would otherwise be eligible, and the desktop is the only
-    // participant whose audio this agent is allowed to act on.
-    inputOptions: { closeOnDisconnect: false, participantIdentity: DESKTOP_IDENTITY },
-    outputOptions: voiceOutputOptions(),
-  });
-  console.log("session started");
-  void announceAgentState(room, session.agentState);
 }
 
 main().catch((err) => {
-  if (err instanceof VoiceNotConfiguredError) {
-    console.error(err.message);
-    process.exit(NOT_CONFIGURED_EXIT_CODE);
-    return;
-  }
   console.error("fatal:", err);
   process.exit(1);
 });

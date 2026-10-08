@@ -8,7 +8,7 @@ import { actionSchema } from "@rigel/k8s/src/actionSchema";
 import { voiceSystemPrompt } from "@rigel/server/src/systemPrompt";
 import { z } from "zod";
 import { decideMutationRoute } from "./mutationFlow.js";
-import { desktopPresent, publishJson, type PublishRoom } from "./publish.js";
+import { desktopPresent, publishJson, type PublishRoom, type VoiceClient } from "./publish.js";
 import { runRead } from "./readTool.js";
 import type { ServerClient } from "./serverClient.js";
 import type { SessionState } from "./state.js";
@@ -25,7 +25,12 @@ export const SENT_TO_DESKTOP =
 export const NO_DESKTOP =
   "Refused: this one is destructive and needs approval in the desktop app, and no desktop session is connected. Tell the user this in one sentence.";
 
-export function buildAgent(state: SessionState, server: ServerClient, room: PublishRoom): voice.Agent {
+export function buildAgent(
+  state: SessionState,
+  server: ServerClient,
+  room: PublishRoom,
+  client: VoiceClient,
+): voice.Agent {
   return new (class extends voice.Agent {
     constructor() {
       super({
@@ -172,14 +177,14 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
               // Both PR kinds take the same route: they change no cluster
               // state, land on a branch, and are read on GitHub before merging.
               if ((a.kind === "proposeRepoFix" || a.kind === "adoptWorkload") && isAutoRunnable(a)) {
-                await publishJson(room, "rigel.action", { id, action: a, command: null, auto: true });
+                await publishJson(room, client, "rigel.action", { id, action: a, command: null, auto: true });
                 try {
                   const res = await server.proposeFix(a, state.activeContext);
                   if (!res.ok) {
-                    await publishJson(room, "rigel.action.result", { id, ok: false, summary: res.message ?? "failed" });
+                    await publishJson(room, client, "rigel.action.result", { id, ok: false, summary: res.message ?? "failed" });
                     return `That failed: ${res.message ?? "the pull request could not be opened"}. Nothing was pushed. Tell the user in one sentence.`;
                   }
-                  await publishJson(room, "rigel.action.result", {
+                  await publishJson(room, client, "rigel.action.result", {
                     id,
                     ok: true,
                     summary: `opened pull request #${res.number ?? 0}`,
@@ -192,7 +197,7 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
                       : "";
                   return `Done: pull request #${res.number ?? 0} is open at ${res.prUrl}.${carried} Tell the user the pull request is open, name the repository and the number, say the URL, and say how many resources it covers; the link is in the popover and the change itself is on GitHub. Nothing was changed on the cluster.`;
                 } catch (err) {
-                  await publishJson(room, "rigel.action.result", { id, ok: false, summary: String(err) });
+                  await publishJson(room, client, "rigel.action.result", { id, ok: false, summary: String(err) });
                   return `That failed: ${String(err)}. Nothing was pushed. Tell the user in one sentence.`;
                 }
               }
@@ -205,9 +210,9 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
               // the desktop without a command string; the ConfirmSheet builds
               // its own preview there.
               if (!PREVIEWABLE(a)) {
-                if (!desktopPresent(room)) return NO_DESKTOP;
+                if (!desktopPresent(room, client)) return NO_DESKTOP;
                 state.awaitingClick.set(id, a.label);
-                await publishJson(room, "rigel.action", { id, action: a, command: null });
+                await publishJson(room, client, "rigel.action", { id, action: a, command: null });
                 return SENT_TO_DESKTOP;
               }
 
@@ -221,13 +226,13 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
                 return "Refused: the app could not build that command.";
               }
               const command = argv.join(" ");
-              const decided = decideMutationRoute(a, command, desktopPresent(room));
+              const decided = decideMutationRoute(a, command, desktopPresent(room, client));
               if (decided.route === "refuse") {
                 return `Refused: ${decided.reason}. Tell the user this in one sentence.`;
               }
               if (decided.route === "click") {
                 state.awaitingClick.set(id, a.label);
-                await publishJson(room, "rigel.action", { id, action: a, command });
+                await publishJson(room, client, "rigel.action", { id, action: a, command });
                 return SENT_TO_DESKTOP;
               }
 
@@ -235,17 +240,17 @@ export function buildAgent(state: SessionState, server: ServerClient, room: Publ
               // agent carries it out. The frame goes up first so the popover
               // shows what is running before the result lands, and the server
               // stamps the ledger `source: "voice"` either way.
-              await publishJson(room, "rigel.action", { id, action: a, command, auto: true });
+              await publishJson(room, client, "rigel.action", { id, action: a, command, auto: true });
               try {
                 const res = await server.runAction(a, state.activeContext);
                 const ok = res.code === 0;
                 const firstErr = res.stderr.split("\n").find(Boolean) ?? "unknown error";
-                await publishJson(room, "rigel.action.result", { id, ok, summary: ok ? "ran" : firstErr });
+                await publishJson(room, client, "rigel.action.result", { id, ok, summary: ok ? "ran" : firstErr });
                 return ok
                   ? `Done: ${command} ran and completed. Tell the user in one short sentence what changed.`
                   : `That failed: ${firstErr}. Tell the user it failed and why, in one sentence.`;
               } catch (err) {
-                await publishJson(room, "rigel.action.result", { id, ok: false, summary: String(err) });
+                await publishJson(room, client, "rigel.action.result", { id, ok: false, summary: String(err) });
                 return "That failed to reach the app, so nothing changed. Tell the user in one sentence.";
               }
             },

@@ -2,9 +2,9 @@
  * Header entry point for voice: a 28px NO_DRAG button (three wavy circles)
  * plus the anchored popover. Room lifetime is owned here: a press on the mark
  * itself toggles the session (connect+open, or end+close, or cancel a
- * connect in flight), so a closed popover never leaves the mic hot. Other
- * ways the popover closes (Escape, an outside click, a nested dialog like
- * ConfirmSheet stealing focus) only hide it — the session outlives those.
+ * connect in flight), so a closed popover never leaves the mic hot. Escape and
+ * an outside click end the session the same way; only a nested dialog like
+ * ConfirmSheet stealing focus hides the popover while the session outlives it.
  * Renders nothing unless the server reports the voice flag enabled.
  */
 import { useCallback, useEffect, useState } from "react";
@@ -58,9 +58,9 @@ export function notReadyMessage(
 ): string {
   if (!configured) return "Add your LiveKit and OpenRouter keys in Settings to use voice.";
   if (status === "error") {
-    return failure === "mic-denied"
-      ? "Rigel needs microphone access. Allow it in your system settings, then try again."
-      : "Could not connect. Check the voice keys in Settings and try again.";
+    if (failure === "mic-denied") return "Rigel needs microphone access. Allow it in your system settings, then try again.";
+    if (failure === "agent-unavailable") return "Agent unavailable. The voice agent isn't running, so try again in a moment.";
+    return "Could not connect. Check the voice keys in Settings and try again.";
   }
   return "Connecting…";
 }
