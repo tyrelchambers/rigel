@@ -107,9 +107,14 @@ mac:
       arch:
         - arm64
         - x64
+    - target: zip
+      arch:
+        - arm64
+        - x64
   # Explicit name so the marketing download-page resolver matches by a known
-  # pattern (e.g. Rigel-0.2.0-arm64.dmg / Rigel-0.2.0-x64.dmg).
-  artifactName: Rigel-${version}-${arch}.dmg
+  # pattern (e.g. Rigel-0.2.0-arm64.dmg / Rigel-0.2.0-x64.dmg). The zip is what
+  # the in-app updater installs; Squirrel.Mac cannot install from a dmg.
+  artifactName: Rigel-${version}-${arch}.${ext}
   hardenedRuntime: true
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
