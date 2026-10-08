@@ -563,6 +563,26 @@ test("a sudo sshCommand writes the secret once when sudo's prompt comes first, e
   expect(JSON.stringify(ws.sent)).not.toContain("rigel-sudo");
 });
 
+test("sudo-rs wraps the prompt as [sudo: <prompt>] Password:, and none of it reaches the output", async () => {
+  const { proc, ws, mgr, written } = sudoHarness();
+  mgr.run({ id: "surs", action: sudoAction, secret: SECRET });
+  await settle();
+
+  proc.stderr.write("[sudo: [rigel-sudo-prompt]] Password: ");
+  await settle();
+  expect(written).toEqual([`${SECRET}\n`]);
+  proc.stderr.write("\n[rigel-sudo-ok]E: Could not get lock /var/lib/dpkg/lock-frontend\n");
+  await finish(proc, 100);
+
+  const frames = JSON.stringify(ws.sent);
+  expect(frames).not.toContain("rigel-sudo");
+  expect(frames).not.toContain("Password:");
+  expect(frames).not.toContain("[sudo:");
+  expect(ws.sent).toContainEqual({
+    type: "action.progress", id: "surs", line: "E: Could not get lock /var/lib/dpkg/lock-frontend", stream: "stderr",
+  });
+});
+
 test("text sudo prints before its prompt (the lecture) does not disarm it", async () => {
   const { proc, mgr, written } = sudoHarness();
   mgr.run({ id: "su2", action: sudoAction, secret: SECRET });

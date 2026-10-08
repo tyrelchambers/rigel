@@ -27,6 +27,8 @@ interface SudoGate {
 
 /** Enough of each stream to summarize the run in the ledger; not a log store. */
 const OUTPUT_CAPTURE_MAX = 2000;
+const SUDO_RS_PROMPT_OPEN = "[sudo: ";
+const SUDO_RS_PROMPT_CLOSE = /^\] Password: ?/;
 
 export type AiActionRecorder = (context: string | null, entry: AiActionEntry) => void;
 
@@ -271,7 +273,9 @@ export class ActionRunManager {
           buf = buf.slice(0, ok) + buf.slice(ok + SUDO_OK_MARKER.length);
           gate.disarm();
         } else {
-          buf = buf.slice(0, prompt) + buf.slice(prompt + SUDO_PROMPT_MARKER.length);
+          const start = buf.slice(0, prompt).endsWith(SUDO_RS_PROMPT_OPEN) ? prompt - SUDO_RS_PROMPT_OPEN.length : prompt;
+          const rest = buf.slice(prompt + SUDO_PROMPT_MARKER.length);
+          buf = buf.slice(0, start) + rest.replace(SUDO_RS_PROMPT_CLOSE, "");
           gate.prompt();
         }
       }
