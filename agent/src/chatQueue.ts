@@ -40,6 +40,7 @@ export function pendingFixesContext(queue: QueuedSuggestion[]): string {
   const lines = queue.slice(0, 10).map((q, i) => {
     const inv = q.action ? invocations(q.action) : null;
     let how: string;
+    if (q.pending) return `${i + 1}. ${q.suggestion}: fix PR already being opened, nothing to approve`;
     if (inv) how = `run: ${inv.map((args) => "kubectl " + args.join(" ")).join(" && ")}`;
     else if (q.action && isRepoFixAction(q.action.kind)) {
       const { kind, label, source, filePath } = q.action;

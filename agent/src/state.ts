@@ -54,6 +54,13 @@ export interface QueuedSuggestion {
    * button → confirm sheet. Absent for notes and for proposals that aren't one of
    * the action kinds. */
   action?: SuggestedAction;
+  /** Already dispatched (a fix PR the fix-runner is opening): shown, not approvable. */
+  pending?: true;
+}
+
+/** Whether the operator can approve this item: it has an action and isn't already in flight. */
+export function isApprovable(q: QueuedSuggestion): q is QueuedSuggestion & { action: SuggestedAction } {
+  return !!q.action && !q.pending;
 }
 
 export interface QueueReconcileResult {

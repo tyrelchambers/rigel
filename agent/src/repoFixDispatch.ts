@@ -168,7 +168,7 @@ export async function dispatchRepoFix(
   if (!exists) {
     const queued: QueuedSuggestion = {
       at: d.at, fingerprint: d.fingerprint, incident: d.incident, suggestion,
-      reason: "fix PR pending the fix-runner", action: d.action,
+      reason: "fix PR pending the fix-runner", action: d.action, pending: true,
     };
     next = { ...next, queue: [queued, ...next.queue].slice(0, d.auditMaxEntries) };
   }

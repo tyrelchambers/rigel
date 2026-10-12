@@ -9,6 +9,7 @@ import {
   appendAudit,
   countFixPrBudget,
   fixBudgetHold,
+  isApprovable,
   type AssistantState,
   type AuditActor,
   type QueuedSuggestion,
@@ -114,11 +115,11 @@ export async function consumeFixApprovals(
   const notifications: string[] = [];
   for (const approval of approvals) {
     if ((state.approvedFixTokens ?? []).includes(approval.token)) continue;
-    const item = state.queue.find(
-      (q) => queuedSuggestionId(q) === approval.id && q.fingerprint === approval.fingerprint && q.action?.kind === "openFixPR",
+    const item = state.queue.filter(isApprovable).find(
+      (q) => queuedSuggestionId(q) === approval.id && q.fingerprint === approval.fingerprint && q.action.kind === "openFixPR",
     );
-    if (item?.action) {
-      const out = await approveQueuedFix(deps, cb, state, { ...item, action: item.action }, ctx);
+    if (item) {
+      const out = await approveQueuedFix(deps, cb, state, item, ctx);
       state = out.state;
       if (out.notification) notifications.push(out.notification);
     }

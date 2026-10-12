@@ -57,6 +57,7 @@ import {
   countFixPrBudget,
   dispositionFromAudit,
   fixBudgetHold,
+  isApprovable,
   readState,
   reconcileQueue,
   recordIncident,
@@ -924,9 +925,9 @@ async function executeChatAction(
   action: SuggestedAction,
 ): Promise<string> {
   const pre = await readState(cfg.stateConfigMap, cfg.stateNamespace);
-  const matched = pre.queue.find((q) => q.action && sameAction(q.action, action));
-  if (matched?.action && isRepoFixAction(matched.action.kind)) {
-    const out = await approveQueuedFix(approveFixDeps(cfg, rc), cb, pre, { ...matched, action: matched.action }, approveFixContext(cfg, rc, "chat", Date.now()));
+  const matched = pre.queue.filter(isApprovable).find((q) => sameAction(q.action, action));
+  if (matched && isRepoFixAction(matched.action.kind)) {
+    const out = await approveQueuedFix(approveFixDeps(cfg, rc), cb, pre, matched, approveFixContext(cfg, rc, "chat", Date.now()));
     if (out.state !== pre) await writeState(cfg.stateConfigMap, cfg.stateNamespace, out.state);
     return out.reply;
   }
