@@ -1302,3 +1302,18 @@ describe("bumpAgentEntitlementRefresh", () => {
     expect(patchCalls).toBe(0);
   });
 });
+
+import { PRESETS } from "@rigel/k8s/src/actionLevels";
+import { setActionLevelsUpdates } from "./assistant";
+
+test("setActionLevels writes the whole map under actionLevels", () => {
+  const levels = { ...PRESETS.balanced, scale: "auto" as const };
+  expect(setActionLevelsUpdates({ action: "setActionLevels", actionLevels: levels })).toEqual({
+    actionLevels: JSON.stringify(levels),
+  });
+});
+
+test("setActionLevels rejects a missing or invalid map", () => {
+  expect(() => setActionLevelsUpdates({ action: "setActionLevels" })).toThrow();
+  expect(() => setActionLevelsUpdates({ action: "setActionLevels", actionLevels: { ...PRESETS.balanced, restart: "yes" } as never })).toThrow();
+});
