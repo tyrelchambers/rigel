@@ -7,7 +7,7 @@
  */
 import { scanLogsForErrors } from "./logScan.js";
 
-export type IncidentKind = "unhealthyPod" | "degradedDeployment" | "loggedError";
+export type IncidentKind = "unhealthyPod" | "degradedDeployment" | "loggedError" | "cordonedNode";
 
 export interface Incident {
   incidentKind: IncidentKind;

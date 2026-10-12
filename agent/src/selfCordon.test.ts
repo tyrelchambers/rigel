@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { CORDONED_BY_ANNOTATION, CORDONED_BY_VALUE, READY_STABLE_MS, selfCordonedNodes } from "./selfCordon.js";
+import { CORDONED_BY_ANNOTATION, CORDONED_BY_VALUE, READY_STABLE_MS, detectSelfCordonedNodes, selfUncordonAction } from "./selfCordon.js";
 
 const NOW = Date.parse("2026-10-11T12:00:00Z");
 
@@ -21,19 +21,20 @@ function node(
   };
 }
 
-describe("selfCordonedNodes", () => {
+describe("detectSelfCordonedNodes", () => {
   test("uncordons a node we cordoned once it has been Ready for the stable window", () => {
-    const r = selfCordonedNodes([node("n1", { unschedulable: true, ours: true, ready: "True", readySinceMs: READY_STABLE_MS })], NOW);
-    expect(r).toEqual({ uncordon: ["n1"], stale: [] });
+    const r = detectSelfCordonedNodes([node("n1", { unschedulable: true, ours: true, ready: "True", readySinceMs: READY_STABLE_MS })], NOW);
+    expect(r.incidents).toEqual([{ incidentKind: "cordonedNode", namespace: "", name: "n1", reason: "ReadyAgain", detail: "cordoned by the assistant, Ready for 5m" }]);
+    expect(r.stale).toEqual([]);
   });
 
   test("waits while Ready is too recent to trust", () => {
-    const r = selfCordonedNodes([node("n1", { unschedulable: true, ours: true, ready: "True", readySinceMs: READY_STABLE_MS - 1 })], NOW);
-    expect(r).toEqual({ uncordon: [], stale: [] });
+    const r = detectSelfCordonedNodes([node("n1", { unschedulable: true, ours: true, ready: "True", readySinceMs: READY_STABLE_MS - 1 })], NOW);
+    expect(r).toEqual({ incidents: [], stale: [] });
   });
 
   test("leaves a still-unhealthy node cordoned", () => {
-    const r = selfCordonedNodes(
+    const r = detectSelfCordonedNodes(
       [
         node("n1", { unschedulable: true, ours: true, ready: "False", readySinceMs: READY_STABLE_MS * 10 }),
         node("n2", { unschedulable: true, ours: true, ready: "Unknown", readySinceMs: READY_STABLE_MS * 10 }),
@@ -41,16 +42,20 @@ describe("selfCordonedNodes", () => {
       ],
       NOW,
     );
-    expect(r).toEqual({ uncordon: [], stale: [] });
+    expect(r).toEqual({ incidents: [], stale: [] });
   });
 
   test("never touches a node someone else cordoned", () => {
-    const r = selfCordonedNodes([node("n1", { unschedulable: true, ready: "True", readySinceMs: READY_STABLE_MS * 10 })], NOW);
-    expect(r).toEqual({ uncordon: [], stale: [] });
+    const r = detectSelfCordonedNodes([node("n1", { unschedulable: true, ready: "True", readySinceMs: READY_STABLE_MS * 10 })], NOW);
+    expect(r).toEqual({ incidents: [], stale: [] });
   });
 
   test("flags our marker as stale once the node was uncordoned by someone else", () => {
-    const r = selfCordonedNodes([node("n1", { ours: true, ready: "True", readySinceMs: READY_STABLE_MS * 10 })], NOW);
-    expect(r).toEqual({ uncordon: [], stale: ["n1"] });
+    const r = detectSelfCordonedNodes([node("n1", { ours: true, ready: "True", readySinceMs: READY_STABLE_MS * 10 })], NOW);
+    expect(r).toEqual({ incidents: [], stale: ["n1"] });
   });
+});
+
+test("selfUncordonAction proposes an uncordon for the incident's node", () => {
+  expect(selfUncordonAction("n1")).toEqual({ kind: "uncordon", node: "n1", label: "Uncordon n1 now that it's been healthy for 5 minutes" });
 });
