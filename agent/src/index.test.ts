@@ -861,6 +861,31 @@ describe("tick() — action levels", () => {
     expect(dispatchedAFix()).toBe(false);
     expect(captured()!.queue).toHaveLength(1);
   });
+
+  test.each([
+    { label: "Drain k3s-slave", kind: "drain", node: "k3s-slave" },
+    { label: "Delete the stuck PVC", kind: "command", args: ["delete", "pvc", "data-0", "-n", "default"] },
+  ])("a $kind proposal is queued as a note with no runnable action", async (proposal) => {
+    vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [proposal] }));
+    const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "auto" } });
+    await expect(tick(makeConfig(), newCb(), createLoopState())).resolves.toBeUndefined();
+    const state = captured()!;
+    expect(state.queue).toHaveLength(1);
+    expect(state.queue[0]!.action).toBeUndefined();
+    expect(state.queue[0]!.reason).toBe("not an action the agent can take; run it yourself in Rigel");
+    expect(state.audit[0]).toMatchObject({ proposal: proposal.label, tier: "ask", outcome: "queued" });
+    expect(state.audit[0]!.command).toBeUndefined();
+    for (const v of ["drain", "delete", "rollout", "scale", "set", "cordon", "uncordon"]) expect(mutated(v)).toBe(false);
+  });
+
+  test("a malformed proposal of a known kind is recorded as a failure without aborting the tick", async () => {
+    vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [{ label: "Restart it", kind: "restart" }] }));
+    const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "auto" } });
+    await expect(tick(makeConfig(), newCb(), createLoopState())).resolves.toBeUndefined();
+    expect(captured()!.audit[0]).toMatchObject({ proposal: "Restart it", outcome: "failure", tier: "auto" });
+    expect(captured()!.audit[0]!.detail).toMatch(/missing required field: deployment/);
+    expect(mutated("rollout")).toBe(false);
+  });
 });
 
 describe("queue — dedup by incident + label + action args", () => {
