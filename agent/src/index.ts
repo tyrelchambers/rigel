@@ -805,7 +805,7 @@ export async function tick(
 
     // Fix PRs the operator approved from the desktop since the last tick.
     if (rc.approvedFixes.length > 0) {
-      const approved = await consumeFixApprovals(approveFixDeps(cfg, rc), cb, state, rc.approvedFixes, approveFixContext(cfg, rc, "pr", now));
+      const approved = await consumeFixApprovals(approveFixDeps(cfg, rc), cb, state, rc.approvedFixes, approveFixContext(cfg, rc, "desktop", now));
       state = approved.state;
       notifications.push(...approved.notifications);
     }

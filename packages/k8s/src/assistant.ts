@@ -957,8 +957,8 @@ export interface AssistantAuditEntry {
   detail: string;
   backupRef?: string;
   analysis?: string;
-  /** Who initiated this action: the autonomous loop, a chat approval, or the
-   * autofix-PR pipeline. Absent on entries written before actor stamping shipped. */
+  /** Who initiated this action: the autonomous loop, a chat or desktop approval,
+   * or the autofix-PR pipeline. Absent on entries written before actor stamping shipped. */
   actor?: string;
 }
 

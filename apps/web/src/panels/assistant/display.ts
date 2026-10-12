@@ -85,6 +85,8 @@ export function actorLabel(actor: string | undefined): string | null {
       return "Approved by you";
     case "pr":
       return "Opened a PR";
+    case "desktop":
+      return "Approved on desktop";
     default:
       return null;
   }

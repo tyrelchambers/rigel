@@ -1,10 +1,10 @@
 // ActorBadge — a small provenance pill on an audit entry: who initiated the
-// action (the autonomous loop, a chat approval, or the autofix-PR pipeline).
+// action (the autonomous loop, a chat or desktop approval, or the autofix-PR pipeline).
 // Renders nothing for legacy/unknown actors.
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
-import { faRobot, faUser, faCodePullRequest } from "@awesome.me/kit-6050953220/icons/classic/solid";
+import { faRobot, faUser, faCodePullRequest, faDesktop } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { cn } from "@/lib/utils";
 import { actorLabel } from "../display";
 
@@ -12,6 +12,7 @@ const ACTOR_ICON: Record<string, IconDefinition> = {
   autonomous: faRobot,
   chat: faUser,
   pr: faCodePullRequest,
+  desktop: faDesktop,
 };
 
 export function ActorBadge({ actor, className }: { actor?: string; className?: string }) {

@@ -101,11 +101,11 @@ describe("consumeFixApprovals", () => {
 
   test("dispatches a matching item once and stamps its token", async () => {
     const { d, apply } = deps();
-    const first = await consumeFixApprovals(d, cb(), seeded(), [approval], { ...ctx, actor: "pr" });
+    const first = await consumeFixApprovals(d, cb(), seeded(), [approval], { ...ctx, actor: "desktop" });
     expect(apply).toHaveBeenCalledTimes(2);
     expect(first.notifications).toHaveLength(1);
     expect(first.state.approvedFixTokens).toEqual(["tok-1"]);
-    expect(first.state.audit[0]).toMatchObject({ verdict: "approved", actor: "pr" });
+    expect(first.state.audit[0]).toMatchObject({ verdict: "approved", actor: "desktop" });
 
     const again = await consumeFixApprovals(d, cb(), { ...first.state, queue: [ITEM] }, [approval], ctx);
     expect(apply).toHaveBeenCalledTimes(2);

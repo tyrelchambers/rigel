@@ -1148,7 +1148,7 @@ describe("tick() — approving a queued fix PR", () => {
     expect(dispatchedAFix()).toBe(true);
     const after = captured()!;
     expect(after.approvedFixTokens).toEqual(["tok-1"]);
-    expect(after.audit[0]).toMatchObject({ outcome: "queued", verdict: "approved", actor: "pr", tier: "ask" });
+    expect(after.audit[0]).toMatchObject({ outcome: "queued", verdict: "approved", actor: "desktop", tier: "ask" });
     expect(after.queue).toHaveLength(1);
     expect(after.queue[0]!.reason).toBe("fix PR pending the fix-runner");
 

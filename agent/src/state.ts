@@ -20,7 +20,7 @@ export type Outcome = "success" | "failure" | "queued" | "skipped";
  * the separate desktop ledger's `AiActionSource` (packages/k8s/src/aiActionLedger.ts)
  * instead, which answers a different question (which AI surface ran the
  * mutation, not who approved it). */
-export type AuditActor = "autonomous" | "chat" | "pr";
+export type AuditActor = "autonomous" | "chat" | "pr" | "desktop";
 
 export interface AuditEntry {
   at: string;
