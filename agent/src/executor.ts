@@ -4,8 +4,8 @@ import { getManifestYaml, kubectl } from "./kubectl.js";
 /**
  * Runs an approved action against the cluster, capturing a pre-mutation backup
  * first so the change is revertible. This is deterministic — no model is
- * involved; by the time we get here the action has already cleared the risk
- * classifier, the circuit breaker, and (for MEDIUM) the supervisor.
+ * involved; by the time we get here the action has already cleared its action
+ * level (Review = the supervisor) and the circuit breaker.
  */
 
 export interface ExecutionResult {

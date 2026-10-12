@@ -803,14 +803,15 @@ const mutated = (verb: string) => vi.mocked(kubectl).mock.calls.some((c) => c[0]
 
 describe("tick() — action levels", () => {
   test.each([
-    ["auto", "success", true],
-    ["ask", "queued", false],
-    ["off", "skipped", false],
-  ] as const)("restart at %s → %s", async (level, outcome, ran) => {
+    ["auto", "success", true, undefined],
+    ["ask", "queued", false, "restart"],
+    ["off", "skipped", false, undefined],
+  ] as const)("restart at %s → %s", async (level, outcome, ran, queuedKind) => {
     vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [RESTART] }));
     const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "auto", actionLevels: JSON.stringify({ restart: level }) } });
     await tick(makeConfig(), newCb(), createLoopState());
     expect(captured()!.audit[0]).toMatchObject({ proposal: "Restart memos", outcome, tier: level });
+    expect(captured()!.queue[0]?.action?.kind).toBe(queuedKind);
     expect(mutated("rollout")).toBe(ran);
   });
 
@@ -849,10 +850,13 @@ describe("tick() — action levels", () => {
 
   test("off records a skip with no notification", async () => {
     vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [RESTART] }));
-    const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "auto", actionLevels: JSON.stringify({ restart: "off" }) } });
+    const { captured } = wireCluster({
+      configData: { enabled: "true", confirmPolls: "1", mode: "auto", webhookUrl: "http://hook", notifyChannels: "webhook", actionLevels: JSON.stringify({ restart: "off" }) },
+    });
     await tick(makeConfig(), newCb(), createLoopState());
     expect(captured()!.audit[0]!.detail).toBe("turned off in Action levels");
     expect(captured()!.queue).toHaveLength(0);
+    expect(vi.mocked(sendToChannel)).not.toHaveBeenCalled();
   });
 
   test("a node the assistant cordoned is uncordoned at Balanced (auto), without the worker", async () => {
@@ -861,6 +865,7 @@ describe("tick() — action levels", () => {
     expect(vi.mocked(runWorker)).not.toHaveBeenCalled();
     expect(mutated("uncordon")).toBe(true);
     expect(captured()!.audit[0]).toMatchObject({ outcome: "success", tier: "auto", fingerprint: "cordonedNode||k3s-slave|ReadyAgain" });
+    expect(captured()!.incidents![0]!.location).toBe("k3s-slave");
   });
 
   test("own-cordon undo follows the Uncordon level (ask → queued, no uncordon)", async () => {
@@ -868,12 +873,51 @@ describe("tick() — action levels", () => {
     await tick(makeConfig(), newCb(), createLoopState());
     expect(mutated("uncordon")).toBe(false);
     expect(captured()!.queue).toHaveLength(1);
+    expect(captured()!.queue[0]!.action!.kind).toBe("uncordon");
   });
 
   test("own-cordon undo respects advisory mode like every other action", async () => {
-    wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "advisory" }, pods: [], nodes: [OUR_CORDONED_NODE] });
+    const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "advisory" }, pods: [], nodes: [OUR_CORDONED_NODE] });
     await tick(makeConfig(), newCb(), createLoopState());
     expect(mutated("uncordon")).toBe(false);
+    expect(captured()!.queue[0]).toMatchObject({ reason: "advisory mode — suggestion only", action: { kind: "uncordon", node: "k3s-slave" } });
+  });
+
+  test("own-cordon undo at review goes to the supervisor and uncordons on approve", async () => {
+    const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "auto", actionLevels: JSON.stringify({ uncordon: "review" }) }, pods: [], nodes: [OUR_CORDONED_NODE] });
+    await tick(makeConfig(), newCb(), createLoopState());
+    expect(vi.mocked(runSupervisor)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(runSupervisor).mock.calls[0]![1]).toMatchObject({ incidentKind: "cordonedNode", name: "k3s-slave" });
+    expect(mutated("uncordon")).toBe(true);
+    expect(captured()!.audit[0]).toMatchObject({ outcome: "success", verdict: "approved", tier: "review" });
+  });
+
+  test("own-cordon undo at off is skipped and never uncordons", async () => {
+    const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "auto", actionLevels: JSON.stringify({ uncordon: "off" }) }, pods: [], nodes: [OUR_CORDONED_NODE] });
+    await tick(makeConfig(), newCb(), createLoopState());
+    expect(mutated("uncordon")).toBe(false);
+    expect(captured()!.audit[0]).toMatchObject({ outcome: "skipped", tier: "off" });
+    expect(captured()!.queue).toHaveLength(0);
+  });
+
+  test("own-cordon undo outside the quiet-hours window is queued, not run", async () => {
+    const start = (new Date().getHours() + 2) % 24;
+    const hh = (h: number) => `${String(h).padStart(2, "0")}:00`;
+    const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "window", window: `${hh(start)}-${hh((start + 1) % 24)}` }, pods: [], nodes: [OUR_CORDONED_NODE] });
+    await tick(makeConfig(), newCb(), createLoopState());
+    expect(mutated("uncordon")).toBe(false);
+    expect(captured()!.queue[0]).toMatchObject({ reason: "outside quiet-hours window — queued for approval", action: { kind: "uncordon" } });
+  });
+
+  test("own-cordon undo vetoed by the breaker is queued for approval, not run", async () => {
+    const cb = newCb();
+    cb.record("earlier", "node/k3s-slave", Date.now());
+    const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "auto", maxPerResourcePerHour: "1" }, pods: [], nodes: [OUR_CORDONED_NODE] });
+    await tick(makeConfig(), cb, createLoopState());
+    expect(mutated("uncordon")).toBe(false);
+    expect(captured()!.queue[0]).toMatchObject({ action: { kind: "uncordon" } });
+    expect(captured()!.queue[0]!.reason).toMatch(/^hit the action limit: /);
+    expect(captured()!.audit[0]).toMatchObject({ outcome: "queued", tier: "auto" });
   });
 
   test("openFixPR at auto dispatches without the fix-quality supervisor", async () => {
@@ -913,6 +957,7 @@ describe("tick() — action levels", () => {
     await tick(makeConfig(), newCb(), createLoopState());
     expect(dispatchedAFix()).toBe(false);
     expect(captured()!.queue).toHaveLength(1);
+    expect(captured()!.queue[0]!.action!.kind).toBe("openFixPR");
   });
 
   test.each([

@@ -40,8 +40,7 @@ export interface AuditEntry {
   actor?: AuditActor;
 }
 
-/** A remediation the agent could not perform (RBAC-blocked / destructive), left
- * for the human to run from Rigel in the morning. */
+/** A remediation left for the human to approve or run from Rigel. */
 export interface QueuedSuggestion {
   at: string;
   incident: string;
@@ -51,9 +50,9 @@ export interface QueuedSuggestion {
    * re-validated each poll and moot items auto-cleared. Optional for back-compat
    * with items persisted before this field existed. */
   fingerprint?: string;
-  /** The structured action, when one exists (escalated MEDIUM items). Lets
-   * Rigel render a runnable button → confirm sheet. Absent for destructive
-   * suggestions, which have no expressible action kind. */
+  /** The structured action, when one exists. Lets Rigel render a runnable
+   * button → confirm sheet. Absent for notes and for proposals that aren't one of
+   * the action kinds. */
   action?: SuggestedAction;
 }
 
@@ -377,7 +376,7 @@ export function countFixPrBudget(
  * fix-runner" placeholder) for this `fingerprint` + `title` with its terminal
  * outcome (opened / failed). When no pending entry is found (e.g. rotated out of
  * the capped log), the terminal entry is prepended instead. The pending entry is
- * the only queued/medium entry with NO verdict for this fingerprint+proposal —
+ * the only queued entry with NO verdict for this fingerprint+proposal —
  * escalated items carry a verdict, so they are never matched. Pure. */
 export function resolveFixAudit(
   state: AssistantState,

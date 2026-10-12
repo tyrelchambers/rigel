@@ -5,9 +5,9 @@ import { isRepoFixAction, type SuggestedAction } from "./action.js";
 
 /**
  * The Opus supervisor: a second, independent, deliberately adversarial review
- * of a MEDIUM-risk action the cheap worker proposed. Its job is to find a
+ * of an action set to Review that the cheap worker proposed. Its job is to find a
  * reason NOT to run the action — so it acts as a real skeptic, not a rubber
- * stamp. Only `approve` lets a MEDIUM action through; anything else is
+ * stamp. Only `approve` lets a Review action through; anything else is
  * fail-closed (reject → skip, escalate → queue for the human).
  *
  * Note this layer sits ON TOP of, never instead of, the deterministic
