@@ -6,6 +6,8 @@
  * `WorkloadAction.kubectlInvocations()` exactly, so the agent and the app run
  * identical commands.
  */
+import { CORDONED_BY_ANNOTATION, CORDONED_BY_VALUE } from "./selfCordon.js";
+
 export interface SuggestedAction {
   label: string;
   kind: string;
@@ -113,10 +115,14 @@ export function toKubectlInvocations(action: SuggestedAction): string[][] {
     }
     case "deletePod":
       return [["delete", "pod", need(action.pod, "pod"), "-n", ns]];
-    case "cordon":
-      return [["cordon", need(action.node, "node")]];
-    case "uncordon":
-      return [["uncordon", need(action.node, "node")]];
+    case "cordon": {
+      const node = need(action.node, "node");
+      return [["cordon", node], ["annotate", "node", node, `${CORDONED_BY_ANNOTATION}=${CORDONED_BY_VALUE}`, "--overwrite"]];
+    }
+    case "uncordon": {
+      const node = need(action.node, "node");
+      return [["uncordon", node], ["annotate", "node", node, `${CORDONED_BY_ANNOTATION}-`]];
+    }
     case "openFixPR":
       // Not a kubectl action — opening a PR against the GitOps source is the
       // fix-runner's job. Fail loudly here so it can never silently run a command.

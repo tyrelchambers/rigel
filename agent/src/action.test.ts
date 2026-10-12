@@ -137,15 +137,17 @@ describe("toKubectlInvocations", () => {
     ).toEqual([["delete", "pod", "memos-abc", "-n", "default"]]);
   });
 
-  test("cordon → cordon node", () => {
+  test("cordon → cordon node and mark it as the agent's cordon", () => {
     expect(toKubectlInvocations({ label: "", kind: "cordon", node: "node-1" })).toEqual([
       ["cordon", "node-1"],
+      ["annotate", "node", "node-1", "rigel.run/cordoned-by=assistant", "--overwrite"],
     ]);
   });
 
-  test("uncordon → uncordon node", () => {
+  test("uncordon → uncordon node and clear the agent's marker", () => {
     expect(toKubectlInvocations({ label: "", kind: "uncordon", node: "node-1" })).toEqual([
       ["uncordon", "node-1"],
+      ["annotate", "node", "node-1", "rigel.run/cordoned-by-"],
     ]);
   });
 
