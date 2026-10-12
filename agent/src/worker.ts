@@ -37,15 +37,17 @@ const READ_ONLY_TOOLS = [
 export type TriageVerdict = "acceptable" | "actionable" | "uncertain";
 const TRIAGE_VERDICTS = new Set<TriageVerdict>(["acceptable", "actionable", "uncertain"]);
 
-const KUBECTL_KINDS: readonly { kind: ActionKind; verb: string }[] = [
-  { kind: "restart", verb: "Restart" },
-  { kind: "scale", verb: "Scale" },
-  { kind: "rollback", verb: "Roll back" },
-  { kind: "setEnv", verb: "Update" },
-  { kind: "deletePod", verb: "Delete" },
-  { kind: "cordon", verb: "Cordon" },
-  { kind: "uncordon", verb: "Uncordon" },
+const KUBECTL_KINDS: readonly { kind: ActionKind; verb: string; example: string }[] = [
+  { kind: "restart", verb: "Restart", example: "Restart backend-worker so Celery's heartbeat comes back and the readiness probes stop failing." },
+  { kind: "scale", verb: "Scale", example: "Scale api to 3 replicas so it can keep up with the request backlog." },
+  { kind: "rollback", verb: "Roll back", example: "Roll back checkout to its previous version so the new release stops crashing on startup." },
+  { kind: "setEnv", verb: "Update", example: "Update worker's QUEUE_URL so it points at the new Redis service again." },
+  { kind: "deletePod", verb: "Delete", example: "Delete the stuck api pod so its Deployment schedules a fresh one." },
+  { kind: "cordon", verb: "Cordon", example: "Cordon node-3 so no new pods land on it while its disk is failing." },
+  { kind: "uncordon", verb: "Uncordon", example: "Uncordon node-3 so pods can schedule on it again now that it's healthy." },
 ];
+
+const FIX_PR_EXAMPLE = "Open a fix PR to pin memos to its last healthy image tag so the pods stop crashing.";
 
 const FIX_PR_PARAGRAPH = `Source-fix remediation (openFixPR) — available ONLY when the incident below is explicitly marked "autofix-eligible". It opens a pull request against the workload's GitOps source instead of touching the cluster, for when the root cause is a defect in the committed manifest/config (a bad image tag, a wrong env value, an incorrect/missing field) rather than a transient runtime fault. When eligible AND the root cause is such a defect, propose it INSTEAD of a kubectl action:
   { "label": string, "kind": "openFixPR", "source": <the GitOps source name given below>,
@@ -66,6 +68,16 @@ function systemPrompt(levels: ActionLevels): string {
   const enabled = KUBECTL_KINDS.filter(({ kind }) => levels[kind] !== "off");
   const fixPR = levels.openFixPR !== "off";
   const examples = LEAST_INVASIVE_EXAMPLES.filter(({ kind }) => levels[kind] !== "off").map((e) => e.clause).join("; ");
+  const verbs = [enabled.map((k) => k.verb).join(" / "), fixPR ? 'for openFixPR use "Open a fix PR"' : ""].filter(Boolean).join("; ");
+  const labelExample = enabled[0]?.example ?? (fixPR ? FIX_PR_EXAMPLE : null);
+  const kubectlSchema = enabled.length > 0
+    ? `kubectl remediation schema (emit a single object):
+  { "label": string, "kind": <one of: ${enabled.map((k) => k.kind).join("|")}>,
+    "deployment"?: string, "pod"?: string, "node"?: string, "namespace"?: string,
+    "replicas"?: number, "env"?: {string:string} }
+
+`
+    : "";
   return `You are Rigel's autonomous cluster remediation assistant, running unattended inside a Kubernetes cluster while the operator is asleep.
 
 You investigate an incident using ONLY read-only kubectl (get/describe/logs/top/events/explain).
@@ -79,16 +91,11 @@ When in doubt, choose "uncertain" — NEVER "actionable".
 
 STEP 2 — Remediation. ONLY when your verdict is "actionable" you MAY propose AT MOST ONE remediation as a single fenced \`\`\`action block. For "acceptable" or "uncertain", emit NO action.
 
-kubectl remediation schema (emit a single object):
-  { "label": string, "kind": <one of: ${enabled.map((k) => k.kind).join("|")}>,
-    "deployment"?: string, "pod"?: string, "node"?: string, "namespace"?: string,
-    "replicas"?: number, "env"?: {string:string} }
-
-${fixPR ? FIX_PR_PARAGRAPH : ""}Guidance:
+${kubectlSchema}${fixPR ? FIX_PR_PARAGRAPH : ""}Guidance:
 - Prefer the least invasive fix that addresses root cause.${examples ? ` ${examples[0]!.toUpperCase()}${examples.slice(1)}.` : ""}
-- Only propose kubectl actions whose kind is in the list above. Anything destructive (deleting namespaces/PVCs/volumes, draining nodes, editing secrets/RBAC) is NOT available to you — if that is what's truly needed, do NOT emit an action; set the verdict to "uncertain" and explain in prose so it can be queued for the human.
-- Always include the namespace.
-- Write the "label" the way a helpful assistant would tell the operator what you're doing: start with the plain base verb for the kind (${enabled.map((k) => k.verb).join(" / ")}${fixPR ? '; for openFixPR use "Open a fix PR"' : ""}), name the target, then say why in natural language. Example: "Restart backend-worker so Celery's heartbeat comes back and the readiness probes stop failing." One sentence, plain English, no jargon dumps and no trailing period.`;
+- ${enabled.length > 0 ? "Only propose kubectl actions whose kind is in the list above." : "No kubectl actions are available to you."} Anything destructive (deleting namespaces/PVCs/volumes, draining nodes, editing secrets/RBAC) is NOT available to you — if that is what's truly needed, do NOT emit an action; set the verdict to "uncertain" and explain in prose so it can be queued for the human.
+- Always include the namespace.${labelExample ? `
+- Write the "label" the way a helpful assistant would tell the operator what you're doing: start with the plain base verb for the kind (${verbs}), name the target, then say why in natural language. Example: "${labelExample}" One sentence, plain English, no jargon dumps and no trailing period.` : ""}`;
 }
 
 export interface WorkerOutput {

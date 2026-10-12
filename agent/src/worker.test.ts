@@ -153,4 +153,30 @@ describe("runWorker", () => {
     expect(prompt).toContain('- Prefer the least invasive fix that addresses root cause. A transient crash wants "restart".\n');
     expect(prompt).not.toMatch(/rollback|deletePod/);
   });
+
+  test("with every kubectl kind Off, the kubectl schema is dropped and the label example uses an enabled kind", async () => {
+    const spy = vi.spyOn(runModelMod, "runModel").mockResolvedValue({ text: "", costUsd: 0, isError: false });
+    const allKubectlOff = { restart: "off", rollback: "off", deletePod: "off", cordon: "off", uncordon: "off", scale: "off", setEnv: "off", openFixPR: "review" } as const;
+    await runWorker({ ...rc(), actionLevels: allKubectlOff }, [INC]);
+    const prompt = spy.mock.calls[0]![0].systemPrompt;
+    expect(prompt).not.toContain("kubectl remediation schema");
+    expect(prompt).not.toContain("<one of: >");
+    expect(prompt).not.toContain("Restart backend-worker");
+    expect(prompt).toContain('start with the plain base verb for the kind (for openFixPR use "Open a fix PR")');
+    expect(prompt).toMatch(/Example: "Open a fix PR/);
+  });
+
+  test("the Restart label example is kept verbatim while restart is enabled", async () => {
+    const spy = vi.spyOn(runModelMod, "runModel").mockResolvedValue({ text: "", costUsd: 0, isError: false });
+    await runWorker(rc(), [INC]);
+    expect(spy.mock.calls[0]![0].systemPrompt).toContain('Example: "Restart backend-worker so Celery\'s heartbeat comes back and the readiness probes stop failing." One sentence, plain English, no jargon dumps and no trailing period.');
+  });
+
+  test("with restart Off, the label example comes from another enabled kind", async () => {
+    const spy = vi.spyOn(runModelMod, "runModel").mockResolvedValue({ text: "", costUsd: 0, isError: false });
+    await runWorker({ ...rc(), actionLevels: { ...PRESETS.balanced, restart: "off" } }, [INC]);
+    const prompt = spy.mock.calls[0]![0].systemPrompt;
+    expect(prompt).not.toContain("Restart backend-worker");
+    expect(prompt).toMatch(/Example: "Scale /);
+  });
 });
