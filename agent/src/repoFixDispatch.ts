@@ -1,4 +1,4 @@
-import { appendAudit, type AssistantState, type QueuedSuggestion, type Tier } from "./state.js";
+import { appendAudit, type AssistantState, type AuditActor, type QueuedSuggestion, type Tier, type Verdict } from "./state.js";
 import type { SuggestedAction } from "./action.js";
 import type { ResolvedRepo } from "./repoResolve.js";
 import type { KubectlResult } from "./kubectl.js";
@@ -52,6 +52,10 @@ export interface RepoFixDispatch {
   /** The fix-runner image (same immutable tag as the agent) the Job runs. */
   image: string;
   tier: Tier;
+  /** Who the audit names: "pr" by default, "chat" when approved from chat. */
+  actor?: AuditActor;
+  /** Set when an operator approved the queued fix. */
+  verdict?: Verdict;
 }
 
 export interface RepoFixOutcome {
@@ -84,7 +88,7 @@ export async function dispatchRepoFix(
         tier: d.tier, outcome: "skipped",
         detail: "openFixPR proposed, but autofix is disabled or this workload is outside the autofix scope",
         analysis: truncate(d.analysis),
-        actor: "pr",
+        actor: d.actor ?? "pr", verdict: d.verdict,
       }, d.auditMaxEntries),
     };
   }
@@ -95,7 +99,7 @@ export async function dispatchRepoFix(
         tier: d.tier, outcome: "skipped",
         detail: "openFixPR proposed, but the workload has no GitOps source (not autofix-eligible)",
         analysis: truncate(d.analysis),
-        actor: "pr",
+        actor: d.actor ?? "pr", verdict: d.verdict,
       }, d.auditMaxEntries),
     };
   }
@@ -116,7 +120,7 @@ export async function dispatchRepoFix(
           tier: d.tier, outcome: "failure",
           detail: "openFixPR approved, but the fix-runner image is not configured (RIGEL_FIX_RUNNER_IMAGE): cannot open the PR",
           analysis: truncate(d.analysis),
-          actor: "pr",
+          actor: d.actor ?? "pr", verdict: d.verdict,
         }, d.auditMaxEntries),
       };
     }
@@ -145,7 +149,7 @@ export async function dispatchRepoFix(
         tier: d.tier, outcome: "failure",
         detail: truncate(`openFixPR approved, but the fix Job could not be created (fail-safe): ${String(err)}`),
         analysis: truncate(d.analysis),
-        actor: "pr",
+        actor: d.actor ?? "pr", verdict: d.verdict,
       }, d.auditMaxEntries),
     };
   }
@@ -154,7 +158,7 @@ export async function dispatchRepoFix(
   let next = appendAudit(state, {
     at: d.at, fingerprint: d.fingerprint, incident: d.incident, proposal: suggestion,
     tier: d.tier, outcome: "queued", detail, analysis: truncate(d.analysis),
-    actor: "pr",
+    actor: d.actor ?? "pr", verdict: d.verdict,
   }, d.auditMaxEntries);
 
   // Surface the pending fix in the approval queue for visibility. The fix-runner

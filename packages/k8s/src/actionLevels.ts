@@ -63,3 +63,34 @@ export function matchPreset(levels: ActionLevels): PresetId | null {
 export function serializeActionLevels(levels: ActionLevels): string {
   return JSON.stringify(Object.fromEntries(ACTION_LEVEL_KINDS.map(({ kind }) => [kind, levels[kind]])));
 }
+
+/** Stable identity for a queued suggestion (mirrors Swift `id`). */
+export function queuedSuggestionId(q: { at: string; incident: string; suggestion: string }): string {
+  return `${q.at}|${q.incident}|${q.suggestion}`;
+}
+
+/** An operator's approval of a queued fix PR, written to assistant-config
+ *  (`approvedFixes`) by the desktop and consumed once by the agent by token. */
+export interface ApprovedFix {
+  id: string;
+  fingerprint: string;
+  token: string;
+  at: number;
+}
+
+export const MAX_APPROVED_FIXES = 20;
+
+export function parseApprovedFixes(raw: string | undefined): ApprovedFix[] {
+  if (!raw) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter((a): a is ApprovedFix => {
+    const o = a as Partial<ApprovedFix> | null;
+    return typeof o?.id === "string" && typeof o.fingerprint === "string" && typeof o.token === "string" && typeof o.at === "number";
+  });
+}

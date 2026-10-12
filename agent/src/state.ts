@@ -204,6 +204,9 @@ export interface AssistantState {
   /** Last server-stamped entitlementRefreshAt the agent has honored, so a
    *  changed value force-triggers exactly one immediate entitlement check. */
   entitlementRefreshAt?: string;
+  /** Tokens of desktop fix-PR approvals already acted on, so a marker left in
+   *  assistant-config never dispatches twice. Capped, newest-first. */
+  approvedFixTokens?: string[];
 }
 
 /** Cap on the rolling incident history, and the max age before pruning. */
@@ -369,6 +372,14 @@ export function countFixPrBudget(
     return Number.isFinite(at) && at >= since;
   }).length;
   return recordedOpen + Math.max(0, inFlightJobCount);
+}
+
+/** Why a fix PR can't be opened against the daily budget right now, or null
+ *  when it can. `used` is null when the in-flight fix Jobs couldn't be listed. */
+export function fixBudgetHold(used: number | null, cap: number): string | null {
+  if (used === null) return "fix-PR budget unverifiable (the in-flight fix-Job list was unreadable this tick): deferring";
+  if (used >= cap) return `daily fix-PR budget reached (${cap}/${cap}): not opening another fix PR until a slot frees up`;
+  return null;
 }
 
 /**

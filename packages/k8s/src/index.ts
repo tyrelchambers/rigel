@@ -229,7 +229,6 @@ export {
   parseIncidentFingerprint,
   type ParsedFingerprint,
   auditEntryId,
-  queuedSuggestionId,
   isEnabled,
   autonomyMode,
   quietWindow,
