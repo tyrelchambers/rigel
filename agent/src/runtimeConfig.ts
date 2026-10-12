@@ -4,6 +4,7 @@ import { parseAlertRules, type AlertRule } from "./alerts.js";
 import type { ProviderId, RoleSelection } from "./providers/types.js";
 import { parseDigests, type DigestSubscription } from "@rigel/k8s/src/digest.js";
 import { parseNotifyAllowlist, type ChannelId } from "@rigel/k8s/src/channels.js";
+import { parseActionLevels, type ActionLevels } from "@rigel/k8s/src/actionLevels.js";
 
 export interface OperationalLimits {
   pollIntervalMs: number;
@@ -54,6 +55,7 @@ export interface TimeWindow {
 
 export interface RuntimeConfig {
   enabled: boolean;
+  actionLevels: ActionLevels;
   mode: AutonomyMode;
   window?: TimeWindow;
   silenced: Set<string>;
@@ -276,6 +278,7 @@ function disabledDefaults(cfg: Config): RuntimeConfig {
     autofix: parseAutofixConfig({}),
     digests: [],
     notifyAllowlist: null,
+    actionLevels: parseActionLevels(undefined),
   };
 }
 
@@ -324,6 +327,7 @@ export async function readRuntimeConfig(cfg: Config): Promise<RuntimeConfig> {
     digests: parseDigestsFromConfig(data),
     digestRunNow: parseDigestRunNow(data),
     notifyAllowlist: parseNotifyAllowlist(data),
+    actionLevels: parseActionLevels(data.actionLevels),
     entitlementRefreshAt: data.entitlementRefreshAt && data.entitlementRefreshAt.trim() ? data.entitlementRefreshAt.trim() : undefined,
   };
 }

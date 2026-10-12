@@ -1,6 +1,7 @@
 import { describe, expect, it, test, vi } from "vitest";
 import { parseWindow, inWindow, decideAutonomy, readRuntimeConfig, parseAlertRulesFromConfig, parseMatrixConfig, parseAutofixConfig, parseAutofixScope, parseAutofixMaxPerDay, parseHHMM, parseDigestsFromConfig, parseDigestRunNow } from "./runtimeConfig.js";
 import { kubectl } from "./kubectl.js";
+import { PRESETS } from "@rigel/k8s/src/actionLevels.js";
 import type { Config } from "./config.js";
 
 vi.mock("./kubectl.js", () => ({ kubectl: vi.fn() }));
@@ -408,5 +409,17 @@ describe("parseDigestRunNow", () => {
   it("returns undefined on junk or bad mode", () => {
     expect(parseDigestRunNow({ digestRunNow: "x" })).toBeUndefined();
     expect(parseDigestRunNow({ digestRunNow: JSON.stringify({ id: "a", mode: "boom", token: "t" }) })).toBeUndefined();
+  });
+});
+
+describe("readRuntimeConfig — action levels", () => {
+  test("Balanced when actionLevels is absent", async () => {
+    mockConfigMap({});
+    expect((await readRuntimeConfig(CFG)).actionLevels).toEqual(PRESETS.balanced);
+  });
+
+  test("parsed from assistant-config when present", async () => {
+    mockConfigMap({ actionLevels: JSON.stringify({ ...PRESETS.balanced, uncordon: "ask" }) });
+    expect((await readRuntimeConfig(CFG)).actionLevels.uncordon).toBe("ask");
   });
 });
