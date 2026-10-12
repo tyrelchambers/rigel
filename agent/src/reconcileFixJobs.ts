@@ -39,6 +39,8 @@ export interface FixReconcileContext {
   at: string;
   auditMaxEntries: number;
   pullRequestsMax?: number;
+  /** Tier for a terminal entry whose pending dispatch entry has rotated out of
+   *  the log; otherwise the pending entry's own tier is kept. */
   tier: Tier;
 }
 

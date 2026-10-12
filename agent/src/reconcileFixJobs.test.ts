@@ -66,6 +66,16 @@ describe("reconcileFixJobs", () => {
     expect(r.state.audit[0]?.detail).toContain("pull/7");
   });
 
+  test("the terminal entry keeps the level the fix was dispatched at, not the current one", async () => {
+    const seeded = appendAudit(emptyState(), {
+      at: "2026-06-30T11:00:00.000Z", fingerprint: FP, incident: INCIDENT, proposal: TITLE,
+      tier: "auto", outcome: "queued", detail: "fix PR opening (pending the fix-runner): ...", actor: "pr",
+    }, 200);
+    const r = await reconcileFixJobs(deps(), seeded, { ...ctx, tier: "ask" });
+    expect(r.state.audit).toHaveLength(1);
+    expect(r.state.audit[0]).toMatchObject({ outcome: "success", tier: "auto" });
+  });
+
   test("replaces the dispatch's PENDING audit entry in place (not a new entry)", async () => {
     // Seed the pending fix-PR audit entry the dispatch records (queued, no verdict).
     const seeded = appendAudit(emptyState(), {

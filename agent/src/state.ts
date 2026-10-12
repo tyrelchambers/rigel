@@ -374,10 +374,12 @@ export function countFixPrBudget(
 /**
  * Replace the dispatch's PENDING fix-PR audit entry (the "queued pending the
  * fix-runner" placeholder) for this `fingerprint` + `title` with its terminal
- * outcome (opened / failed). When no pending entry is found (e.g. rotated out of
- * the capped log), the terminal entry is prepended instead. The pending entry is
- * the only queued entry with NO verdict for this fingerprint+proposal —
- * escalated items carry a verdict, so they are never matched. Pure. */
+ * outcome (opened / failed), keeping the pending entry's tier (the level the fix
+ * was dispatched at) and its approval verdict. When no pending entry is found
+ * (e.g. rotated out of the capped log), the terminal entry is prepended instead.
+ * The pending entry is the only queued entry for this fingerprint+proposal with
+ * no verdict, or "approved" when an operator approved it — escalated items carry
+ * an "escalated" verdict, so they are never matched. Pure. */
 export function resolveFixAudit(
   state: AssistantState,
   fingerprint: string,
@@ -386,10 +388,12 @@ export function resolveFixAudit(
   maxEntries: number,
 ): AssistantState {
   const idx = state.audit.findIndex(
-    (e) => e.fingerprint === fingerprint && e.outcome === "queued" && e.verdict === undefined && e.proposal === title,
+    (e) => e.fingerprint === fingerprint && e.outcome === "queued" && (e.verdict === undefined || e.verdict === "approved") && e.proposal === title,
   );
   if (idx === -1) return appendAudit(state, terminal, maxEntries);
-  const audit = state.audit.map((e, i) => (i === idx ? terminal : e));
+  const pending = state.audit[idx]!;
+  const resolved: AuditEntry = { ...terminal, tier: pending.tier, ...(pending.verdict ? { verdict: pending.verdict } : {}) };
+  const audit = state.audit.map((e, i) => (i === idx ? resolved : e));
   return { ...state, audit, updatedAt: terminal.at };
 }
 

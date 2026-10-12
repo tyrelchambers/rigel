@@ -194,7 +194,14 @@ describe("resolveFixAudit", () => {
     const s = appendAudit(emptyState(), pending(), 200);
     const out = resolveFixAudit(s, "fp", "Open fix PR", terminal, 200);
     expect(out.audit).toHaveLength(1);
-    expect(out.audit[0]).toBe(terminal);
+    expect(out.audit[0]).toEqual(terminal);
+  });
+
+  test("keeps the pending entry's tier and approval verdict", () => {
+    const s = appendAudit(emptyState(), pending({ tier: "ask", verdict: "approved" }), 200);
+    const out = resolveFixAudit(s, "fp", "Open fix PR", { ...terminal, tier: "auto" }, 200);
+    expect(out.audit).toHaveLength(1);
+    expect(out.audit[0]).toMatchObject({ outcome: "success", tier: "ask", verdict: "approved" });
   });
 
   test("prepends when no pending entry exists (e.g. rotated out)", () => {
