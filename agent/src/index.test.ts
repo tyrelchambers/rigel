@@ -976,12 +976,12 @@ describe("tick() — action levels", () => {
     for (const v of ["drain", "delete", "rollout", "scale", "set", "cordon", "uncordon"]) expect(mutated(v)).toBe(false);
   });
 
-  test("a malformed proposal of a known kind is recorded as a failure without aborting the tick", async () => {
+  test("a malformed proposal of a known kind is recorded as skipped without aborting the tick", async () => {
     vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [{ label: "Restart it", kind: "restart" }] }));
     const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "auto" } });
     await expect(tick(makeConfig(), newCb(), createLoopState())).resolves.toBeUndefined();
-    expect(captured()!.audit[0]).toMatchObject({ proposal: "Restart it", outcome: "failure", tier: "auto" });
-    expect(captured()!.audit[0]!.detail).toMatch(/missing required field: deployment/);
+    expect(captured()!.audit[0]).toMatchObject({ proposal: "Restart it", outcome: "skipped", tier: "auto" });
+    expect(captured()!.audit[0]!.detail).toBe("malformed proposal: action is missing required field: deployment");
     expect(mutated("rollout")).toBe(false);
   });
 });
