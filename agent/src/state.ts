@@ -1,3 +1,4 @@
+import type { ActionLevel } from "@rigel/k8s/src/actionLevels.js";
 import { kubectl, type KubectlResult } from "./kubectl.js";
 import type { SuggestedAction } from "./action.js";
 import { emptyAlertState, type AlertState } from "./alerts.js";
@@ -10,7 +11,7 @@ import { emptyAlertState, type AlertState } from "./alerts.js";
  * so the agent never clobbers them.
  */
 
-export type Tier = "low" | "medium" | "blocked";
+export type Tier = "low" | "medium" | "blocked" | ActionLevel;
 export type Verdict = "auto" | "approved" | "rejected" | "escalated" | "skipped";
 export type Outcome = "success" | "failure" | "queued" | "skipped";
 /** Who initiated an action inside the agent's own loop. Deliberately excludes
