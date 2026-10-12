@@ -13,6 +13,7 @@ import {
 } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { PRESETS, ACTION_LEVEL_KINDS, ACTION_LEVEL_LABELS, matchPreset, type ActionKind, type ActionLevel, type PresetId } from "@rigel/k8s";
 import { cn } from "@/lib/utils";
+import { Segmented, type SegmentedOption } from "@/components/ui/segmented";
 import { useAssistantCtx } from "./AssistantContext";
 
 const LEVELS: { value: ActionLevel; label: string; dot: string; def: string }[] = [
@@ -22,10 +23,10 @@ const LEVELS: { value: ActionLevel; label: string; dot: string; def: string }[] 
   { value: "off", label: ACTION_LEVEL_LABELS.off, dot: "bg-[var(--fg-tertiary)]", def: "Never does it" },
 ];
 
-const PRESET_OPTIONS: { id: PresetId; label: string }[] = [
-  { id: "loose", label: "Loose" },
-  { id: "balanced", label: "Balanced" },
-  { id: "strict", label: "Strict" },
+const PRESET_OPTIONS: SegmentedOption<PresetId>[] = [
+  { value: "loose", label: "Loose" },
+  { value: "balanced", label: "Balanced" },
+  { value: "strict", label: "Strict" },
 ];
 
 const KIND_ICONS: Record<ActionKind, IconDefinition> = {
@@ -38,42 +39,6 @@ const KIND_ICONS: Record<ActionKind, IconDefinition> = {
   setEnv: faSliders,
   openFixPR: faCodePullRequest,
 };
-
-interface SegmentedOption {
-  key: string;
-  label: string;
-  ariaLabel?: string;
-  dot?: string;
-  selected: boolean;
-  onClick: () => void;
-}
-
-function Segmented({ options, segmentClass, disabled }: { options: SegmentedOption[]; segmentClass: string; disabled: boolean }) {
-  return (
-    <div className="flex gap-0.5 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-sunken)] p-[3px]">
-      {options.map((o) => (
-        <button
-          key={o.key}
-          type="button"
-          disabled={disabled}
-          aria-pressed={o.selected}
-          aria-label={o.ariaLabel}
-          onClick={o.onClick}
-          className={cn(
-            "flex items-center justify-center gap-1.5 rounded py-1.5 text-xs transition-colors disabled:opacity-60",
-            segmentClass,
-            o.selected
-              ? "bg-[var(--border-strong)] font-semibold text-[var(--fg-primary)]"
-              : "font-medium text-[var(--fg-secondary)] hover:text-[var(--fg-primary)]",
-          )}
-        >
-          {o.selected && o.dot && <span className={cn("size-1.5 rounded-full", o.dot)} />}
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 export function ActionLevelsCard() {
   const { d, ns, working, run } = useAssistantCtx();
@@ -95,14 +60,11 @@ export function ActionLevelsCard() {
             </span>
           )}
           <Segmented
+            value={current}
+            onChange={(id) => save(PRESETS[id])}
+            options={PRESET_OPTIONS}
             disabled={working}
-            segmentClass="px-3"
-            options={PRESET_OPTIONS.map((p) => ({
-              key: p.id,
-              label: p.label,
-              selected: current === p.id,
-              onClick: () => save(PRESETS[p.id]),
-            }))}
+            segmentClassName="px-3"
           />
         </div>
       </div>
@@ -131,16 +93,11 @@ export function ActionLevelsCard() {
               <p className="text-xs text-[var(--fg-tertiary)]">{description}</p>
             </div>
             <Segmented
+              value={d.actionLevels[kind]}
+              onChange={(level) => save({ ...d.actionLevels, [kind]: level })}
+              options={LEVELS.map((l) => ({ value: l.value, label: l.label, ariaLabel: `${label}: ${l.label}`, dot: l.dot }))}
               disabled={working}
-              segmentClass="w-[66px]"
-              options={LEVELS.map((l) => ({
-                key: l.value,
-                label: l.label,
-                ariaLabel: `${label}: ${l.label}`,
-                dot: l.dot,
-                selected: d.actionLevels[kind] === l.value,
-                onClick: () => save({ ...d.actionLevels, [kind]: l.value }),
-              }))}
+              segmentClassName="w-[66px]"
             />
           </div>
         ))}

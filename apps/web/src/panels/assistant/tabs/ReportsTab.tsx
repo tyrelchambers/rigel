@@ -27,6 +27,7 @@ import {
 } from "@rigel/k8s";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Segmented } from "@/components/ui/segmented";
 import {
   Dialog,
   DialogBody,
@@ -85,40 +86,6 @@ function Caption({ children }: { children: ReactNode }) {
     <span className="font-mono text-2xs tracking-[0.5px] text-[var(--fg-tertiary)]">
       {children}
     </span>
-  );
-}
-
-/** A segmented (pill) control: a bordered track with equal, selectable segments. */
-function Segmented<T extends string>({
-  value,
-  onChange,
-  options,
-}: {
-  value: T;
-  onChange: (v: T) => void;
-  options: { value: T; label: string }[];
-}) {
-  return (
-    <div className="flex w-full gap-[3px] rounded-md border border-[var(--border-subtle)] bg-white/[0.04] p-[3px]">
-      {options.map((o) => {
-        const active = o.value === value;
-        return (
-          <button
-            key={o.value}
-            type="button"
-            aria-pressed={active}
-            onClick={() => onChange(o.value)}
-            className={`flex-1 rounded-sm py-1.5 text-xs transition-colors ${
-              active
-                ? "border border-[var(--border-subtle)] bg-white/[0.08] font-semibold text-[var(--fg-primary)]"
-                : "text-[var(--fg-tertiary)] hover:text-[var(--fg-primary)]"
-            }`}
-          >
-            {o.label}
-          </button>
-        );
-      })}
-    </div>
   );
 }
 
@@ -483,6 +450,9 @@ export function ReportsTab() {
             <div className="flex flex-col gap-2">
               <Caption>Schedule</Caption>
               <Segmented<Cadence>
+                variant="raised"
+                className="w-full"
+                segmentClassName="flex-1"
                 value={cadence}
                 onChange={pickCadence}
                 options={[
@@ -543,6 +513,9 @@ export function ReportsTab() {
             <div className="flex flex-col gap-2">
               <Caption>What it covers</Caption>
               <Segmented<"sinceLast" | "fixed">
+                variant="raised"
+                className="w-full"
+                segmentClassName="flex-1"
                 value={lookbackMode}
                 onChange={setLookbackMode}
                 options={[
