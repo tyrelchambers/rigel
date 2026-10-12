@@ -941,6 +941,35 @@ describe("tick() — action levels", () => {
   });
 });
 
+describe("tick() — circuit breaker", () => {
+  test("a cordon and a later uncordon of the same node share one breaker key", async () => {
+    const cb = newCb();
+    const limits = { enabled: "true", confirmPolls: "1", mode: "auto", maxPerResourcePerHour: "1" };
+    vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [{ label: "Cordon k3s-slave", kind: "cordon", node: "k3s-slave" }] }));
+    wireCluster({ configData: limits });
+    await tick(makeConfig(), cb, createLoopState());
+    expect(mutated("cordon")).toBe(true);
+
+    const { captured } = wireCluster({ configData: limits, pods: [], nodes: [OUR_CORDONED_NODE] });
+    await tick(makeConfig(), cb, createLoopState());
+    expect(mutated("uncordon")).toBe(false);
+    expect(captured()!.queue[0]!.reason).toBe("hit the action limit: circuit-breaker: resource node/k3s-slave hit its hourly cap (1)");
+  });
+
+  test("a breaker veto queues the action for approval with the breaker reason", async () => {
+    vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [RESTART] }));
+    const { captured } = wireCluster({
+      configData: { enabled: "true", confirmPolls: "1", mode: "auto", webhookUrl: "http://hook", notifyChannels: "webhook", maxPerNight: "0" },
+    });
+    await tick(makeConfig(), newCb(), createLoopState());
+    const why = "hit the action limit: circuit-breaker: nightly total cap reached (0)";
+    expect(mutated("rollout")).toBe(false);
+    expect(captured()!.queue[0]).toMatchObject({ reason: why, action: { kind: "restart" } });
+    expect(captured()!.audit[0]).toMatchObject({ outcome: "queued", tier: "auto", detail: "circuit-breaker: nightly total cap reached (0)" });
+    expect(vi.mocked(sendToChannel)).toHaveBeenCalledWith(expect.anything(), "webhook", expect.stringContaining(`Waiting on your OK: Restart memos — default/memos-7d9f-abc: CrashLoopBackOff (${why})`));
+  });
+});
+
 describe("queue — dedup by incident + label + action args", () => {
   const emptyState = (): AssistantState => ({ updatedAt: "", audit: [], queue: [], report: "" });
 
