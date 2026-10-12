@@ -38,6 +38,14 @@ describe("pendingFixesContext", () => {
   });
 
 
+  test("a fix PR already being opened is listed without an approval block", () => {
+    const out = pendingFixesContext([
+      q({ suggestion: "Bump memos", pending: true, action: { kind: "openFixPR", label: "Open fix PR", source: "memos", filePath: "apps/memos/deployment.yaml" } }),
+    ]);
+    expect(out).toContain("1. Bump memos: fix PR already being opened, nothing to approve");
+    expect(out).not.toContain("emit:");
+  });
+
   test("empty queue → empty string (nothing injected)", () => {
     expect(pendingFixesContext([])).toBe("");
   });

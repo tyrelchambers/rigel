@@ -57,7 +57,7 @@ describe("dispatchRepoFix", () => {
     expect(state.audit[0]).toMatchObject({ outcome: "queued", tier: "review", proposal: ACTION.title, actor: "pr" });
     expect(state.audit[0]?.detail).toContain("fix-runner");
     expect(state.audit[0]?.detail).toContain("github.com/me/infra@main");
-    expect(state.queue[0]).toMatchObject({ suggestion: ACTION.title, action: { kind: "openFixPR" } });
+    expect(state.queue[0]).toMatchObject({ suggestion: ACTION.title, action: { kind: "openFixPR" }, pending: true });
     expect(notification).toContain("Fix PR pending");
   });
 

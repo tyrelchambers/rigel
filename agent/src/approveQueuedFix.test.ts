@@ -45,7 +45,7 @@ describe("approveQueuedFix", () => {
     expect(apply).toHaveBeenCalledTimes(2);
     expect(eligibility).toHaveBeenCalledWith(expect.objectContaining({ incidentKind: "unhealthyPod", namespace: "default", name: "memos-abc" }));
     expect(out.state.queue).toHaveLength(1);
-    expect(out.state.queue[0]).toMatchObject({ reason: "fix PR pending the fix-runner" });
+    expect(out.state.queue[0]).toMatchObject({ reason: "fix PR pending the fix-runner", pending: true });
     expect(out.state.audit[0]).toMatchObject({ outcome: "queued", verdict: "approved", actor: "chat", tier: "ask" });
     expect(record).toHaveBeenCalledWith(FP, "default/memos", ctx.nowMs);
     expect(out.notification).toBe("▸ Fix PR pending: Bump memos image to a healthy tag (default/memos-abc: CrashLoopBackOff)");
@@ -117,6 +117,13 @@ describe("consumeFixApprovals", () => {
     const out = await consumeFixApprovals(d, cb(), emptyState(), [approval], ctx);
     expect(apply).not.toHaveBeenCalled();
     expect(out.state.approvedFixTokens).toEqual(["tok-1"]);
+  });
+
+  test("a marker never matches a pending item", async () => {
+    const { d, apply } = deps();
+    const out = await consumeFixApprovals(d, cb(), { ...emptyState(), queue: [{ ...ITEM, pending: true }] }, [approval], ctx);
+    expect(apply).not.toHaveBeenCalled();
+    expect(out.state.queue).toEqual([{ ...ITEM, pending: true }]);
   });
 
   test("a marker never matches a different fingerprint", async () => {

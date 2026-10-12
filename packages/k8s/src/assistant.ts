@@ -969,6 +969,8 @@ export interface AssistantQueuedSuggestion {
   reason: string;
   fingerprint?: string;
   action?: SuggestedAction;
+  /** Already dispatched (a fix PR being opened): shown, not approvable. */
+  pending?: true;
 }
 
 /**

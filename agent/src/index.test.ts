@@ -1150,6 +1150,17 @@ describe("tick() — approving a queued fix PR", () => {
     expect(vi.mocked(notifySignal)).toHaveBeenCalledWith("http://sig", "+15550001111", ["+15550002222"], expect.stringContaining("✓ Fix PR pending: Bump memos image to a healthy tag"));
   });
 
+  test("a chat fix PR that matches only a pending item is not dispatched again", async () => {
+    const { label, source, filePath } = OPEN_FIX_PR;
+    chatSays({ kind: "openFixPR", label, source, filePath });
+    wireCluster({
+      configData: { ...budgetConfig("5"), ...CHAT_CONFIG }, deploymentJSON: DEPLOYMENT_JSON,
+      stateSeed: { updatedAt: "", audit: [], queue: [{ ...QUEUED_FIX, reason: "fix PR pending the fix-runner", pending: true }], report: "" },
+    });
+    await tick(makeConfig(), newCb(), handledLoop());
+    expect(dispatchedAFix()).toBe(false);
+  });
+
   test("a chat fix PR that matches nothing queued is refused", async () => {
     const { label, source, filePath } = OPEN_FIX_PR;
     chatSays({ kind: "openFixPR", label, source, filePath });

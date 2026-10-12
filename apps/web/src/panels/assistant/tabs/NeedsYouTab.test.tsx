@@ -79,6 +79,13 @@ describe("NeedsYouTab", () => {
     });
   });
 
+  it("a fix PR already being opened shows a muted label instead of an approve button", () => {
+    queue = [{ ...FIX, reason: "fix PR pending the fix-runner", pending: true }];
+    renderTab();
+    expect(screen.queryByRole("button", { name: "Open fix PR" })).not.toBeInTheDocument();
+    expect(screen.getByText("Opening PR…")).toBeInTheDocument();
+  });
+
   it("a queued kubectl action still goes to the confirm sheet", () => {
     queue = [RESTART];
     renderTab();

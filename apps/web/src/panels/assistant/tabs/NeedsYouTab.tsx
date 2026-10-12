@@ -58,7 +58,9 @@ export function NeedsYouTab() {
               <p className="font-mono text-sm font-medium">{q.incident}</p>
               <p className="text-sm">{q.suggestion}</p>
               <p className="text-xs text-muted-foreground">{q.reason}</p>
-              {q.action && (
+              {q.pending ? (
+                <p className="text-xs text-[var(--fg-tertiary)]">Opening PR…</p>
+              ) : q.action && (
                 <Button
                   size="sm"
                   onClick={() =>
