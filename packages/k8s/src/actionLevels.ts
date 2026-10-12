@@ -5,7 +5,7 @@ export type PresetId = "loose" | "balanced" | "strict";
 
 export const ACTION_LEVEL_VALUES: readonly ActionLevel[] = ["auto", "review", "ask", "off"];
 
-export const ACTION_KINDS: readonly { kind: ActionKind; label: string; description: string }[] = [
+export const ACTION_LEVEL_KINDS: readonly { kind: ActionKind; label: string; description: string }[] = [
   { kind: "restart", label: "Restart", description: "Roll out a fresh copy of a deployment" },
   { kind: "rollback", label: "Roll back", description: "Return a deployment to its previous version" },
   { kind: "deletePod", label: "Delete pod", description: "Remove a stuck pod so its controller replaces it" },
@@ -23,7 +23,7 @@ export const PRESETS: Record<PresetId, ActionLevels> = {
 };
 
 export function isActionKind(kind: string): kind is ActionKind {
-  return ACTION_KINDS.some((k) => k.kind === kind);
+  return ACTION_LEVEL_KINDS.some((k) => k.kind === kind);
 }
 
 export function parseActionLevels(raw: string | undefined): ActionLevels {
@@ -35,11 +35,11 @@ export function parseActionLevels(raw: string | undefined): ActionLevels {
     parsed = null;
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return Object.fromEntries(ACTION_KINDS.map((k) => [k.kind, "ask"])) as ActionLevels;
+    return Object.fromEntries(ACTION_LEVEL_KINDS.map((k) => [k.kind, "ask"])) as ActionLevels;
   }
   const stored = parsed as Record<string, unknown>;
   const out = { ...PRESETS.balanced };
-  for (const { kind } of ACTION_KINDS) {
+  for (const { kind } of ACTION_LEVEL_KINDS) {
     if (!(kind in stored)) continue;
     const v = stored[kind];
     out[kind] = ACTION_LEVEL_VALUES.includes(v as ActionLevel) ? (v as ActionLevel) : "ask";
@@ -49,11 +49,11 @@ export function parseActionLevels(raw: string | undefined): ActionLevels {
 
 export function matchPreset(levels: ActionLevels): PresetId | null {
   for (const id of Object.keys(PRESETS) as PresetId[]) {
-    if (ACTION_KINDS.every(({ kind }) => PRESETS[id][kind] === levels[kind])) return id;
+    if (ACTION_LEVEL_KINDS.every(({ kind }) => PRESETS[id][kind] === levels[kind])) return id;
   }
   return null;
 }
 
 export function serializeActionLevels(levels: ActionLevels): string {
-  return JSON.stringify(Object.fromEntries(ACTION_KINDS.map(({ kind }) => [kind, levels[kind]])));
+  return JSON.stringify(Object.fromEntries(ACTION_LEVEL_KINDS.map(({ kind }) => [kind, levels[kind]])));
 }

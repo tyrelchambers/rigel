@@ -60,8 +60,11 @@ import {
   liveMatchesPolicy,
   DEFAULT_POLICY,
   type RbacPolicy,
+  ACTION_LEVEL_KINDS,
+  ACTION_LEVEL_VALUES,
+  serializeActionLevels,
+  type ActionLevels,
 } from "@rigel/k8s";
-import { ACTION_KINDS, ACTION_LEVEL_VALUES, serializeActionLevels, type ActionLevels } from "@rigel/k8s/src/actionLevels";
 import { effectiveClaudeToken } from "./chatConfig";
 import { applyPolicy } from "./rbacApply";
 import { listContexts } from "./contexts";
@@ -584,7 +587,7 @@ export function setMatrixSecret(req: AssistantRequest, namespace: string): strin
 
 export function setActionLevelsUpdates(req: AssistantRequest): Record<string, string> {
   const levels = req.actionLevels;
-  if (!levels || !ACTION_KINDS.every(({ kind }) => ACTION_LEVEL_VALUES.includes(levels[kind]))) {
+  if (!levels || !ACTION_LEVEL_KINDS.every(({ kind }) => ACTION_LEVEL_VALUES.includes(levels[kind]))) {
     throw new Error("setActionLevels requires a level for every action.");
   }
   return { actionLevels: serializeActionLevels(levels) };

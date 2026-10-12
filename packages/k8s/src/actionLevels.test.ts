@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { ACTION_KINDS, PRESETS, matchPreset, parseActionLevels, serializeActionLevels } from "./actionLevels";
+import { ACTION_LEVEL_KINDS, PRESETS, matchPreset, parseActionLevels, serializeActionLevels } from "./actionLevels";
 
 describe("parseActionLevels", () => {
   test("missing key → Balanced", () => {
@@ -18,11 +18,11 @@ describe("parseActionLevels", () => {
 
   test.each(["{nope", "[]", "null", "42"])("unparseable or non-object %s → every kind ask", (raw) => {
     const l = parseActionLevels(raw);
-    for (const k of ACTION_KINDS) expect(l[k.kind]).toBe("ask");
+    for (const k of ACTION_LEVEL_KINDS) expect(l[k.kind]).toBe("ask");
   });
 
   test("unknown kinds in the stored map are dropped", () => {
-    expect(Object.keys(parseActionLevels(JSON.stringify({ drain: "auto" })))).toEqual(ACTION_KINDS.map((k) => k.kind));
+    expect(Object.keys(parseActionLevels(JSON.stringify({ drain: "auto" })))).toEqual(ACTION_LEVEL_KINDS.map((k) => k.kind));
   });
 });
 
