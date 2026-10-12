@@ -66,6 +66,17 @@ describe("ConfirmSheet — non-blocking execute", () => {
     });
   });
 
+  it("keeps Execute disabled when the preview fails", async () => {
+    const { fetchPreviewCommand } = await import("@/lib/api");
+    vi.mocked(fetchPreviewCommand).mockRejectedValueOnce(new Error("unsupported action kind: openFixPR"));
+    const action: ActionBlock = { kind: "openFixPR", label: "Open fix PR" } as ActionBlock;
+
+    wrap(<ConfirmSheet action={action} open={true} onClose={vi.fn()} />);
+
+    await screen.findByText("unsupported action kind: openFixPR");
+    expect(screen.getByRole("button", { name: /execute/i })).toBeDisabled();
+  });
+
   it("keeps purge in-modal (does not background-run it)", async () => {
     const onClose = vi.fn();
     const onPurge = vi.fn();
