@@ -61,6 +61,7 @@ import {
   DEFAULT_POLICY,
   type RbacPolicy,
 } from "@rigel/k8s";
+import { ACTION_KINDS, ACTION_LEVEL_VALUES, serializeActionLevels, type ActionLevels } from "@rigel/k8s/src/actionLevels";
 import { effectiveClaudeToken } from "./chatConfig";
 import { applyPolicy } from "./rbacApply";
 import { listContexts } from "./contexts";
@@ -128,6 +129,7 @@ export type AssistantAction =
   | "setCredentials"
   | "setLimits"
   | "setAutofix"
+  | "setActionLevels"
   | "restart"
   | "silence"
   | "unsilence"
@@ -170,6 +172,7 @@ export interface AssistantRequest {
   autofixEnabled?: boolean;
   autofixMaxPerDay?: number;
   autofixScope?: { projects?: string[] };
+  actionLevels?: ActionLevels;
   monitorNamespaces?: string;
   mode?: string;
   window?: string;
@@ -577,6 +580,14 @@ export function setMatrixUpdates(req: AssistantRequest): Record<string, string> 
 export function setMatrixSecret(req: AssistantRequest, namespace: string): string | null {
   const token = (req.matrixAccessToken ?? "").trim();
   return token === "" ? null : matrixSecretYAML(token, namespace);
+}
+
+export function setActionLevelsUpdates(req: AssistantRequest): Record<string, string> {
+  const levels = req.actionLevels;
+  if (!levels || !ACTION_KINDS.every(({ kind }) => ACTION_LEVEL_VALUES.includes(levels[kind]))) {
+    throw new Error("setActionLevels requires a level for every action.");
+  }
+  return { actionLevels: serializeActionLevels(levels) };
 }
 
 /** Live limit change: read-modify-write the limit keys in assistant-config. No
@@ -1221,6 +1232,8 @@ export async function handleAssistant(
       return setLimits(context, namespace, req);
     case "setAutofix":
       return setAutofix(context, namespace, req);
+    case "setActionLevels":
+      return patchConfig(context, namespace, setActionLevelsUpdates(req));
     case "restart":
       return restartAgent(context, namespace);
     case "silence":
