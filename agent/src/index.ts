@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 import { realpathSync } from "node:fs";
 import { getHours, getMinutes } from "date-fns";
 import { levelFor } from "./classifier.js";
+import { isActionKind } from "@rigel/k8s/src/actionLevels.js";
 import { evaluateAlertRules, emptyAlertState } from "./alerts.js";
 import { collectMetricSnapshot } from "./metrics.js";
 import { loadConfig, resolveFixRunnerImage, type Config } from "./config.js";
@@ -511,6 +512,16 @@ export async function tick(
 
       const action = actions[0]!;
       const level = levelFor(action.kind, rc.actionLevels);
+      if (!isActionKind(action.kind)) {
+        const reason = "not an action the agent can take; run it yourself in Rigel";
+        state = queue(state, cfg, ts, fp, describe(incident), action.label, reason);
+        state = record(state, cfg, {
+          at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
+          tier: "ask", outcome: "queued", detail: reason, analysis: truncate(analysis),
+        });
+        notifications.push(`▸ You'll need to run this one yourself in Rigel: ${action.label} (${describe(incident)})`);
+        continue;
+      }
       if (level === "off") {
         state = record(state, cfg, {
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
@@ -639,11 +650,21 @@ export async function tick(
         continue;
       }
 
+      let command: string;
+      try {
+        command = previewCommand(action);
+      } catch (e) {
+        state = record(state, cfg, {
+          at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
+          tier: level, outcome: "failure", detail: String(e), analysis: truncate(analysis),
+        });
+        continue;
+      }
       if (level === "ask") {
         state = queue(state, cfg, ts, fp, describe(incident), action.label, "set to Ask me in Action levels", action);
         state = record(state, cfg, {
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-          command: previewCommand(action), tier: level, outcome: "queued", detail: "set to Ask me in Action levels", analysis: truncate(analysis),
+          command, tier: level, outcome: "queued", detail: "set to Ask me in Action levels", analysis: truncate(analysis),
         });
         notifications.push(`▸ Waiting on your OK: ${action.label} — ${describe(incident)}`);
         continue;
@@ -653,7 +674,6 @@ export async function tick(
       // actions execute on the deterministic guardrails alone.
       let execVerdict: "auto" | "approved" = "auto";
       if (level === "review") {
-        const command = previewCommand(action);
         let sup: SupervisorOutput;
         try {
           sup = await runSupervisor(rc, incident, action, analysis, command);
@@ -696,7 +716,7 @@ export async function tick(
         state = queue(state, cfg, ts, fp, describe(incident), action.label, why, action);
         state = record(state, cfg, {
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-          command: previewCommand(action), tier: level, outcome: "queued", detail: why, analysis: truncate(analysis),
+          command, tier: level, outcome: "queued", detail: why, analysis: truncate(analysis),
         });
         notifications.push(`▸ Waiting on your OK: ${action.label} — ${describe(incident)} (${why})`);
         continue;
