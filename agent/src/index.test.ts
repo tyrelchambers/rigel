@@ -952,6 +952,16 @@ describe("tick() — action levels", () => {
     expect(captured()!.audit[0]).toMatchObject({ outcome: "queued", tier: "auto", actor: "pr" });
   });
 
+  test("openFixPR at off skips the repo resolve entirely", async () => {
+    vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [RESTART] }));
+    wireCluster({ configData: { ...budgetConfig("5"), actionLevels: JSON.stringify({ openFixPR: "off" }) }, deploymentJSON: DEPLOYMENT_JSON });
+    await tick(makeConfig(), newCb(), createLoopState());
+    const calls = vi.mocked(kubectl).mock.calls.map((c) => c[0]);
+    expect(calls.some((a) => a[0] === "get" && a[1] === "deployment")).toBe(false);
+    expect(calls.some((a) => a[0] === "get" && a[1] === "configmap" && a[2] === "rigel-git-sources")).toBe(false);
+    expect(vi.mocked(runWorker).mock.calls[0]![2]).toBeNull();
+  });
+
   test("openFixPR at ask queues it, no dispatch", async () => {
     const { captured } = wireCluster({ configData: { ...budgetConfig("5"), actionLevels: JSON.stringify({ openFixPR: "ask" }) }, deploymentJSON: DEPLOYMENT_JSON });
     await tick(makeConfig(), newCb(), createLoopState());
