@@ -136,7 +136,7 @@ export function toKubectlInvocations(action: SuggestedAction): string[][] {
 
 export function resourceKeyFor(action: SuggestedAction): string {
   if (action.node) return `node/${action.node}`;
-  const target = action.deployment ?? action.pod ?? (action.args ? action.args.slice(0, 3).join("-") : action.label);
+  const target = action.deployment ?? action.pod ?? action.source ?? (action.args ? action.args.slice(0, 3).join("-") : action.label);
   return `${action.namespace ?? "default"}/${target}`;
 }
 

@@ -240,4 +240,9 @@ describe("resourceKeyFor", () => {
     expect(resourceKeyFor({ label: "x", kind: "command", args: ["delete", "pvc", "data-0", "-n", "apps"] })).toBe("default/delete-pvc-data-0");
     expect(resourceKeyFor({ label: "just a label", kind: "command" })).toBe("default/just a label");
   });
+
+  test("a fix PR keys on its namespace and GitOps source", () => {
+    expect(resourceKeyFor({ label: "Open fix PR", kind: "openFixPR", source: "memos", filePath: "apps/memos/deployment.yaml" })).toBe("default/memos");
+    expect(resourceKeyFor({ label: "Open fix PR", kind: "openFixPR", source: "memos", namespace: "apps" })).toBe("apps/memos");
+  });
 });

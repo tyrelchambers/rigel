@@ -1025,6 +1025,28 @@ describe("tick() — circuit breaker", () => {
   });
 });
 
+describe("tick() — circuit breaker on fix PRs", () => {
+  test("a breaker veto queues an Auto fix PR for approval instead of dispatching it", async () => {
+    const cb = newCb();
+    for (let i = 0; i < 3; i++) cb.record("earlier", "default/memos", Date.now());
+    const { captured } = wireCluster({ configData: { ...budgetConfig("5"), actionLevels: JSON.stringify({ openFixPR: "auto" }) }, deploymentJSON: DEPLOYMENT_JSON });
+    await tick(makeConfig(), cb, createLoopState());
+    expect(dispatchedAFix()).toBe(false);
+    expect(captured()!.queue[0]).toMatchObject({ action: { kind: "openFixPR" } });
+    expect(captured()!.queue[0]!.reason).toMatch(/^hit the action limit: /);
+    expect(captured()!.audit[0]).toMatchObject({ outcome: "queued", tier: "auto" });
+  });
+
+  test("a dispatched fix PR counts toward the breaker", async () => {
+    const cb = newCb();
+    const record = vi.spyOn(cb, "record");
+    wireCluster({ configData: { ...budgetConfig("5"), actionLevels: JSON.stringify({ openFixPR: "auto" }) }, deploymentJSON: DEPLOYMENT_JSON });
+    await tick(makeConfig(), cb, createLoopState());
+    expect(dispatchedAFix()).toBe(true);
+    expect(record).toHaveBeenCalledWith(CRASH_FP, "default/memos", expect.any(Number));
+  });
+});
+
 const CHAT_CONFIG = { enabled: "true", confirmPolls: "1", mode: "auto", signalApiUrl: "http://sig", signalNumber: "+15550001111", signalRecipients: "+15550002222" };
 const UNCORDON = { label: "Uncordon k3s-slave", kind: "uncordon", node: "k3s-slave" };
 const QUEUED_UNCORDON = { at: "2026-10-11T00:00:00.000Z", fingerprint: "cordonedNode||k3s-slave|ReadyAgain", incident: "k3s-slave: ReadyAgain", suggestion: UNCORDON.label, reason: "set to Ask me in Action levels", action: UNCORDON };
