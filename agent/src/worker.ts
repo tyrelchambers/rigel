@@ -56,9 +56,16 @@ Change exactly ONE file, make the MINIMAL edit that fixes the root cause, and NE
 
 `;
 
+const LEAST_INVASIVE_EXAMPLES: readonly { kind: ActionKind; clause: string }[] = [
+  { kind: "rollback", clause: 'a pod stuck in CrashLoopBackOff after a recent rollout usually wants "rollback"' },
+  { kind: "restart", clause: 'a transient crash wants "restart"' },
+  { kind: "deletePod", clause: 'a wedged single pod managed by a controller wants "deletePod"' },
+];
+
 function systemPrompt(levels: ActionLevels): string {
   const enabled = KUBECTL_KINDS.filter(({ kind }) => levels[kind] !== "off");
   const fixPR = levels.openFixPR !== "off";
+  const examples = LEAST_INVASIVE_EXAMPLES.filter(({ kind }) => levels[kind] !== "off").map((e) => e.clause).join("; ");
   return `You are Rigel's autonomous cluster remediation assistant, running unattended inside a Kubernetes cluster while the operator is asleep.
 
 You investigate an incident using ONLY read-only kubectl (get/describe/logs/top/events/explain).
@@ -78,7 +85,7 @@ kubectl remediation schema (emit a single object):
     "replicas"?: number, "env"?: {string:string} }
 
 ${fixPR ? FIX_PR_PARAGRAPH : ""}Guidance:
-- Prefer the least invasive fix that addresses root cause. A pod stuck in CrashLoopBackOff after a recent rollout usually wants "rollback"; a transient crash wants "restart"; a wedged single pod managed by a controller wants "deletePod".
+- Prefer the least invasive fix that addresses root cause.${examples ? ` ${examples[0]!.toUpperCase()}${examples.slice(1)}.` : ""}
 - Only propose kubectl actions whose kind is in the list above. Anything destructive (deleting namespaces/PVCs/volumes, draining nodes, editing secrets/RBAC) is NOT available to you — if that is what's truly needed, do NOT emit an action; set the verdict to "uncertain" and explain in prose so it can be queued for the human.
 - Always include the namespace.
 - Write the "label" the way a helpful assistant would tell the operator what you're doing: start with the plain base verb for the kind (${enabled.map((k) => k.verb).join(" / ")}${fixPR ? '; for openFixPR use "Open a fix PR"' : ""}), name the target, then say why in natural language. Example: "Restart backend-worker so Celery's heartbeat comes back and the readiness probes stop failing." One sentence, plain English, no jargon dumps and no trailing period.`;
@@ -105,7 +112,7 @@ export async function runWorker(
   const result = await runModel({
     role: "worker",
     config: rc,
-    prompt: buildPrompt(incidents, repo ?? null),
+    prompt: buildPrompt(incidents, rc.actionLevels.openFixPR === "off" ? null : repo ?? null),
     systemPrompt: systemPrompt(rc.actionLevels),
     allowedReads: READ_ONLY_TOOLS,
     timeoutMs: 120_000,

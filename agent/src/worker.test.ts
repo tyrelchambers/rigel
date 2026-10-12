@@ -137,4 +137,20 @@ describe("runWorker", () => {
     await runWorker({ ...rc(), actionLevels: { ...PRESETS.balanced, openFixPR: "off" } }, [INC]);
     expect(spy.mock.calls[0]![0].systemPrompt).not.toMatch(/openFixPR/);
   });
+
+  test("a resolved repo is not offered when openFixPR is Off", async () => {
+    const spy = vi.spyOn(runModelMod, "runModel").mockResolvedValue({ text: "", costUsd: 0, isError: false });
+    await runWorker({ ...rc(), actionLevels: { ...PRESETS.balanced, openFixPR: "off" } }, [INC], REPO);
+    expect(spy.mock.calls[0]![0].prompt).not.toContain("MAY propose an openFixPR");
+  });
+
+  test("the guidance example only names kinds that aren't Off", async () => {
+    const spy = vi.spyOn(runModelMod, "runModel").mockResolvedValue({ text: "", costUsd: 0, isError: false });
+    await runWorker(rc(), [INC]);
+    expect(spy.mock.calls[0]![0].systemPrompt).toContain('- Prefer the least invasive fix that addresses root cause. A pod stuck in CrashLoopBackOff after a recent rollout usually wants "rollback"; a transient crash wants "restart"; a wedged single pod managed by a controller wants "deletePod".\n');
+    await runWorker({ ...rc(), actionLevels: { ...PRESETS.balanced, rollback: "off", deletePod: "off" } }, [INC]);
+    const prompt = spy.mock.calls[1]![0].systemPrompt;
+    expect(prompt).toContain('- Prefer the least invasive fix that addresses root cause. A transient crash wants "restart".\n');
+    expect(prompt).not.toMatch(/rollback|deletePod/);
+  });
 });

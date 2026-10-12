@@ -4,10 +4,11 @@ import type { SuggestedAction } from "./action.js";
 /**
  * Undo the agent's own cordons. An autonomous `cordon` stamps the node with
  * CORDONED_BY_ANNOTATION; once that node has been Ready for READY_STABLE_MS it
- * becomes a `cordonedNode` incident that takes the Uncordon level like any other action. A node cordoned by anyone else carries no
- * marker and is never touched. A marker left on a node that is already
- * schedulable (a human uncordoned it first) is stale and gets removed, so a later
- * manual cordon isn't mistaken for ours.
+ * becomes a `cordonedNode` incident that takes the Uncordon level like any other
+ * action. A node cordoned by anyone else carries no marker and is never touched.
+ * A marker left on a node that is already schedulable (a human uncordoned it
+ * first) is stale and gets removed, so a later manual cordon isn't mistaken for
+ * ours.
  */
 export const CORDONED_BY_ANNOTATION = "rigel.run/cordoned-by";
 export const CORDONED_BY_VALUE = "assistant";
