@@ -421,6 +421,7 @@ export type AssistantAction =
   | "setLimits"
   | "setAutofix"
   | "setActionLevels"
+  | "approveQueuedFix"
   | "restart"
   | "silence"
   | "unsilence"
@@ -568,6 +569,8 @@ export interface AssistantRequest {
   autofixMaxPerDay?: number;
   autofixScope?: AutofixScopeInput;
   actionLevels?: ActionLevels;
+  // approveQueuedFix — the queued fix PR's queuedSuggestionId (plus `fingerprint`).
+  queuedId?: string;
   // BYO credential source (setCredentialSource / clearCredentialSource). Only
   // ids + Secret/data-key NAMES — never a secret value.
   credentialId?: keyof AssistantCredentials;
