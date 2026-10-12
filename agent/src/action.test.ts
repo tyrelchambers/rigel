@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { backupTarget, isRepoFixAction, parseActions, toKubectlInvocations } from "./action.js";
+import { backupTarget, isRepoFixAction, parseActions, resourceKeyFor, toKubectlInvocations } from "./action.js";
 
 describe("parseActions", () => {
   test("parses a single fenced action object", () => {
@@ -225,4 +225,19 @@ test("command action backup target parses delete <kind> <name> -n <ns>", () => {
 test("command action with no snapshottable target returns null namespace target", () => {
   const a = { label: "x", kind: "command", args: ["drain", "node-1"] };
   expect(backupTarget(a as any)).toEqual({ kind: "", name: "", namespace: null });
+});
+
+describe("resourceKeyFor", () => {
+  test("a cordon and an uncordon of the same node share one key", () => {
+    const cordon = resourceKeyFor({ label: "c", kind: "cordon", node: "k3s-slave" });
+    expect(cordon).toBe("node/k3s-slave");
+    expect(resourceKeyFor({ label: "u", kind: "uncordon", node: "k3s-slave" })).toBe(cordon);
+  });
+
+  test("workload actions key on namespace and target", () => {
+    expect(resourceKeyFor({ label: "r", kind: "restart", deployment: "memos", namespace: "apps" })).toBe("apps/memos");
+    expect(resourceKeyFor({ label: "d", kind: "deletePod", pod: "memos-abc" })).toBe("default/memos-abc");
+    expect(resourceKeyFor({ label: "x", kind: "command", args: ["delete", "pvc", "data-0", "-n", "apps"] })).toBe("default/delete-pvc-data-0");
+    expect(resourceKeyFor({ label: "just a label", kind: "command" })).toBe("default/just a label");
+  });
 });

@@ -35,7 +35,7 @@ import {
   type Incident,
 } from "./detector.js";
 import { kubectl, kubectlApply } from "./kubectl.js";
-import { isRepoFixAction, toKubectlInvocations, type SuggestedAction } from "./action.js";
+import { isRepoFixAction, resourceKeyFor, toKubectlInvocations, type SuggestedAction } from "./action.js";
 import { conjugateDone, couldntPhrase, greeting } from "./notifyVoice.js";
 import type { RepoFixDeps } from "./repoFixDispatch.js";
 import { runThreadedDiagnosis } from "./threadedDiagnosis.js";
@@ -439,7 +439,6 @@ export async function tick(
     for (const packet of packets) {
       const incident = packet.incident;
       const fp = fingerprint(incident);
-      const resourceKey = `${incident.namespace}/${incident.name}`;
 
       // Diagnosed — mark handled so we don't re-dispatch next tick.
       loop.handled.add(fp);
@@ -735,12 +734,17 @@ export async function tick(
       }
 
       // Auto or Review (Opus-approved) — execute under the circuit breaker.
+      const resourceKey = resourceKeyFor(action);
       const cbVerdict = cb.canAct(fp, resourceKey, now);
       if (!cbVerdict.allowed) {
+        const reason = cbVerdict.reason ?? "blocked by circuit breaker";
+        const why = `hit the action limit: ${reason}`;
+        state = queue(state, cfg, ts, fp, describe(incident), action.label, why, action);
         state = record(state, cfg, {
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-          tier: level, outcome: "skipped", detail: cbVerdict.reason ?? "blocked by circuit breaker", analysis: truncate(analysis),
+          command, tier: level, outcome: "queued", detail: reason, analysis: truncate(analysis),
         });
+        notifications.push(`▸ Waiting on your OK: ${action.label} — ${describe(incident)} (${why})`);
         continue;
       }
 
@@ -883,10 +887,7 @@ async function executeChatAction(
   action: SuggestedAction,
 ): Promise<string> {
   const level = levelFor(action.kind, rc.actionLevels);
-  const ns = action.namespace ?? "default";
-  const targetName = action.deployment ?? action.pod ?? action.node
-    ?? (action.args ? action.args.slice(0, 3).join("-") : action.label);
-  const resourceKey = `${ns}/${targetName}`;
+  const resourceKey = resourceKeyFor(action);
   const pre = await readState(cfg.stateConfigMap, cfg.stateNamespace);
   const matched = pre.queue.find((q) => q.action && sameInvocations(q.action, action));
   const fp = matched?.fingerprint || matched?.incident || `chat|${source}`;
