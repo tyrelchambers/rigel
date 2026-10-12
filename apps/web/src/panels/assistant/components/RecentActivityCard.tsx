@@ -20,7 +20,7 @@ import {
   faTriangleExclamation,
   faWrench,
 } from "@awesome.me/kit-6050953220/icons/classic/solid";
-import { parseIncidentFingerprint, type AssistantAuditEntry } from "@rigel/k8s";
+import { parseIncidentFingerprint, tierLabel, type AssistantAuditEntry } from "@rigel/k8s";
 import { useCluster } from "@/store/cluster";
 import { cn } from "@/lib/utils";
 import { remarkAlerts } from "@/lib/remarkAlerts";
@@ -154,7 +154,7 @@ export function RecentActivityCard({ e }: { e: AssistantAuditEntry }) {
         {e.tier && (
           <span className="flex shrink-0 items-center gap-1.5 rounded bg-white/[0.05] px-2 py-0.5 font-mono text-3xs uppercase tracking-[0.5px] text-[var(--fg-tertiary)]">
             <span className="size-1 rounded-full bg-[var(--fg-tertiary)]" />
-            {e.tier}
+            {tierLabel(e.tier)}
           </span>
         )}
         <span className="shrink-0 font-mono text-xs text-[var(--fg-tertiary)]" title={e.at}>

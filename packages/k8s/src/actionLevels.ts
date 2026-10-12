@@ -5,6 +5,12 @@ export type PresetId = "loose" | "balanced" | "strict";
 
 export const ACTION_LEVEL_VALUES: readonly ActionLevel[] = ["auto", "review", "ask", "off"];
 
+export const ACTION_LEVEL_LABELS: Record<ActionLevel, string> = { auto: "Auto", review: "Review", ask: "Ask me", off: "Off" };
+
+export function tierLabel(tier: string): string {
+  return ACTION_LEVEL_VALUES.includes(tier as ActionLevel) ? ACTION_LEVEL_LABELS[tier as ActionLevel] : tier;
+}
+
 export const ACTION_LEVEL_KINDS: readonly { kind: ActionKind; label: string; description: string }[] = [
   { kind: "restart", label: "Restart", description: "Roll out a fresh copy of a deployment" },
   { kind: "rollback", label: "Roll back", description: "Return a deployment to its previous version" },

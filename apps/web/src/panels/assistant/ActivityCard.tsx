@@ -18,7 +18,7 @@ import {
   faArrowRotateLeft,
 } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import type { AssistantAuditEntry } from "@rigel/k8s";
-import { auditEntryId } from "@rigel/k8s";
+import { auditEntryId, tierLabel } from "@rigel/k8s";
 import { cn } from "@/lib/utils";
 import { useAssistantCtx } from "./AssistantContext";
 import { auditCanExpand, relativeTime } from "./display";
@@ -85,7 +85,7 @@ export function ActivityCard({ e }: { e: AssistantAuditEntry }) {
           {e.tier && (
             <span className="inline-flex items-center gap-1.5 rounded bg-white/[0.05] px-2 py-0.5 font-mono text-3xs tracking-[0.03em] text-[var(--fg-tertiary)] uppercase">
               <span className="size-1.5 rounded-full bg-[var(--fg-tertiary)]" />
-              {e.tier}
+              {tierLabel(e.tier)}
             </span>
           )}
           <span className="font-mono text-xs text-[var(--fg-tertiary)]" title={e.at}>
