@@ -878,8 +878,9 @@ function buildMessageHandler(
  * Opus supervisor, but every other guardrail still applies: unknown-kind/repo-fix
  * items are refused, the circuit breaker can veto, and a backup is snapshotted
  * before mutating. When the action matches a fix the loop had queued (correlated
- * by its kubectl invocation), it inherits that item's fingerprint and is dropped
- * from the queue on run so the desktop UI stops showing it as pending. */
+ * by its kubectl invocation), it inherits that item's fingerprint, level and
+ * breaker key, skips the breaker check (the approval is the decision), and is
+ * dropped from the queue on run so the desktop UI stops showing it as pending. */
 async function executeChatAction(
   cfg: Config,
   rc: RuntimeConfig,
@@ -887,14 +888,15 @@ async function executeChatAction(
   source: string,
   action: SuggestedAction,
 ): Promise<string> {
-  const level = levelFor(action.kind, rc.actionLevels);
-  const resourceKey = resourceKeyFor(action);
   const pre = await readState(cfg.stateConfigMap, cfg.stateNamespace);
   const matched = pre.queue.find((q) => q.action && sameInvocations(q.action, action));
+  const target = matched?.action ?? action;
+  const level = levelFor(target.kind, rc.actionLevels);
+  const resourceKey = resourceKeyFor(target);
   const fp = matched?.fingerprint || matched?.incident || `chat|${source}`;
   const incident = matched?.incident || "chat request";
 
-  return executeActionGuarded(cb, { action, fingerprint: fp, resourceKey }, {
+  return executeActionGuarded(cb, { action, fingerprint: fp, resourceKey, approved: !!matched }, {
     now: () => Date.now(),
     execute: (a) => executeAction(a),
     storeBackup: async (key, yaml) => storeBackup(cfg.backupsConfigMap, cfg.stateNamespace, key, yaml, cfg.maxBackups),

@@ -1025,6 +1025,60 @@ describe("tick() — circuit breaker", () => {
   });
 });
 
+const CHAT_CONFIG = { enabled: "true", confirmPolls: "1", mode: "auto", signalApiUrl: "http://sig", signalNumber: "+15550001111", signalRecipients: "+15550002222" };
+const UNCORDON = { label: "Uncordon k3s-slave", kind: "uncordon", node: "k3s-slave" };
+const QUEUED_UNCORDON = { at: "2026-10-11T00:00:00.000Z", fingerprint: "cordonedNode||k3s-slave|ReadyAgain", incident: "k3s-slave: ReadyAgain", suggestion: UNCORDON.label, reason: "set to Ask me in Action levels", action: UNCORDON };
+
+/** Drive one chat message through tick(): the operator texts, and the chat
+ *  model replies with an action block for `action`. */
+function chatSays(action: Record<string, unknown>): void {
+  vi.mocked(receiveSignal).mockResolvedValue([{ envelope: { sourceNumber: "+15550002222", dataMessage: { message: "yes, do it", timestamp: 42 } } }] as never);
+  vi.mocked(runModel).mockResolvedValue({ isError: false, text: "On it.\n```action\n" + JSON.stringify(action) + "\n```", sessionId: "s1", costUsd: 0 } as never);
+}
+
+describe("tick() — chat approvals", () => {
+  test("approving a queued uncordon is recorded at the Uncordon level and keyed on the node", async () => {
+    const cb = newCb();
+    const record = vi.spyOn(cb, "record");
+    chatSays(UNCORDON);
+    const { captured } = wireCluster({ configData: { ...CHAT_CONFIG, actionLevels: JSON.stringify({ uncordon: "ask" }) }, pods: [], stateSeed: { updatedAt: "", audit: [], queue: [QUEUED_UNCORDON], report: "" } });
+    await tick(makeConfig(), cb, createLoopState());
+    expect(mutated("uncordon")).toBe(true);
+    expect(captured()!.audit[0]).toMatchObject({ actor: "chat", tier: "ask", verdict: "approved", outcome: "success", fingerprint: QUEUED_UNCORDON.fingerprint });
+    expect(record).toHaveBeenCalledWith(QUEUED_UNCORDON.fingerprint, "node/k3s-slave", expect.any(Number));
+    expect(captured()!.queue).toHaveLength(0);
+  });
+
+  test("a command-form approval of a queued restart takes the Restart level and the deployment key", async () => {
+    const cb = newCb();
+    const record = vi.spyOn(cb, "record");
+    const queued = { at: "2026-10-11T00:00:00.000Z", fingerprint: CRASH_FP, incident: "default/memos-7d9f-abc: CrashLoopBackOff", suggestion: RESTART.label, reason: "set to Ask me in Action levels", action: RESTART };
+    chatSays({ kind: "command", label: "Restart memos", args: ["rollout", "restart", "deployment/memos", "-n", "default"] });
+    const { captured } = wireCluster({ configData: { ...CHAT_CONFIG, actionLevels: JSON.stringify({ restart: "review" }) }, pods: [], stateSeed: { updatedAt: "", audit: [], queue: [queued], report: "" } });
+    await tick(makeConfig(), cb, createLoopState());
+    expect(captured()!.audit[0]).toMatchObject({ actor: "chat", tier: "review", outcome: "success", fingerprint: CRASH_FP });
+    expect(record).toHaveBeenCalledWith(CRASH_FP, "default/memos", expect.any(Number));
+  });
+
+  test("approving a queued item runs even when the breaker would veto it", async () => {
+    const cb = newCb();
+    for (let i = 0; i < 3; i++) cb.record("earlier", "node/k3s-slave", Date.now());
+    chatSays(UNCORDON);
+    wireCluster({ configData: CHAT_CONFIG, pods: [], stateSeed: { updatedAt: "", audit: [], queue: [QUEUED_UNCORDON], report: "" } });
+    await tick(makeConfig(), cb, createLoopState());
+    expect(mutated("uncordon")).toBe(true);
+  });
+
+  test("a chat action that matches nothing queued is still held by the breaker", async () => {
+    const cb = newCb();
+    for (let i = 0; i < 3; i++) cb.record("earlier", "node/k3s-slave", Date.now());
+    chatSays(UNCORDON);
+    wireCluster({ configData: CHAT_CONFIG, pods: [] });
+    await tick(makeConfig(), cb, createLoopState());
+    expect(mutated("uncordon")).toBe(false);
+  });
+});
+
 describe("queue — dedup by incident + label + action args", () => {
   const emptyState = (): AssistantState => ({ updatedAt: "", audit: [], queue: [], report: "" });
 

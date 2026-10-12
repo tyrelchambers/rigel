@@ -40,4 +40,16 @@ describe("executeActionGuarded", () => {
     expect(await executeActionGuarded(cb(), { action: { label: "x", kind: "drain", node: "n" } as any, fingerprint: "f", resourceKey: "r" }, d)).toMatch(/blocked from automatic execution/);
     expect(await executeActionGuarded(cb(), { action: { label: "Uncordon n", kind: "uncordon", node: "n" } as any, fingerprint: "f", resourceKey: "r" }, d)).toMatch(/^✓ Ran/);
   });
+
+  test("an approval of a queued item skips the breaker check but is still recorded", async () => {
+    const breaker = cb();
+    for (let i = 0; i < 5; i++) breaker.record("fp", "default/api", 1_000);
+    const record = vi.spyOn(breaker, "record");
+    const d = deps();
+    const reply = await executeActionGuarded(breaker, { action: action as any, fingerprint: "fp", resourceKey: "default/api", approved: true }, d);
+    expect(reply).toMatch(/^✓ Ran/);
+    expect(d.execute).toHaveBeenCalled();
+    expect(record).toHaveBeenCalledWith("fp", "default/api", 1_000);
+  });
 });
+
