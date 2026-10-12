@@ -7,19 +7,19 @@ import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faTriangleExclamation, faLayerGroup, faMessageExclamation, faServer, faSparkles } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import type { SuggestedPrompt, SuggestionKind } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
-const META: Record<SuggestionKind, { Icon: IconDefinition; color: string }> = {
-  pod: { Icon: faTriangleExclamation, color: "var(--status-failed)" },
-  deploy: { Icon: faLayerGroup, color: "var(--status-pending)" },
-  warn: { Icon: faMessageExclamation, color: "var(--status-failed)" },
-  node: { Icon: faServer, color: "var(--status-pending)" },
-  investigate: { Icon: faSparkles, color: "var(--accent-primary)" },
+const FAILED = "text-[var(--status-failed)] bg-[color-mix(in_oklab,var(--status-failed)_12%,transparent)] border-[color-mix(in_oklab,var(--status-failed)_30%,transparent)]";
+const PENDING = "text-[var(--status-pending)] bg-[color-mix(in_oklab,var(--status-pending)_12%,transparent)] border-[color-mix(in_oklab,var(--status-pending)_30%,transparent)]";
+const ACCENT = "text-[var(--accent-primary)] bg-[color-mix(in_oklab,var(--accent-primary)_12%,transparent)] border-[color-mix(in_oklab,var(--accent-primary)_30%,transparent)]";
+
+const META: Record<SuggestionKind, { Icon: IconDefinition; tone: string }> = {
+  pod: { Icon: faTriangleExclamation, tone: FAILED },
+  deploy: { Icon: faLayerGroup, tone: PENDING },
+  warn: { Icon: faMessageExclamation, tone: FAILED },
+  node: { Icon: faServer, tone: PENDING },
+  investigate: { Icon: faSparkles, tone: ACCENT },
 };
-
-function rgba(hex: string, a: number): string {
-  const n = parseInt(hex.slice(1), 16);
-  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
-}
 
 export function SuggestedPromptsRow({
   prompts,
@@ -30,39 +30,16 @@ export function SuggestedPromptsRow({
 }) {
   if (prompts.length === 0) return null;
   return (
-    <div
-      style={{
-        display: "flex",
-        gap: 6,
-        overflowX: "auto",
-        padding: "6px 12px",
-        borderTop: "1px solid #26272B",
-        background: "var(--surface-elevated)",
-      }}
-    >
+    <div className="flex gap-1.5 overflow-x-auto border-t border-[var(--border-subtle)] bg-[var(--surface-elevated)] px-3 py-1.5">
       {prompts.map((p) => {
-        const { Icon, color } = META[p.kind];
+        const { Icon, tone } = META[p.kind];
         return (
           <button
             key={p.id}
             type="button"
             onClick={() => onTap(p)}
             title={p.prompt.slice(0, 200)}
-            className="text-2xs"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 5,
-              flexShrink: 0,
-              padding: "4px 8px",
-              borderRadius: 6,
-              color,
-              background: rgba(color, 0.12),
-              border: `1px solid ${rgba(color, 0.3)}`,
-              fontWeight: 500,
-              whiteSpace: "nowrap",
-              cursor: "pointer",
-            }}
+            className={cn("flex shrink-0 cursor-pointer items-center gap-[5px] whitespace-nowrap rounded-md border px-2 py-1 text-2xs font-medium", tone)}
           >
             <FontAwesomeIcon icon={Icon} className="size-[11px]" />
             {p.label}

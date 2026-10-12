@@ -1,0 +1,96 @@
+export type ActionLevel = "auto" | "review" | "ask" | "off";
+export type ActionKind = "restart" | "rollback" | "deletePod" | "cordon" | "uncordon" | "scale" | "setEnv" | "openFixPR";
+export type ActionLevels = Record<ActionKind, ActionLevel>;
+export type PresetId = "loose" | "balanced" | "strict";
+
+export const ACTION_LEVEL_VALUES: readonly ActionLevel[] = ["auto", "review", "ask", "off"];
+
+export const ACTION_LEVEL_LABELS: Record<ActionLevel, string> = { auto: "Auto", review: "Review", ask: "Ask me", off: "Off" };
+
+export function tierLabel(tier: string): string {
+  return ACTION_LEVEL_VALUES.includes(tier as ActionLevel) ? ACTION_LEVEL_LABELS[tier as ActionLevel] : tier;
+}
+
+export const ACTION_LEVEL_KINDS: readonly { kind: ActionKind; label: string; description: string }[] = [
+  { kind: "restart", label: "Restart", description: "Roll out a fresh copy of a deployment" },
+  { kind: "rollback", label: "Roll back", description: "Return a deployment to its previous version" },
+  { kind: "deletePod", label: "Delete pod", description: "Remove a stuck pod so its controller replaces it" },
+  { kind: "cordon", label: "Cordon", description: "Stop new pods landing on an unhealthy node" },
+  { kind: "uncordon", label: "Uncordon", description: "Let pods schedule on a node again" },
+  { kind: "scale", label: "Scale", description: "Change how many replicas a deployment runs" },
+  { kind: "setEnv", label: "Set env", description: "Change a deployment's environment variables" },
+  { kind: "openFixPR", label: "Open fix PR", description: "Open a pull request against the workload's repo" },
+];
+
+export const PRESETS: Record<PresetId, ActionLevels> = {
+  loose: { restart: "auto", rollback: "auto", deletePod: "auto", cordon: "auto", uncordon: "auto", scale: "auto", setEnv: "review", openFixPR: "review" },
+  balanced: { restart: "auto", rollback: "auto", deletePod: "auto", cordon: "auto", uncordon: "auto", scale: "review", setEnv: "review", openFixPR: "review" },
+  strict: { restart: "review", rollback: "ask", deletePod: "review", cordon: "ask", uncordon: "ask", scale: "ask", setEnv: "ask", openFixPR: "ask" },
+};
+
+export function isActionKind(kind: string): kind is ActionKind {
+  return ACTION_LEVEL_KINDS.some((k) => k.kind === kind);
+}
+
+export function parseActionLevels(raw: string | undefined): ActionLevels {
+  if (raw === undefined || raw.trim() === "") return { ...PRESETS.balanced };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    parsed = null;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return Object.fromEntries(ACTION_LEVEL_KINDS.map((k) => [k.kind, "ask"])) as ActionLevels;
+  }
+  const stored = parsed as Record<string, unknown>;
+  const out = { ...PRESETS.balanced };
+  for (const { kind } of ACTION_LEVEL_KINDS) {
+    if (!(kind in stored)) continue;
+    const v = stored[kind];
+    out[kind] = ACTION_LEVEL_VALUES.includes(v as ActionLevel) ? (v as ActionLevel) : "ask";
+  }
+  return out;
+}
+
+export function matchPreset(levels: ActionLevels): PresetId | null {
+  for (const id of Object.keys(PRESETS) as PresetId[]) {
+    if (ACTION_LEVEL_KINDS.every(({ kind }) => PRESETS[id][kind] === levels[kind])) return id;
+  }
+  return null;
+}
+
+export function serializeActionLevels(levels: ActionLevels): string {
+  return JSON.stringify(Object.fromEntries(ACTION_LEVEL_KINDS.map(({ kind }) => [kind, levels[kind]])));
+}
+
+/** Stable identity for a queued suggestion (mirrors Swift `id`). */
+export function queuedSuggestionId(q: { at: string; incident: string; suggestion: string }): string {
+  return `${q.at}|${q.incident}|${q.suggestion}`;
+}
+
+/** An operator's approval of a queued fix PR, written to assistant-config
+ *  (`approvedFixes`) by the desktop and consumed once by the agent by token. */
+export interface ApprovedFix {
+  id: string;
+  fingerprint: string;
+  token: string;
+  at: number;
+}
+
+export const MAX_APPROVED_FIXES = 20;
+
+export function parseApprovedFixes(raw: string | undefined): ApprovedFix[] {
+  if (!raw) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter((a): a is ApprovedFix => {
+    const o = a as Partial<ApprovedFix> | null;
+    return typeof o?.id === "string" && typeof o.fingerprint === "string" && typeof o.token === "string" && typeof o.at === "number";
+  });
+}

@@ -28,6 +28,8 @@ interface Deployment {
   status?: { readyReplicas?: number; replicas?: number };
 }
 interface NodeCondition { type?: string; status?: string }
+const PRESSURE_CONDITIONS = new Set(["MemoryPressure", "DiskPressure", "PIDPressure", "NetworkUnavailable"]);
+
 interface Node { metadata?: Meta; status?: { conditions?: NodeCondition[] } }
 interface K8sEvent {
   type?: string;
@@ -179,7 +181,7 @@ export function buildSuggestions(data: {
 
   // 4. Node pressure
   for (const node of data.nodes) {
-    const pressure = (node.status?.conditions ?? []).some((c) => c.type !== "Ready" && c.status === "True");
+    const pressure = (node.status?.conditions ?? []).some((c) => PRESSURE_CONDITIONS.has(c.type ?? "") && c.status === "True");
     if (!pressure) continue;
     const name = node.metadata?.name ?? "?";
     out.push({

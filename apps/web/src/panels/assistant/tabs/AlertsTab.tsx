@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAssistantCtx } from "../AssistantContext";
 import { AlertsCard } from "../AlertsCard";
+import { ActionLevelsCard } from "../ActionLevelsCard";
 import { useEntitlement } from "@/shell/useEntitlement";
 import { useAccount } from "@/shell/useAccount";
 import { useUpgrade } from "@/shell/UpgradeContext";
@@ -122,6 +123,8 @@ export function AlertsTab() {
           </button>
         </div>
       </div>
+
+      <ActionLevelsCard />
 
       {d.silenced.length > 0 && (
         <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-elevated)] p-[22px]">

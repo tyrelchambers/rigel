@@ -22,7 +22,7 @@ import { ruleRisk } from "../risk";
 import { buildRoleYaml } from "../manifest";
 import { NamespaceField } from "@/components/NamespaceField";
 import { TokenInput } from "./TokenInput";
-import { Segmented } from "./Segmented";
+import { Segmented } from "@/components/ui/segmented";
 import { SectionHeader } from "./SectionHeader";
 import { LabeledField, fieldInputClass, fieldSurface } from "./LabeledField";
 import { useApiResources } from "@/lib/api";
@@ -162,7 +162,9 @@ export function RoleEditor({ target, open, onClose, onApply, onEditYaml }: Props
               </LabeledField>
               <div className="flex items-center gap-[14px]">
                 <Segmented
-                  options={["Role", "ClusterRole"] as const}
+                  options={(["Role", "ClusterRole"] as const).map((o) => ({ value: o, label: o }))}
+                  className="shrink-0"
+                  segmentClassName="whitespace-nowrap px-[14px] outline-none"
                   value={kind}
                   onChange={setKind}
                   ariaLabel="Role kind"

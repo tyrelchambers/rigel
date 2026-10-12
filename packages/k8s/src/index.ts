@@ -1,6 +1,7 @@
 // kubectl wrappers, output parsing, and resource types are ported here
 // from Sources/Rigel/Cluster/ via the parity orchestrator.
 
+export * from "./actionLevels";
 export * from "./alerts";
 export * from "./digest";
 export * from "./commandPolicy";
@@ -228,7 +229,6 @@ export {
   parseIncidentFingerprint,
   type ParsedFingerprint,
   auditEntryId,
-  queuedSuggestionId,
   isEnabled,
   autonomyMode,
   quietWindow,

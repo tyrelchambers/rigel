@@ -1,3 +1,4 @@
+import type { ActionLevel } from "@rigel/k8s/src/actionLevels.js";
 import { kubectl, type KubectlResult } from "./kubectl.js";
 import type { SuggestedAction } from "./action.js";
 import { emptyAlertState, type AlertState } from "./alerts.js";
@@ -10,7 +11,7 @@ import { emptyAlertState, type AlertState } from "./alerts.js";
  * so the agent never clobbers them.
  */
 
-export type Tier = "low" | "medium" | "blocked";
+export type Tier = "low" | "medium" | "blocked" | ActionLevel;
 export type Verdict = "auto" | "approved" | "rejected" | "escalated" | "skipped";
 export type Outcome = "success" | "failure" | "queued" | "skipped";
 /** Who initiated an action inside the agent's own loop. Deliberately excludes
@@ -19,7 +20,7 @@ export type Outcome = "success" | "failure" | "queued" | "skipped";
  * the separate desktop ledger's `AiActionSource` (packages/k8s/src/aiActionLedger.ts)
  * instead, which answers a different question (which AI surface ran the
  * mutation, not who approved it). */
-export type AuditActor = "autonomous" | "chat" | "pr";
+export type AuditActor = "autonomous" | "chat" | "pr" | "desktop";
 
 export interface AuditEntry {
   at: string;
@@ -39,8 +40,7 @@ export interface AuditEntry {
   actor?: AuditActor;
 }
 
-/** A remediation the agent could not perform (RBAC-blocked / destructive), left
- * for the human to run from Rigel in the morning. */
+/** A remediation left for the human to approve or run from Rigel. */
 export interface QueuedSuggestion {
   at: string;
   incident: string;
@@ -50,10 +50,17 @@ export interface QueuedSuggestion {
    * re-validated each poll and moot items auto-cleared. Optional for back-compat
    * with items persisted before this field existed. */
   fingerprint?: string;
-  /** The structured action, when one exists (escalated MEDIUM items). Lets
-   * Rigel render a runnable button → confirm sheet. Absent for destructive
-   * suggestions, which have no expressible action kind. */
+  /** The structured action, when one exists. Lets Rigel render a runnable
+   * button → confirm sheet. Absent for notes and for proposals that aren't one of
+   * the action kinds. */
   action?: SuggestedAction;
+  /** Already dispatched (a fix PR the fix-runner is opening): shown, not approvable. */
+  pending?: true;
+}
+
+/** Whether the operator can approve this item: it has an action and isn't already in flight. */
+export function isApprovable(q: QueuedSuggestion): q is QueuedSuggestion & { action: SuggestedAction } {
+  return !!q.action && !q.pending;
 }
 
 export interface QueueReconcileResult {
@@ -204,6 +211,9 @@ export interface AssistantState {
   /** Last server-stamped entitlementRefreshAt the agent has honored, so a
    *  changed value force-triggers exactly one immediate entitlement check. */
   entitlementRefreshAt?: string;
+  /** Tokens of desktop fix-PR approvals already acted on, so a marker left in
+   *  assistant-config never dispatches twice. Capped, newest-first. */
+  approvedFixTokens?: string[];
 }
 
 /** Cap on the rolling incident history, and the max age before pruning. */
@@ -371,13 +381,23 @@ export function countFixPrBudget(
   return recordedOpen + Math.max(0, inFlightJobCount);
 }
 
+/** Why a fix PR can't be opened against the daily budget right now, or null
+ *  when it can. `used` is null when the in-flight fix Jobs couldn't be listed. */
+export function fixBudgetHold(used: number | null, cap: number): string | null {
+  if (used === null) return "fix-PR budget unverifiable (the in-flight fix-Job list was unreadable this tick): deferring";
+  if (used >= cap) return `daily fix-PR budget reached (${cap}/${cap}): not opening another fix PR until a slot frees up`;
+  return null;
+}
+
 /**
  * Replace the dispatch's PENDING fix-PR audit entry (the "queued pending the
  * fix-runner" placeholder) for this `fingerprint` + `title` with its terminal
- * outcome (opened / failed). When no pending entry is found (e.g. rotated out of
- * the capped log), the terminal entry is prepended instead. The pending entry is
- * the only queued/medium entry with NO verdict for this fingerprint+proposal —
- * escalated items carry a verdict, so they are never matched. Pure. */
+ * outcome (opened / failed), keeping the pending entry's tier (the level the fix
+ * was dispatched at) and its approval verdict. When no pending entry is found
+ * (e.g. rotated out of the capped log), the terminal entry is prepended instead.
+ * The pending entry is the only queued entry for this fingerprint+proposal with
+ * no verdict, or "approved" when an operator approved it — escalated items carry
+ * an "escalated" verdict, so they are never matched. Pure. */
 export function resolveFixAudit(
   state: AssistantState,
   fingerprint: string,
@@ -386,10 +406,12 @@ export function resolveFixAudit(
   maxEntries: number,
 ): AssistantState {
   const idx = state.audit.findIndex(
-    (e) => e.fingerprint === fingerprint && e.outcome === "queued" && e.verdict === undefined && e.proposal === title,
+    (e) => e.fingerprint === fingerprint && e.outcome === "queued" && (e.verdict === undefined || e.verdict === "approved") && e.proposal === title,
   );
   if (idx === -1) return appendAudit(state, terminal, maxEntries);
-  const audit = state.audit.map((e, i) => (i === idx ? terminal : e));
+  const pending = state.audit[idx]!;
+  const resolved: AuditEntry = { ...terminal, tier: pending.tier, ...(pending.verdict ? { verdict: pending.verdict } : {}) };
+  const audit = state.audit.map((e, i) => (i === idx ? resolved : e));
   return { ...state, audit, updatedAt: terminal.at };
 }
 
