@@ -52,7 +52,7 @@ export interface RepoFixDispatch {
   /** The fix-runner image (same immutable tag as the agent) the Job runs. */
   image: string;
   tier: Tier;
-  /** Who the audit names: "pr" by default, "chat" when approved from chat. */
+  /** Who the audit names: "pr" by default, "chat" or "desktop" when approved there. */
   actor?: AuditActor;
   /** Set when an operator approved the queued fix. */
   verdict?: Verdict;
