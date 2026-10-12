@@ -2,7 +2,7 @@ import { fileURLToPath } from "node:url";
 import { realpathSync } from "node:fs";
 import { getHours, getMinutes } from "date-fns";
 import { classifyRisk, RiskTier } from "./classifier.js";
-import { evaluateAlertRules, emptyAlertState, type AlertRule } from "./alerts.js";
+import { evaluateAlertRules, emptyAlertState } from "./alerts.js";
 import { collectMetricSnapshot } from "./metrics.js";
 import { loadConfig, resolveFixRunnerImage, type Config } from "./config.js";
 import { readRuntimeConfig, decideAutonomy, type RuntimeConfig, type AutofixConfig } from "./runtimeConfig.js";
@@ -45,6 +45,7 @@ import { runWorker } from "./worker.js";
 import { diagnoseConfirmed } from "./diagnosePool.js";
 import { runSupervisor, type SupervisorOutput } from "./supervisor.js";
 import { executeAction } from "./executor.js";
+import { CORDONED_BY_ANNOTATION, READY_STABLE_MS, selfCordonedNodes } from "./selfCordon.js";
 import { executeActionGuarded } from "./executeActionGuarded.js";
 import { CircuitBreaker } from "./guardrails.js";
 import { runSelfCheck, formatSelfCheck } from "./selfCheck.js";
@@ -198,13 +199,59 @@ async function detectAll(cfg: Config, autofix: AutofixConfig): Promise<{ inciden
   return { incidents, pods, deps, podsOk: podsRes.code === 0, depsOk: depsRes.code === 0, logScanned };
 }
 
-/** Node objects for node-scoped notReady alerts — a no-op (no cluster call)
- *  unless an enabled node/notReady rule exists, mirroring collectMetricSnapshot. */
-async function collectAlertNodes(rules: AlertRule[]): Promise<Record<string, unknown>[]> {
-  const need = rules.some((r) => r.enabled && r.target.scope === "node" && r.condition.type === "notReady");
-  if (!need) return [];
+/** Node objects for node-scoped notReady alerts and for undoing the agent's own
+ *  cordons (selfCordon). */
+async function collectNodes(): Promise<Record<string, unknown>[]> {
   const res = await kubectl(["get", "nodes", "-o", "json"]);
   return res.code === 0 ? itemsOf(safeParse(res.stdout)) : [];
+}
+
+/** Uncordon nodes the agent cordoned itself once they've been healthy for
+ *  READY_STABLE_MS. Runs outside the supervisor, quiet-hours window and circuit
+ *  breaker on purpose: it only reverses a cordon the agent made, and a cordon left
+ *  in place strands every workload pinned to that node. */
+async function undoSelfCordons(
+  state: AssistantState,
+  cfg: Config,
+  nodes: Record<string, unknown>[],
+  now: number,
+  notifications: string[],
+): Promise<AssistantState> {
+  const ts = new Date(now).toISOString();
+  const plan = selfCordonedNodes(nodes, now);
+  for (const node of plan.stale) {
+    const res = await kubectl(["annotate", "node", node, `${CORDONED_BY_ANNOTATION}-`]);
+    log(res.code === 0 ? `cleared stale cordon marker on ${node}` : `couldn't clear cordon marker on ${node}: ${res.stderr.trim()}`);
+  }
+  for (const node of plan.uncordon) {
+    const action: SuggestedAction = {
+      label: `Uncordon ${node} now that it's been healthy again for ${READY_STABLE_MS / 60_000} minutes`,
+      kind: "uncordon",
+      node,
+    };
+    const incident = `node/${node}: cordoned by the assistant, Ready again`;
+    try {
+      const result = await executeAction(action);
+      let backupRef: string | undefined;
+      if (result.backupYaml) {
+        const key = `${ts}_uncordon_${node}`.replace(/[^A-Za-z0-9_.-]/g, "_");
+        backupRef = await storeBackup(cfg.backupsConfigMap, cfg.stateNamespace, key, result.backupYaml, cfg.maxBackups);
+      }
+      state = appendAudit(state, {
+        at: ts, fingerprint: `selfCordon|${node}`, incident, proposal: action.label,
+        command: result.commands.join(" && "), tier: "low", verdict: "auto",
+        outcome: result.success ? "success" : "failure", detail: truncate(result.output), backupRef, actor: "autonomous",
+      }, cfg.auditMaxEntries);
+      log(`${result.success ? "✓" : "✗"} ${action.label} — ${result.commands.join(" && ")}`);
+      notifications.push(result.success ? `✓ ${conjugateDone(action.kind, action.label)}` : `✗ ${couldntPhrase(action.label)}`);
+    } catch (e) {
+      state = appendAudit(state, {
+        at: ts, fingerprint: `selfCordon|${node}`, incident, proposal: action.label,
+        tier: "low", verdict: "auto", outcome: "failure", detail: String(e), actor: "autonomous",
+      }, cfg.auditMaxEntries);
+    }
+  }
+  return state;
 }
 
 export interface LoopState {
@@ -337,7 +384,8 @@ export async function tick(
     // metrics backend; collectMetricSnapshot is a no-op (no cluster calls) unless
     // an enabled metricThreshold rule exists and a backend is detected.
     const metricSnapshot = await collectMetricSnapshot(rc.alertRules, now);
-    const alertNodes = await collectAlertNodes(rc.alertRules);
+    const nodes = await collectNodes();
+    state = await undoSelfCordons(state, cfg, nodes, now, notifications);
     const alertResult = evaluateAlertRules(
       rc.alertRules,
       detection.pods,
@@ -345,7 +393,7 @@ export async function tick(
       state.alertState ?? emptyAlertState(),
       now,
       metricSnapshot,
-      alertNodes,
+      nodes,
     );
     state = { ...state, alertState: alertResult.alertState };
     for (const ev of alertResult.events) notifications.push(ev.message);
