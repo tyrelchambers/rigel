@@ -967,6 +967,7 @@ export interface AssistantQueuedSuggestion {
   incident: string;
   suggestion: string;
   reason: string;
+  fingerprint?: string;
   action?: SuggestedAction;
 }
 
@@ -1100,11 +1101,6 @@ export function parseIncidentFingerprint(fp: string): ParsedFingerprint | null {
 /** Stable identity for an audit entry (mirrors Swift `id`). */
 export function auditEntryId(e: AssistantAuditEntry): string {
   return `${e.at}|${e.fingerprint}|${e.proposal ?? ""}|${e.outcome}`;
-}
-
-/** Stable identity for a queued suggestion (mirrors Swift `id`). */
-export function queuedSuggestionId(q: AssistantQueuedSuggestion): string {
-  return `${q.at}|${q.incident}|${q.suggestion}`;
 }
 
 // ---------------------------------------------------------------------------

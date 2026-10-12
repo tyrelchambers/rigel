@@ -1107,6 +1107,58 @@ describe("tick() — chat approvals", () => {
   });
 });
 
+const QUEUED_FIX = { at: "2026-10-11T00:00:00.000Z", fingerprint: CRASH_FP, incident: "default/memos-7d9f-abc: CrashLoopBackOff", suggestion: OPEN_FIX_PR.label, reason: "fix PR, set to Ask me in Action levels", action: OPEN_FIX_PR };
+const FIX_APPROVAL = { id: `${QUEUED_FIX.at}|${QUEUED_FIX.incident}|${QUEUED_FIX.suggestion}`, fingerprint: CRASH_FP, token: "tok-1", at: 1 };
+
+/** A loop that already handled the crash, so only the approval path acts. */
+function handledLoop() {
+  const loop = createLoopState();
+  loop.handled.add(CRASH_FP);
+  loop.streaks.set(CRASH_FP, 5);
+  return loop;
+}
+
+describe("tick() — approving a queued fix PR", () => {
+  test("a desktop approval opens the queued fix PR once", async () => {
+    const configData = { ...budgetConfig("5"), actionLevels: JSON.stringify({ openFixPR: "ask" }), approvedFixes: JSON.stringify([FIX_APPROVAL]) };
+    const { captured } = wireCluster({ configData, deploymentJSON: DEPLOYMENT_JSON, stateSeed: { updatedAt: "", audit: [], queue: [QUEUED_FIX], report: "" } });
+    await tick(makeConfig(), newCb(), handledLoop());
+    expect(dispatchedAFix()).toBe(true);
+    const after = captured()!;
+    expect(after.approvedFixTokens).toEqual(["tok-1"]);
+    expect(after.audit[0]).toMatchObject({ outcome: "queued", verdict: "approved", actor: "pr", tier: "ask" });
+    expect(after.queue).toHaveLength(1);
+    expect(after.queue[0]!.reason).toBe("fix PR pending the fix-runner");
+
+    vi.mocked(kubectl).mockClear();
+    wireCluster({ configData, deploymentJSON: DEPLOYMENT_JSON, stateSeed: { ...after, queue: [QUEUED_FIX] } as never });
+    await tick(makeConfig(), newCb(), handledLoop());
+    expect(dispatchedAFix()).toBe(false);
+  });
+
+  test("a chat approval opens the queued fix PR and replies", async () => {
+    const { label, source, filePath } = OPEN_FIX_PR;
+    chatSays({ kind: "openFixPR", label, source, filePath });
+    const { captured } = wireCluster({
+      configData: { ...budgetConfig("5"), ...CHAT_CONFIG, actionLevels: JSON.stringify({ openFixPR: "ask" }) },
+      deploymentJSON: DEPLOYMENT_JSON, stateSeed: { updatedAt: "", audit: [], queue: [QUEUED_FIX], report: "" },
+    });
+    await tick(makeConfig(), newCb(), handledLoop());
+    expect(dispatchedAFix()).toBe(true);
+    expect(captured()!.audit[0]).toMatchObject({ outcome: "queued", verdict: "approved", actor: "chat" });
+    const { notifySignal } = await import("./notify.js");
+    expect(vi.mocked(notifySignal)).toHaveBeenCalledWith("http://sig", "+15550001111", ["+15550002222"], expect.stringContaining("✓ Fix PR pending: Bump memos image to a healthy tag"));
+  });
+
+  test("a chat fix PR that matches nothing queued is refused", async () => {
+    const { label, source, filePath } = OPEN_FIX_PR;
+    chatSays({ kind: "openFixPR", label, source, filePath });
+    wireCluster({ configData: { ...budgetConfig("5"), ...CHAT_CONFIG }, deploymentJSON: DEPLOYMENT_JSON });
+    await tick(makeConfig(), newCb(), handledLoop());
+    expect(dispatchedAFix()).toBe(false);
+  });
+});
+
 describe("queue — dedup by incident + label + action args", () => {
   const emptyState = (): AssistantState => ({ updatedAt: "", audit: [], queue: [], report: "" });
 

@@ -41,7 +41,8 @@ import type { RepoFixDeps } from "./repoFixDispatch.js";
 import { runThreadedDiagnosis } from "./threadedDiagnosis.js";
 import { runChatTurn } from "./chatTurn.js";
 import { routeChatReply } from "./chatHandler.js";
-import { pendingFixesContext, sameInvocations } from "./chatQueue.js";
+import { pendingFixesContext, sameAction } from "./chatQueue.js";
+import { approveQueuedFix, consumeFixApprovals, type ApproveFixContext, type ApproveFixDeps } from "./approveQueuedFix.js";
 import { runWorker } from "./worker.js";
 import { diagnoseConfirmed } from "./diagnosePool.js";
 import { runSupervisor, type SupervisorOutput } from "./supervisor.js";
@@ -55,6 +56,7 @@ import {
   autoSilence,
   countFixPrBudget,
   dispositionFromAudit,
+  fixBudgetHold,
   readState,
   reconcileQueue,
   recordIncident,
@@ -108,6 +110,29 @@ function repoFixDeps(): RepoFixDeps {
     jobExists: async (name, namespace) =>
       (await kubectl(["get", "job", name, "-n", namespace, "-o", "name"])).code === 0,
     apply: (manifest) => kubectlApply(manifest),
+  };
+}
+
+/** The IO an operator-approved fix PR needs: the dispatch seam, the in-flight
+ *  fix Jobs for the budget, and a fresh eligibility resolve for its workload. */
+function approveFixDeps(cfg: Config, rc: RuntimeConfig): ApproveFixDeps {
+  return {
+    repoFix: repoFixDeps(),
+    listFixJobs: () => fixReconcileDeps(cfg).listFixJobs(),
+    eligibility: async (incident) => {
+      const res = await kubectl(["get", "pods", "-n", incident.namespace, "-o", "json"]);
+      return resolveAutofixEligibility(rc.autofix, incident, res.code === 0 ? itemsOf(safeParse(res.stdout)) : [], {
+        resolveRepo: (ns, dep) => resolveWorkloadRepo({ kubectl }, ns, dep, cfg.stateNamespace),
+      });
+    },
+  };
+}
+
+function approveFixContext(cfg: Config, rc: RuntimeConfig, actor: ApproveFixContext["actor"], nowMs: number): ApproveFixContext {
+  return {
+    at: new Date(nowMs).toISOString(), nowMs, actor, tier: levelFor("openFixPR", rc.actionLevels),
+    maxPerDay: rc.autofix.maxPerDay, auditMaxEntries: cfg.auditMaxEntries,
+    namespace: cfg.stateNamespace, image: cfg.fixRunnerImage,
   };
 }
 
@@ -579,18 +604,13 @@ export async function tick(
         // budget never spends an Opus review, and BEFORE any Job is created, so we
         // can never open more than the cap. An unreadable in-flight list defers ALL
         // dispatch this tick (fail closed). Skipped fixes are recorded for the audit.
-        const cap = rc.autofix.maxPerDay;
-        if (fixListUnreadable || fixBudgetBaseline + fixPrsDispatchedThisTick >= cap) {
-          const detail = fixListUnreadable
-            ? "fix-PR budget unverifiable (the in-flight fix-Job list was unreadable this tick): deferring"
-            : `daily fix-PR budget reached (${cap}/${cap}): not opening another fix PR until a slot frees up`;
+        const budgetHold = fixBudgetHold(fixListUnreadable ? null : fixBudgetBaseline + fixPrsDispatchedThisTick, rc.autofix.maxPerDay);
+        if (budgetHold) {
           state = record(state, cfg, {
             at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-            tier: level, outcome: "skipped", detail, analysis: truncate(analysis),
+            tier: level, outcome: "skipped", detail: budgetHold, analysis: truncate(analysis),
           });
-          log(fixListUnreadable
-            ? `fix-PR budget unverifiable (in-flight Job list unreadable); skipping ${action.label}`
-            : `fix-PR budget reached (${cap}/${cap}); skipping ${action.label}`);
+          log(`${budgetHold}; skipping ${action.label}`);
           continue;
         }
         if (level === "ask") {
@@ -782,6 +802,13 @@ export async function tick(
       }
     }
 
+    // Fix PRs the operator approved from the desktop since the last tick.
+    if (rc.approvedFixes.length > 0) {
+      const approved = await consumeFixApprovals(approveFixDeps(cfg, rc), cb, state, rc.approvedFixes, approveFixContext(cfg, rc, "pr", now));
+      state = approved.state;
+      notifications.push(...approved.notifications);
+    }
+
     // Phase-4 loop close: reconcile any FINISHED fix-runner Jobs — record the opened
     // PR (or the failure) and surface a notification. Recording happens BEFORE the
     // durable state write below; GC happens AFTER it, so a crash mid-reconcile
@@ -886,7 +913,9 @@ function buildMessageHandler(
  * before mutating. When the action matches a fix the loop had queued (correlated
  * by its kubectl invocation), it inherits that item's fingerprint, level and
  * breaker key, skips the breaker check (the approval is the decision), and is
- * dropped from the queue on run so the desktop UI stops showing it as pending. */
+ * dropped from the queue on run so the desktop UI stops showing it as pending.
+ * A queued fix PR the operator approves is opened via approveQueuedFix; a fix PR
+ * that matches nothing queued is refused. */
 async function executeChatAction(
   cfg: Config,
   rc: RuntimeConfig,
@@ -895,7 +924,12 @@ async function executeChatAction(
   action: SuggestedAction,
 ): Promise<string> {
   const pre = await readState(cfg.stateConfigMap, cfg.stateNamespace);
-  const matched = pre.queue.find((q) => q.action && sameInvocations(q.action, action));
+  const matched = pre.queue.find((q) => q.action && sameAction(q.action, action));
+  if (matched?.action && isRepoFixAction(matched.action.kind)) {
+    const out = await approveQueuedFix(approveFixDeps(cfg, rc), cb, pre, { ...matched, action: matched.action }, approveFixContext(cfg, rc, "chat", Date.now()));
+    if (out.state !== pre) await writeState(cfg.stateConfigMap, cfg.stateNamespace, out.state);
+    return out.reply;
+  }
   const target = matched?.action ?? action;
   const level = levelFor(target.kind, rc.actionLevels);
   const resourceKey = resourceKeyFor(target);
@@ -918,7 +952,7 @@ async function executeChatAction(
       // Running a queued fix clears it (whether it succeeded or not — a failure is
       // in the audit log and re-detection re-queues); re-filter the fresh state by
       // value since `matched` came from an earlier read.
-      if (matched) s = { ...s, queue: s.queue.filter((q) => !(q.action && sameInvocations(q.action, action))) };
+      if (matched) s = { ...s, queue: s.queue.filter((q) => !(q.action && sameAction(q.action, action))) };
       await writeState(cfg.stateConfigMap, cfg.stateNamespace, s);
     },
     log,

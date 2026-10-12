@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { ACTION_LEVEL_KINDS, PRESETS, matchPreset, parseActionLevels, serializeActionLevels, tierLabel } from "./actionLevels";
+import { ACTION_LEVEL_KINDS, PRESETS, matchPreset, parseActionLevels, serializeActionLevels, tierLabel, parseApprovedFixes, queuedSuggestionId } from "./actionLevels";
 
 describe("parseActionLevels", () => {
   test("missing key → Balanced", () => {
@@ -65,5 +65,23 @@ describe("tierLabel", () => {
     ["blocked", "blocked"],
   ])("%s → %s", (tier, label) => {
     expect(tierLabel(tier)).toBe(label);
+  });
+});
+
+describe("queuedSuggestionId", () => {
+  test("joins at, incident and suggestion", () => {
+    expect(queuedSuggestionId({ at: "t", incident: "i", suggestion: "s" })).toBe("t|i|s");
+  });
+});
+
+describe("parseApprovedFixes", () => {
+  const ok = { id: "t|i|s", fingerprint: "fp", token: "tok", at: 1 };
+
+  test("keeps well-formed approvals and drops malformed ones", () => {
+    expect(parseApprovedFixes(JSON.stringify([ok, { id: "x" }, null, "junk"]))).toEqual([ok]);
+  });
+
+  test.each([undefined, "", "{nope", "{}"])("%s → empty", (raw) => {
+    expect(parseApprovedFixes(raw)).toEqual([]);
   });
 });

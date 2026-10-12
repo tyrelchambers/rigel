@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { pendingFixesContext, sameInvocations } from "./chatQueue.js";
+import { pendingFixesContext, sameAction } from "./chatQueue.js";
 import type { QueuedSuggestion } from "./state.js";
 
 const restart = (dep: string, ns = "default") => ({ kind: "restart", deployment: dep, namespace: ns, label: `restart ${dep}` });
@@ -9,23 +9,35 @@ function q(over: Partial<QueuedSuggestion>): QueuedSuggestion {
   return { at: "t", incident: "inc", suggestion: "s", reason: "r", ...over };
 }
 
-describe("sameInvocations", () => {
+describe("sameAction", () => {
   test("a command action matches the typed action it is equivalent to", () => {
     // Loop queued a typed `restart`; the agent re-emits it as the raw kubectl command.
-    expect(sameInvocations(restart("memos"), cmd(["rollout", "restart", "deployment/memos", "-n", "default"]))).toBe(true);
+    expect(sameAction(restart("memos"), cmd(["rollout", "restart", "deployment/memos", "-n", "default"]))).toBe(true);
   });
 
   test("different targets do not match", () => {
-    expect(sameInvocations(restart("memos"), cmd(["rollout", "restart", "deployment/api", "-n", "default"]))).toBe(false);
+    expect(sameAction(restart("memos"), cmd(["rollout", "restart", "deployment/api", "-n", "default"]))).toBe(false);
   });
 
-  test("repo-fix actions never match (no kubectl invocation)", () => {
-    const pr = { kind: "openFixPR", label: "open fix PR" };
-    expect(sameInvocations(pr, pr)).toBe(false);
+  test("fix PRs match on their source and file", () => {
+    const pr = { kind: "openFixPR", label: "Open fix PR", source: "memos", filePath: "apps/memos/deployment.yaml", content: "x" };
+    expect(sameAction(pr, { kind: "openFixPR", label: "approve it", source: "memos", filePath: "apps/memos/deployment.yaml" })).toBe(true);
+    expect(sameAction(pr, { ...pr, filePath: "apps/memos/service.yaml" })).toBe(false);
+    expect(sameAction(pr, { ...pr, source: "api" })).toBe(false);
+    expect(sameAction({ kind: "openFixPR", label: "PR" }, { kind: "openFixPR", label: "PR" })).toBe(false);
+    expect(sameAction(pr, cmd(["rollout", "restart", "deployment/memos"]))).toBe(false);
   });
 });
 
 describe("pendingFixesContext", () => {
+  test("a queued fix PR shows the block that approves it", () => {
+    const out = pendingFixesContext([
+      q({ suggestion: "Open fix PR", action: { kind: "openFixPR", label: "Open fix PR", source: "memos", filePath: "apps/memos/deployment.yaml", content: "big", body: "long" } }),
+    ]);
+    expect(out).toContain('1. Open fix PR — opens a fix PR; to approve, emit: {"kind":"openFixPR","label":"Open fix PR","source":"memos","filePath":"apps/memos/deployment.yaml"}');
+  });
+
+
   test("empty queue → empty string (nothing injected)", () => {
     expect(pendingFixesContext([])).toBe("");
   });
@@ -42,6 +54,6 @@ describe("pendingFixesContext", () => {
       q({ suggestion: "Patch the manifest", action: { kind: "openFixPR", label: "PR" } }),
     ]);
     expect(out).toContain("1. Bump watcher memory — handle in Rigel (not runnable from chat)");
-    expect(out).toContain("2. Patch the manifest — opens a fix PR");
+    expect(out).toContain("2. Patch the manifest — opens a fix PR; to approve, emit:");
   });
 });
