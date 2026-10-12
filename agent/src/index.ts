@@ -668,7 +668,7 @@ export async function tick(
       } catch (e) {
         state = record(state, cfg, {
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-          tier: level, outcome: "failure", detail: String(e), analysis: truncate(analysis),
+          tier: level, outcome: "skipped", detail: `malformed proposal: ${e instanceof Error ? e.message : String(e)}`, analysis: truncate(analysis),
         });
         continue;
       }
