@@ -196,7 +196,7 @@ async function detectAll(cfg: Config, autofix: AutofixConfig): Promise<{ inciden
     }
   }
   log(
-    `detect: pods exit=${podsRes.code} (${podsRes.stdout.length}b) deps exit=${depsRes.code} (${depsRes.stdout.length}b) → ${incidents.length} incident(s) before filter` +
+    `detect: pods exit=${podsRes.code} (${podsRes.stdout.length}b) deps exit=${depsRes.code} (${depsRes.stdout.length}b) nodes exit=${nodesRes.code} (${nodesRes.stdout.length}b) → ${incidents.length} incident(s) before filter` +
       (incidents.length ? `: ${incidents.map((i) => `${i.namespace}/${i.name}:${i.reason}`).join(", ")}` : "") +
       (podsRes.code !== 0 ? ` | pods stderr: ${podsRes.stderr.slice(0, 200)}` : ""),
   );
@@ -1045,11 +1045,13 @@ function describe(i: Incident): string {
   return `${loc}: ${i.reason}${i.detail ? ` (${i.detail})` : ""}`;
 }
 
-/** A compact `namespace/name` for an incident fingerprint (kind|ns|name|reason),
- *  falling back to the raw fingerprint when it isn't in that shape. */
+/** A compact `namespace/name` (or just `name` when cluster-scoped) for an incident
+ *  fingerprint (kind|ns|name|reason), falling back to the raw fingerprint when it
+ *  isn't in that shape. */
 function shortFingerprint(fp: string): string {
   const p = fp.split("|");
-  return p.length >= 3 && p[1] && p[2] ? `${p[1]}/${p[2]}` : fp;
+  if (p.length < 3 || !p[2]) return fp;
+  return p[1] ? `${p[1]}/${p[2]}` : p[2];
 }
 
 const AUTO_SILENCE_PREFIX = "Auto-silenced ";

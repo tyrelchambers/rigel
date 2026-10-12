@@ -11,7 +11,7 @@ import type { ActionKind, ActionLevels } from "@rigel/k8s/src/actionLevels.js";
  * VERDICT — is this error acceptable, actionable, or uncertain — and (2) at most
  * one proposed remediation as a fenced ```action block. The worker can only
  * READ — every mutation it proposes is gated downstream by the triage verdict,
- * the classifier, the circuit breaker and (for MEDIUM) the Opus supervisor. It
+ * its action level (Review = the Opus supervisor) and the circuit breaker. It
  * never executes anything itself.
  *
  * When (and only when) a workload was passed as autofix-eligible (a GitOps source
