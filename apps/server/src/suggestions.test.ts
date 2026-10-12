@@ -30,6 +30,16 @@ test("degraded deployments + node pressure", () => {
   expect(out.find((p) => p.id === "node-n1")?.label).toBe("n1: node pressure");
 });
 
+test("informational node conditions like k3s EtcdIsVoter are not pressure", () => {
+  const out = buildSuggestions({
+    pods: [],
+    deployments: [],
+    nodes: [{ metadata: { name: "n1", uid: "n1" }, status: { conditions: [{ type: "EtcdIsVoter", status: "True" }, { type: "Ready", status: "True" }] } }],
+    events: [],
+  });
+  expect(out.some((p) => p.kind === "node")).toBe(false);
+});
+
 test("groups warning events by reason|kind|namespace, summing counts", () => {
   const events = [
     { type: "Warning", reason: "BackOff", count: 5, involvedObject: { kind: "Pod", name: "p1", namespace: "default" }, message: "x" },
