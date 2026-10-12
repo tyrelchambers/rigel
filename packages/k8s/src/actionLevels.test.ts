@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { ACTION_LEVEL_KINDS, PRESETS, matchPreset, parseActionLevels, serializeActionLevels } from "./actionLevels";
+import { ACTION_LEVEL_KINDS, PRESETS, matchPreset, parseActionLevels, serializeActionLevels, tierLabel } from "./actionLevels";
 
 describe("parseActionLevels", () => {
   test("missing key → Balanced", () => {
@@ -52,5 +52,18 @@ describe("presets", () => {
 
   test("serialize round-trips through parse", () => {
     expect(parseActionLevels(serializeActionLevels(PRESETS.loose))).toEqual(PRESETS.loose);
+  });
+});
+
+describe("tierLabel", () => {
+  test.each([
+    ["auto", "Auto"],
+    ["review", "Review"],
+    ["ask", "Ask me"],
+    ["off", "Off"],
+    ["low", "low"],
+    ["blocked", "blocked"],
+  ])("%s → %s", (tier, label) => {
+    expect(tierLabel(tier)).toBe(label);
   });
 });

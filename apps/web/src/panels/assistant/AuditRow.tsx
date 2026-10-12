@@ -4,7 +4,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronDown, faChevronRight, faArrowRotateLeft } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { Button } from "@/components/ui/button";
 import type { AssistantAuditEntry } from "@rigel/k8s";
-import { auditEntryId } from "@rigel/k8s";
+import { auditEntryId, tierLabel } from "@rigel/k8s";
 import { useAssistantCtx } from "./AssistantContext";
 import {
   outcomeGlyph,
@@ -44,7 +44,7 @@ export function AuditRow({ e }: { e: AssistantAuditEntry }) {
               <FontAwesomeIcon icon={faChevronRight} className="size-3" />
             ))}
           <ActorBadge actor={e.actor} />
-          <span className="font-mono text-3xs uppercase text-muted-foreground">{e.tier}</span>
+          <span className="font-mono text-3xs uppercase text-muted-foreground">{tierLabel(e.tier)}</span>
           <span
             className="font-mono text-3xs text-muted-foreground"
             title={e.at}
