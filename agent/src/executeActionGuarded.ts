@@ -15,6 +15,9 @@ export interface GuardedContext {
   action: SuggestedAction;
   fingerprint: string;
   resourceKey: string;
+  /** The operator approved a queued item: their decision stands in for the
+   *  breaker check (which caps unattended actions), but the action still counts. */
+  approved?: boolean;
 }
 
 /** Run one already-approved action through the circuit breaker + backup +
@@ -33,8 +36,10 @@ export async function executeActionGuarded(
     return `"${action.label}" is blocked from automatic execution. Run it from Rigel.`;
   }
   const now = deps.now();
-  const verdict = cb.canAct(fingerprint, resourceKey, now);
-  if (!verdict.allowed) return `Can't run that right now — ${verdict.reason}.`;
+  if (!ctx.approved) {
+    const verdict = cb.canAct(fingerprint, resourceKey, now);
+    if (!verdict.allowed) return `Can't run that right now — ${verdict.reason}.`;
+  }
   cb.record(fingerprint, resourceKey, now);
   try {
     const result = await deps.execute(action);
