@@ -64,6 +64,7 @@ import {
   writeState,
   type AssistantState,
   type AuditEntry,
+  type Tier,
 } from "./state.js";
 import { evaluateDigests } from "./digest.js";
 
@@ -405,8 +406,8 @@ export async function tick(
     // dispatches this tick are added via fixPrsDispatchedThisTick below, so the cap
     // holds even before the reconcile records them. The Jobs are listed ONCE (not
     // re-listed per dispatch) to dodge read-after-write races; the in-tick counter
-    // covers same-tick dispatches. Independent of the kubectl circuit breaker (that
-    // caps per-resource-per-hour cluster mutations; this caps PR creation per day).
+    // covers same-tick dispatches. An additional cap on top of the circuit breaker
+    // (that caps per-resource-per-hour actions; this caps PR creation per day).
     let fixBudgetBaseline = 0;
     let fixPrsDispatchedThisTick = 0;
     // Fail CLOSED: if the in-flight Job list can't be read this tick we can't verify
@@ -544,7 +545,8 @@ export async function tick(
       //   3. its action level: Ask me ⇒ queue for a human; Review ⇒ the adversarial
       //      fix-quality supervisor (buildFixPrompt) must APPROVE the proposed file
       //      change (reject ⇒ skip, escalate / supervisor-error ⇒ queue for a human);
-      //      Auto ⇒ dispatch.
+      //      Auto ⇒ dispatch;
+      //   4. then autonomy and the circuit breaker, like every action (a veto queues it).
       // Eligibility is reused from Stage A (the owning-Deployment walk), not
       // re-derived from the action (which mistook a pod name for a Deployment — 2b).
       if (isRepoFixAction(action.kind)) {
@@ -646,6 +648,15 @@ export async function tick(
           notifications.push(`▸ Waiting on your OK: ${action.label} — ${describe(incident)} (${autonomyQueueWhy})`);
           continue;
         }
+        const fixKey = resourceKeyFor(action);
+        const fixVerdict = cb.canAct(fp, fixKey, now);
+        if (!fixVerdict.allowed) {
+          const held = holdForBreaker(state, cfg, ts, fp, incident, action, level, fixVerdict.reason, analysis);
+          state = held.state;
+          notifications.push(held.notification);
+          continue;
+        }
+        cb.record(fp, fixKey, now);
         // Approved or Auto → create the fix ConfigMap + Job via the seam (dispatchRepoFix
         // queues it pending the fix-runner, which opens the actual PR).
         const outcome = await dispatchRepoFix(repoFixDeps(), state, {
@@ -738,14 +749,9 @@ export async function tick(
       const resourceKey = resourceKeyFor(action);
       const cbVerdict = cb.canAct(fp, resourceKey, now);
       if (!cbVerdict.allowed) {
-        const reason = cbVerdict.reason ?? "blocked by circuit breaker";
-        const why = `hit the action limit: ${reason}`;
-        state = queue(state, cfg, ts, fp, describe(incident), action.label, why, action);
-        state = record(state, cfg, {
-          at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-          command, tier: level, outcome: "queued", detail: reason, analysis: truncate(analysis),
-        });
-        notifications.push(`▸ Waiting on your OK: ${action.label} — ${describe(incident)} (${why})`);
+        const held = holdForBreaker(state, cfg, ts, fp, incident, action, level, cbVerdict.reason, analysis, command);
+        state = held.state;
+        notifications.push(held.notification);
         continue;
       }
 
@@ -1004,6 +1010,30 @@ function record(state: AssistantState, cfg: Config, entry: AuditEntry): Assistan
     note: entry.proposal,
   });
   return next;
+}
+
+/** A circuit-breaker veto queues the action for the operator's approval (the
+ *  breaker caps unattended actions only) and says why. */
+function holdForBreaker(
+  state: AssistantState,
+  cfg: Config,
+  ts: string,
+  fp: string,
+  incident: Incident,
+  action: SuggestedAction,
+  level: Tier,
+  breakerReason: string | undefined,
+  analysis: string,
+  command?: string,
+): { state: AssistantState; notification: string } {
+  const reason = breakerReason ?? "blocked by circuit breaker";
+  const why = `hit the action limit: ${reason}`;
+  let next = queue(state, cfg, ts, fp, describe(incident), action.label, why, action);
+  next = record(next, cfg, {
+    at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
+    command, tier: level, outcome: "queued", detail: reason, analysis: truncate(analysis),
+  });
+  return { state: next, notification: `▸ Waiting on your OK: ${action.label} — ${describe(incident)} (${why})` };
 }
 
 /** Surface a loud report when the worker provider's credential is failing (an
