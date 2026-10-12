@@ -34,4 +34,10 @@ describe("executeActionGuarded", () => {
     expect(reply).toMatch(/Can't run that right now/);
     expect(d.execute).not.toHaveBeenCalled();
   });
+
+  test("an unknown kind is refused; a known kind runs regardless of its level", async () => {
+    const d = deps();
+    expect(await executeActionGuarded(cb(), { action: { label: "x", kind: "drain", node: "n" } as any, fingerprint: "f", resourceKey: "r" }, d)).toMatch(/blocked from automatic execution/);
+    expect(await executeActionGuarded(cb(), { action: { label: "Uncordon n", kind: "uncordon", node: "n" } as any, fingerprint: "f", resourceKey: "r" }, d)).toMatch(/^✓ Ran/);
+  });
 });
