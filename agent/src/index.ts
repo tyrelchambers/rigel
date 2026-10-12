@@ -599,7 +599,7 @@ export async function tick(
             at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
             tier: level, outcome: "queued", detail: "set to Ask me in Action levels", analysis: truncate(analysis),
           });
-          notifications.push(`▸ I'd like your OK to open a fix PR: ${action.label} — ${describe(incident)}`);
+          notifications.push(`▸ Waiting on your OK: ${action.label} — ${describe(incident)} (set to Ask me in Action levels)`);
           continue;
         }
         if (level === "review") {
@@ -1027,7 +1027,7 @@ function holdForBreaker(
   command?: string,
 ): { state: AssistantState; notification: string } {
   const reason = breakerReason ?? "blocked by circuit breaker";
-  const why = `hit the action limit: ${reason}`;
+  const why = `hit the action limit: ${reason.replace(/^circuit-breaker: /, "")}`;
   let next = queue(state, cfg, ts, fp, describe(incident), action.label, why, action);
   next = record(next, cfg, {
     at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
