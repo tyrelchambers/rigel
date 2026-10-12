@@ -1077,6 +1077,28 @@ describe("tick() — chat approvals", () => {
     expect(captured()!.queue).toHaveLength(0);
   });
 
+  test("a typed uncordon approval copied from the chat context runs both commands and drops the item", async () => {
+    chatSays(UNCORDON);
+    const { captured } = wireCluster({ configData: CHAT_CONFIG, pods: [], stateSeed: { updatedAt: "", audit: [], queue: [QUEUED_UNCORDON], report: "" } });
+    await tick(makeConfig(), newCb(), createLoopState());
+    expect(vi.mocked(runModel).mock.calls.some((c) => c[0].prompt.includes(`to approve, emit: ${JSON.stringify(UNCORDON)}`))).toBe(true);
+    const calls = vi.mocked(kubectl).mock.calls.map((c) => c[0]);
+    expect(calls).toContainEqual(["uncordon", "k3s-slave"]);
+    expect(calls).toContainEqual(["annotate", "node", "k3s-slave", "rigel.run/cordoned-by-"]);
+    expect(captured()!.audit[0]).toMatchObject({ actor: "chat", verdict: "approved", outcome: "success", command: "kubectl uncordon k3s-slave && kubectl annotate node k3s-slave rigel.run/cordoned-by-" });
+    expect(captured()!.queue).toHaveLength(0);
+  });
+
+  test("a typed approval of a queued restart runs it and drops the item", async () => {
+    const queued = { at: "2026-10-11T00:00:00.000Z", fingerprint: CRASH_FP, incident: "default/memos-7d9f-abc: CrashLoopBackOff", suggestion: RESTART.label, reason: "set to Ask me in Action levels", action: RESTART };
+    chatSays(RESTART);
+    const { captured } = wireCluster({ configData: CHAT_CONFIG, pods: [], stateSeed: { updatedAt: "", audit: [], queue: [queued], report: "" } });
+    await tick(makeConfig(), newCb(), createLoopState());
+    expect(vi.mocked(kubectl).mock.calls.map((c) => c[0])).toContainEqual(["rollout", "restart", "deployment/memos", "-n", "default"]);
+    expect(captured()!.audit[0]).toMatchObject({ actor: "chat", verdict: "approved", outcome: "success", fingerprint: CRASH_FP });
+    expect(captured()!.queue).toHaveLength(0);
+  });
+
   test("a command-form approval of a queued restart takes the Restart level and the deployment key", async () => {
     const cb = newCb();
     const record = vi.spyOn(cb, "record");
