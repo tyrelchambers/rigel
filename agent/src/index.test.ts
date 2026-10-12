@@ -147,6 +147,7 @@ function wireCluster(opts: {
   fixJobs?: unknown[];
   /** Force the `get jobs` list to FAIL: a non-zero exit, or a spawn-style throw. */
   failJobsList?: "nonzero" | "throw";
+  nodes?: Record<string, unknown>[];
 }): { captured: () => AssistantState | undefined } {
   const pods = opts.pods ?? [CRASH_POD];
   let captured: AssistantState | undefined;
@@ -161,6 +162,7 @@ function wireCluster(opts: {
     if (cm === "rigel-git-sources") return res(JSON.stringify({ data: { "sources.json": JSON.stringify(GIT_SOURCES) } }));
     if (args[0] === "get" && args[1] === "pods") return res(JSON.stringify({ items: pods }));
     if (args[0] === "get" && args[1] === "deployments") return res(JSON.stringify({ items: [] }));
+    if (args[0] === "get" && args[1] === "nodes") return res(JSON.stringify({ items: opts.nodes ?? [] }));
     if (args[0] === "get" && args[1] === "jobs") {
       if (opts.failJobsList === "throw") throw new Error("spawn kubectl ENOENT");
       if (opts.failJobsList === "nonzero") return res("", 1); // RBAC denial / 429 / timeout
@@ -169,6 +171,7 @@ function wireCluster(opts: {
     if (args[0] === "get" && args[1] === "deployment") return opts.deploymentJSON ? res(opts.deploymentJSON) : res("", 1);
     if (args[0] === "logs") return opts.logText !== undefined ? res(opts.logText) : res("", 1);
     if (args[0] === "rollout") return res("deployment.apps/memos restarted");
+    if (args[0] === "uncordon" || args[0] === "annotate") return res("ok");
     if (args[0] === "apply") {
       captured = captureState(stdin) ?? captured;
       return res("");
@@ -424,7 +427,7 @@ describe("tick() — openFixPR fix-quality supervisor", () => {
     await tick(makeConfig(), newCb(), createLoopState());
 
     const state = captured();
-    expect(state!.audit[0]).toMatchObject({ outcome: "skipped", verdict: "rejected", tier: "medium" });
+    expect(state!.audit[0]).toMatchObject({ outcome: "skipped", verdict: "rejected", tier: "review" });
     expect(state!.audit[0]?.detail).toMatch(/Opus rejected the fix/);
     expect(state!.queue).toHaveLength(0);
   });
@@ -436,7 +439,7 @@ describe("tick() — openFixPR fix-quality supervisor", () => {
     await tick(makeConfig(), newCb(), createLoopState());
 
     const state = captured();
-    expect(state!.audit[0]).toMatchObject({ outcome: "queued", verdict: "escalated", tier: "medium" });
+    expect(state!.audit[0]).toMatchObject({ outcome: "queued", verdict: "escalated", tier: "review" });
     expect(state!.audit[0]?.detail).toMatch(/Opus escalated the fix/);
     expect(state!.queue[0]).toMatchObject({ action: { kind: "openFixPR" } });
     expect(state!.queue[0]?.reason).toMatch(/Opus escalated/);
@@ -449,7 +452,7 @@ describe("tick() — openFixPR fix-quality supervisor", () => {
     await expect(tick(makeConfig(), newCb(), createLoopState())).resolves.toBeUndefined();
 
     const state = captured();
-    expect(state!.audit[0]).toMatchObject({ outcome: "queued", verdict: "escalated", tier: "medium" });
+    expect(state!.audit[0]).toMatchObject({ outcome: "queued", verdict: "escalated", tier: "review" });
     expect(state!.audit[0]?.detail).toMatch(/fail-closed/);
   });
 
@@ -463,7 +466,7 @@ describe("tick() — openFixPR fix-quality supervisor", () => {
     // CRASH_POD is a STATUS incident, so an acceptable verdict does NOT silence it;
     // the openFixPR is simply skipped for being non-actionable.
     expect(vi.mocked(runSupervisor)).not.toHaveBeenCalled();
-    expect(state!.audit[0]).toMatchObject({ proposal: OPEN_FIX_PR.label, outcome: "skipped", tier: "medium" });
+    expect(state!.audit[0]).toMatchObject({ proposal: OPEN_FIX_PR.label, outcome: "skipped", tier: "review" });
     expect(state!.audit[0]?.detail).toMatch(/not actionable/);
     expect(state!.queue).toHaveLength(0);
     expect(state!.autoSilenced ?? []).toHaveLength(0);
@@ -581,7 +584,7 @@ describe("tick() — per-day fix-PR budget", () => {
     const state = captured();
     // Skipped BEFORE spending an Opus fix-quality review, and no fix Job was created.
     expect(vi.mocked(runSupervisor)).not.toHaveBeenCalled();
-    expect(state!.audit[0]).toMatchObject({ proposal: OPEN_FIX_PR.label, outcome: "skipped", tier: "medium" });
+    expect(state!.audit[0]).toMatchObject({ proposal: OPEN_FIX_PR.label, outcome: "skipped", tier: "review" });
     expect(state!.audit[0]?.detail).toMatch(/daily fix-PR budget reached \(2\/2\)/);
     expect(dispatchedAFix()).toBe(false);
   });
@@ -658,7 +661,7 @@ describe("tick() — per-day fix-PR budget", () => {
       // No fix Job/ConfigMap applied, and the Opus fix-quality review was never spent.
       expect(dispatchedAFix()).toBe(false);
       expect(vi.mocked(runSupervisor)).not.toHaveBeenCalled();
-      expect(state!.audit[0]).toMatchObject({ proposal: OPEN_FIX_PR.label, outcome: "skipped", tier: "medium" });
+      expect(state!.audit[0]).toMatchObject({ proposal: OPEN_FIX_PR.label, outcome: "skipped", tier: "review" });
       expect(state!.audit[0]?.detail).toMatch(/budget unverifiable .*unreadable/);
     },
   );
@@ -784,6 +787,79 @@ describe("tick() — two-phase split: incident history + scheduled digests", () 
 
     expect(vi.mocked(sendToChannel)).not.toHaveBeenCalled();
     expect(captured()!.digestState!.lastSentAt.a).toBe(future);
+  });
+});
+
+const READY_LONG_AGO = new Date(Date.now() - 10 * 60_000).toISOString();
+const OUR_CORDONED_NODE = {
+  metadata: { name: "k3s-slave", annotations: { "rigel.run/cordoned-by": "assistant" } },
+  spec: { unschedulable: true },
+  status: { conditions: [{ type: "Ready", status: "True", lastTransitionTime: READY_LONG_AGO }] },
+};
+const mutated = (verb: string) => vi.mocked(kubectl).mock.calls.some((c) => c[0]?.[0] === verb);
+
+describe("tick() — action levels", () => {
+  test.each([
+    ["auto", "success", true],
+    ["ask", "queued", false],
+    ["off", "skipped", false],
+  ] as const)("restart at %s → %s", async (level, outcome, ran) => {
+    vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [RESTART] }));
+    const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "auto", actionLevels: JSON.stringify({ restart: level }) } });
+    await tick(makeConfig(), newCb(), createLoopState());
+    expect(captured()!.audit[0]).toMatchObject({ proposal: "Restart memos", outcome, tier: level });
+    expect(mutated("rollout")).toBe(ran);
+  });
+
+  test("restart at review goes to the supervisor and runs on approve", async () => {
+    vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [RESTART] }));
+    const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "auto", actionLevels: JSON.stringify({ restart: "review" }) } });
+    await tick(makeConfig(), newCb(), createLoopState());
+    expect(vi.mocked(runSupervisor)).toHaveBeenCalled();
+    expect(captured()!.audit[0]).toMatchObject({ outcome: "success", verdict: "approved", tier: "review" });
+  });
+
+  test("off records a skip with no notification", async () => {
+    vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [RESTART] }));
+    const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "auto", actionLevels: JSON.stringify({ restart: "off" }) } });
+    await tick(makeConfig(), newCb(), createLoopState());
+    expect(captured()!.audit[0]!.detail).toBe("turned off in Action levels");
+    expect(captured()!.queue).toHaveLength(0);
+  });
+
+  test("a node the assistant cordoned is uncordoned at Balanced (auto), without the worker", async () => {
+    const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "auto" }, pods: [], nodes: [OUR_CORDONED_NODE] });
+    await tick(makeConfig(), newCb(), createLoopState());
+    expect(vi.mocked(runWorker)).not.toHaveBeenCalled();
+    expect(mutated("uncordon")).toBe(true);
+    expect(captured()!.audit[0]).toMatchObject({ outcome: "success", tier: "auto", fingerprint: "cordonedNode||k3s-slave|ReadyAgain" });
+  });
+
+  test("own-cordon undo follows the Uncordon level (ask → queued, no uncordon)", async () => {
+    const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "auto", actionLevels: JSON.stringify({ uncordon: "ask" }) }, pods: [], nodes: [OUR_CORDONED_NODE] });
+    await tick(makeConfig(), newCb(), createLoopState());
+    expect(mutated("uncordon")).toBe(false);
+    expect(captured()!.queue).toHaveLength(1);
+  });
+
+  test("own-cordon undo respects advisory mode like every other action", async () => {
+    wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "advisory" }, pods: [], nodes: [OUR_CORDONED_NODE] });
+    await tick(makeConfig(), newCb(), createLoopState());
+    expect(mutated("uncordon")).toBe(false);
+  });
+
+  test("openFixPR at auto dispatches without the fix-quality supervisor", async () => {
+    wireCluster({ configData: { ...budgetConfig("5"), actionLevels: JSON.stringify({ openFixPR: "auto" }) }, deploymentJSON: DEPLOYMENT_JSON });
+    await tick(makeConfig(), newCb(), createLoopState());
+    expect(vi.mocked(runSupervisor)).not.toHaveBeenCalled();
+    expect(dispatchedAFix()).toBe(true);
+  });
+
+  test("openFixPR at ask queues it, no dispatch", async () => {
+    const { captured } = wireCluster({ configData: { ...budgetConfig("5"), actionLevels: JSON.stringify({ openFixPR: "ask" }) }, deploymentJSON: DEPLOYMENT_JSON });
+    await tick(makeConfig(), newCb(), createLoopState());
+    expect(dispatchedAFix()).toBe(false);
+    expect(captured()!.queue).toHaveLength(1);
   });
 });
 
