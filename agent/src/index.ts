@@ -362,11 +362,12 @@ export async function tick(
     // (only when a source actually resolved), and Stage B reuses it to route an
     // openFixPR proposal without re-resolving — and without the 2b bug of treating a
     // pod name as a Deployment name. Short-circuits to no cluster IO when autofix is
-    // off / out of scope, so this is cheap when autofix isn't in play.
+    // off / out of scope / openFixPR is Off, so this is cheap when autofix isn't in play.
     const eligibility = new Map<string, AutofixEligibility>(
       await Promise.all(
         confirmed.map(async (incident) => {
-          let e: AutofixEligibility;
+          let e: AutofixEligibility = { inScope: false, repo: null };
+          if (rc.actionLevels.openFixPR === "off") return [fingerprint(incident), e] as const;
           try {
             e = await resolveAutofixEligibility(rc.autofix, incident, detection.pods, {
               resolveRepo: (ns, dep) => resolveWorkloadRepo({ kubectl }, ns, dep, cfg.stateNamespace),
