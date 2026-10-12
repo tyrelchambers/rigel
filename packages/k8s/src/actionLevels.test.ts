@@ -16,8 +16,8 @@ describe("parseActionLevels", () => {
     expect(parseActionLevels(JSON.stringify({ restart: "yolo" })).restart).toBe("ask");
   });
 
-  test("unparseable JSON → every kind ask", () => {
-    const l = parseActionLevels("{nope");
+  test.each(["{nope", "[]", "null", "42"])("unparseable or non-object %s → every kind ask", (raw) => {
+    const l = parseActionLevels(raw);
     for (const k of ACTION_KINDS) expect(l[k.kind]).toBe("ask");
   });
 
