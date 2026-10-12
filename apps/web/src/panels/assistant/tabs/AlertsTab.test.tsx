@@ -6,8 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AlertsTab } from "./AlertsTab";
 import { AssistantContext, type AssistantContextValue } from "../AssistantContext";
 import type { AssistantDerived } from "../useAssistant";
-import type { AlertRule } from "@rigel/k8s";
-import { PRESETS } from "@rigel/k8s/src/actionLevels";
+import { PRESETS, type AlertRule } from "@rigel/k8s";
 
 vi.mock("@/lib/chatHandoff", () => ({ handoffToChat: vi.fn() }));
 import { handoffToChat } from "@/lib/chatHandoff";

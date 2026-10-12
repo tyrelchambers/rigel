@@ -1303,7 +1303,7 @@ describe("bumpAgentEntitlementRefresh", () => {
   });
 });
 
-import { PRESETS } from "@rigel/k8s/src/actionLevels";
+import { PRESETS } from "@rigel/k8s";
 import { setActionLevelsUpdates } from "./assistant";
 
 test("setActionLevels writes the whole map under actionLevels", () => {

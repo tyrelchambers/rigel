@@ -11,7 +11,7 @@ import {
   faCodePullRequest,
   faCircleInfo,
 } from "@awesome.me/kit-6050953220/icons/classic/solid";
-import { PRESETS, ACTION_KINDS, matchPreset, type ActionKind, type ActionLevel, type PresetId } from "@rigel/k8s/src/actionLevels";
+import { PRESETS, ACTION_LEVEL_KINDS, matchPreset, type ActionKind, type ActionLevel, type PresetId } from "@rigel/k8s";
 import { cn } from "@/lib/utils";
 import { useAssistantCtx } from "./AssistantContext";
 
@@ -118,7 +118,7 @@ export function ActionLevelsCard() {
       </div>
 
       <div className="flex flex-col">
-        {ACTION_KINDS.map(({ kind, label, description }, i) => (
+        {ACTION_LEVEL_KINDS.map(({ kind, label, description }, i) => (
           <div
             key={kind}
             className={cn("flex items-center gap-3 py-3", i > 0 && "border-t border-[var(--border-subtle)]")}
