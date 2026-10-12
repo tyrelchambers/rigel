@@ -16,6 +16,7 @@ import {
   parseTokenExpiry,
   parseAlertRules,
   parseDigests,
+  parseActionLevels,
   ISSUED_AT_ANNOTATION,
   SECRET_NAME,
   isAssistantManaged,
@@ -24,6 +25,7 @@ import {
   type AssistantLiveIssue,
   type TokenExpiryStatus,
   type AlertRule,
+  type ActionLevels,
   type DigestSubscription,
   type AssistantDigestState,
 } from "@rigel/k8s";
@@ -96,6 +98,7 @@ export interface AssistantDerived {
   stateNamespace: string;
   enabled: boolean;
   autonomyMode: string;
+  actionLevels: ActionLevels;
   quietWindow: string;
   webhookURL: string;
   silenced: string[];
@@ -287,6 +290,7 @@ export function useAssistant(installNamespaceHint: string): AssistantDerived {
       stateNamespace,
       enabled: deriveEnabled(configData),
       autonomyMode: deriveMode(configData),
+      actionLevels: parseActionLevels(configData["actionLevels"]),
       quietWindow: deriveWindow(configData),
       webhookURL: configData["webhookUrl"] ?? "",
       silenced: [...deriveSilenced(configData)].sort(),

@@ -1,6 +1,6 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ActiveForward } from "@/panels/services/portForward";
-import type { SuggestedAlert, DigestInput, ApplySource, RecentBatch, ChannelId } from "@rigel/k8s";
+import type { SuggestedAlert, DigestInput, ApplySource, RecentBatch, ChannelId, ActionLevels } from "@rigel/k8s";
 import type { ManifestEdit } from "@rigel/k8s/src/manifestEdit";
 import type { CheckResult, CloudProvider, CloudCluster } from "@rigel/cloud-connect/src/index";
 import type { Subject } from "@/panels/rbac/types";
@@ -420,6 +420,7 @@ export type AssistantAction =
   | "setCredentials"
   | "setLimits"
   | "setAutofix"
+  | "setActionLevels"
   | "restart"
   | "silence"
   | "unsilence"
@@ -566,6 +567,7 @@ export interface AssistantRequest {
   autofixEnabled?: boolean;
   autofixMaxPerDay?: number;
   autofixScope?: AutofixScopeInput;
+  actionLevels?: ActionLevels;
   // BYO credential source (setCredentialSource / clearCredentialSource). Only
   // ids + Secret/data-key NAMES — never a secret value.
   credentialId?: keyof AssistantCredentials;

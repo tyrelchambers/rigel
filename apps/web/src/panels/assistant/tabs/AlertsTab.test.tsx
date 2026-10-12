@@ -7,6 +7,7 @@ import { AlertsTab } from "./AlertsTab";
 import { AssistantContext, type AssistantContextValue } from "../AssistantContext";
 import type { AssistantDerived } from "../useAssistant";
 import type { AlertRule } from "@rigel/k8s";
+import { PRESETS } from "@rigel/k8s/src/actionLevels";
 
 vi.mock("@/lib/chatHandoff", () => ({ handoffToChat: vi.fn() }));
 import { handoffToChat } from "@/lib/chatHandoff";
@@ -33,6 +34,7 @@ const entPayload = (agentAutonomy: boolean): EntitlementPayload => ({
 function derived(overrides: Partial<AssistantDerived> = {}): AssistantDerived {
   return {
     autonomyMode: "auto",
+    actionLevels: PRESETS.balanced,
     quietWindow: "",
     webhookURL: "",
     alertRules: [],
@@ -195,5 +197,31 @@ describe("AlertsTab", () => {
     expect(screen.getByRole("button", { name: /Save changes/i })).toBeInTheDocument();
     // Header reflects edit mode (distinct from the row's aria-label button).
     expect(screen.getByText("Edit alert")).toBeInTheDocument();
+  });
+});
+
+describe("Action levels", () => {
+  it("shows Balanced selected for the default map", () => {
+    wrap(derived());
+    expect(screen.getByRole("button", { name: "Balanced" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByText("Custom")).toBeNull();
+  });
+
+  it("a preset click writes the whole preset", async () => {
+    wrap(derived());
+    await userEvent.click(screen.getByRole("button", { name: "Strict" }));
+    expect(run).toHaveBeenCalledWith({ action: "setActionLevels", namespace: "default", actionLevels: PRESETS.strict });
+  });
+
+  it("one row change writes the map with just that kind changed (Cordon to Ask me)", async () => {
+    wrap(derived());
+    await userEvent.click(screen.getByRole("button", { name: "Cordon: Ask me" }));
+    expect(run).toHaveBeenCalledWith({ action: "setActionLevels", namespace: "default", actionLevels: { ...PRESETS.balanced, cordon: "ask" } });
+  });
+
+  it("shows Custom when the map matches no preset", () => {
+    wrap(derived({ actionLevels: { ...PRESETS.balanced, cordon: "ask" } }));
+    expect(screen.getByText("Custom")).toBeInTheDocument();
+    for (const p of ["Loose", "Balanced", "Strict"]) expect(screen.getByRole("button", { name: p })).toHaveAttribute("aria-pressed", "false");
   });
 });
