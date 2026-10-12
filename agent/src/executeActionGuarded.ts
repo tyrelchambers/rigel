@@ -1,5 +1,5 @@
 // agent/src/executeActionGuarded.ts
-import { classifyRisk, RiskTier } from "./classifier.js";
+import { isActionKind } from "@rigel/k8s/src/actionLevels.js";
 import { isRepoFixAction, type SuggestedAction } from "./action.js";
 import type { CircuitBreaker } from "./guardrails.js";
 
@@ -29,7 +29,7 @@ export async function executeActionGuarded(
   if (isRepoFixAction(action.kind)) {
     return `"${action.label}" opens a fix PR and is handled by the fix-runner — not a command to run from here.`;
   }
-  if (classifyRisk(action.kind) === RiskTier.Blocked && action.kind !== "command") {
+  if (!isActionKind(action.kind) && action.kind !== "command") {
     return `"${action.label}" is blocked from automatic execution. Run it from Rigel.`;
   }
   const now = deps.now();
