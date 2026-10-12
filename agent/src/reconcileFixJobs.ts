@@ -5,6 +5,7 @@ import {
   type AssistantState,
   type AuditEntry,
   type PullRequestRecord,
+  type Tier,
 } from "./state.js";
 
 /**
@@ -38,6 +39,7 @@ export interface FixReconcileContext {
   at: string;
   auditMaxEntries: number;
   pullRequestsMax?: number;
+  tier: Tier;
 }
 
 export interface FixReconcileResult {
@@ -159,12 +161,12 @@ export async function reconcileFixJobs(
       const terminal: AuditEntry = opened
         ? {
             at: ctx.at, fingerprint: meta.fingerprint, incident: meta.incident, proposal: title,
-            tier: "medium", outcome: "success", detail: `Rigel opened a fix PR: ${result.prUrl}`,
+            tier: ctx.tier, outcome: "success", detail: `Rigel opened a fix PR: ${result.prUrl}`,
             actor: "pr",
           }
         : {
             at: ctx.at, fingerprint: meta.fingerprint, incident: meta.incident, proposal: title,
-            tier: "medium", outcome: "failure",
+            tier: ctx.tier, outcome: "failure",
             detail: `fix PR could not be opened: ${result.message ?? "(no detail reported)"}`,
             actor: "pr",
           };

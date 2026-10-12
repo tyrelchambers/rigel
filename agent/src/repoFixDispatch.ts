@@ -1,4 +1,4 @@
-import { appendAudit, type AssistantState, type QueuedSuggestion } from "./state.js";
+import { appendAudit, type AssistantState, type QueuedSuggestion, type Tier } from "./state.js";
 import type { SuggestedAction } from "./action.js";
 import type { ResolvedRepo } from "./repoResolve.js";
 import type { KubectlResult } from "./kubectl.js";
@@ -51,6 +51,7 @@ export interface RepoFixDispatch {
   namespace: string;
   /** The fix-runner image (same immutable tag as the agent) the Job runs. */
   image: string;
+  tier: Tier;
 }
 
 export interface RepoFixOutcome {
@@ -80,7 +81,7 @@ export async function dispatchRepoFix(
     return {
       state: appendAudit(state, {
         at: d.at, fingerprint: d.fingerprint, incident: d.incident, proposal: d.action.label,
-        tier: "medium", outcome: "skipped",
+        tier: d.tier, outcome: "skipped",
         detail: "openFixPR proposed, but autofix is disabled or this workload is outside the autofix scope",
         analysis: truncate(d.analysis),
         actor: "pr",
@@ -91,7 +92,7 @@ export async function dispatchRepoFix(
     return {
       state: appendAudit(state, {
         at: d.at, fingerprint: d.fingerprint, incident: d.incident, proposal: d.action.label,
-        tier: "medium", outcome: "skipped",
+        tier: d.tier, outcome: "skipped",
         detail: "openFixPR proposed, but the workload has no GitOps source (not autofix-eligible)",
         analysis: truncate(d.analysis),
         actor: "pr",
@@ -112,7 +113,7 @@ export async function dispatchRepoFix(
       return {
         state: appendAudit(state, {
           at: d.at, fingerprint: d.fingerprint, incident: d.incident, proposal: suggestion,
-          tier: "medium", outcome: "failure",
+          tier: d.tier, outcome: "failure",
           detail: "openFixPR approved, but the fix-runner image is not configured (RIGEL_FIX_RUNNER_IMAGE): cannot open the PR",
           analysis: truncate(d.analysis),
           actor: "pr",
@@ -141,7 +142,7 @@ export async function dispatchRepoFix(
     return {
       state: appendAudit(state, {
         at: d.at, fingerprint: d.fingerprint, incident: d.incident, proposal: suggestion,
-        tier: "medium", outcome: "failure",
+        tier: d.tier, outcome: "failure",
         detail: truncate(`openFixPR approved, but the fix Job could not be created (fail-safe): ${String(err)}`),
         analysis: truncate(d.analysis),
         actor: "pr",
@@ -152,7 +153,7 @@ export async function dispatchRepoFix(
   const detail = `fix PR opening (pending the fix-runner): ${d.repo.repoURL}@${d.repo.branch} (${d.repo.path})`;
   let next = appendAudit(state, {
     at: d.at, fingerprint: d.fingerprint, incident: d.incident, proposal: suggestion,
-    tier: "medium", outcome: "queued", detail, analysis: truncate(d.analysis),
+    tier: d.tier, outcome: "queued", detail, analysis: truncate(d.analysis),
     actor: "pr",
   }, d.auditMaxEntries);
 
