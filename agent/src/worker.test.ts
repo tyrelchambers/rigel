@@ -4,6 +4,7 @@ import * as runModelMod from "./runModel.js";
 import type { RuntimeConfig } from "./runtimeConfig.js";
 import type { Incident } from "./detector.js";
 import type { ResolvedRepo } from "./repoResolve.js";
+import { PRESETS } from "@rigel/k8s/src/actionLevels.js";
 
 function rc(): RuntimeConfig {
   return {
@@ -16,6 +17,7 @@ function rc(): RuntimeConfig {
     autofix: { enabled: false, scope: { projects: [] }, maxPerDay: 5 },
     digests: [],
     notifyAllowlist: null,
+    actionLevels: PRESETS.balanced,
   } as RuntimeConfig;
 }
 const INC: Incident = { incidentKind: "unhealthyPod", name: "nginx", namespace: "default", reason: "CrashLoopBackOff" } as Incident;
@@ -120,5 +122,19 @@ describe("runWorker", () => {
     await runWorker(rc(), [INC], null);
     const prompt = spy.mock.calls[0]![0].prompt;
     expect(prompt).toMatch(/not autofix-eligible/i);
+  });
+
+  test("the system prompt omits kinds set to Off", async () => {
+    const spy = vi.spyOn(runModelMod, "runModel").mockResolvedValue({ text: "", costUsd: 0, isError: false });
+    await runWorker({ ...rc(), actionLevels: { ...PRESETS.balanced, uncordon: "off", scale: "off" } }, [INC]);
+    const prompt = spy.mock.calls[0]![0].systemPrompt;
+    expect(prompt).toContain("<one of: restart|rollback|setEnv|deletePod|cordon>");
+    expect(prompt).not.toMatch(/\buncordon\b/i);
+  });
+
+  test("the openFixPR paragraph is dropped when openFixPR is Off", async () => {
+    const spy = vi.spyOn(runModelMod, "runModel").mockResolvedValue({ text: "", costUsd: 0, isError: false });
+    await runWorker({ ...rc(), actionLevels: { ...PRESETS.balanced, openFixPR: "off" } }, [INC]);
+    expect(spy.mock.calls[0]![0].systemPrompt).not.toMatch(/openFixPR/);
   });
 });

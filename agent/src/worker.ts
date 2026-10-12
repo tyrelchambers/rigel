@@ -3,6 +3,7 @@ import { runModel } from "./runModel.js";
 import type { RuntimeConfig } from "./runtimeConfig.js";
 import type { Incident } from "./detector.js";
 import type { ResolvedRepo } from "./repoResolve.js";
+import type { ActionKind, ActionLevels } from "@rigel/k8s/src/actionLevels.js";
 
 /**
  * The Worker stage: hands a detected incident to a cheap, fast model
@@ -36,7 +37,29 @@ const READ_ONLY_TOOLS = [
 export type TriageVerdict = "acceptable" | "actionable" | "uncertain";
 const TRIAGE_VERDICTS = new Set<TriageVerdict>(["acceptable", "actionable", "uncertain"]);
 
-const SYSTEM_PROMPT = `You are Rigel's autonomous cluster remediation assistant, running unattended inside a Kubernetes cluster while the operator is asleep.
+const KUBECTL_KINDS: readonly { kind: ActionKind; verb: string }[] = [
+  { kind: "restart", verb: "Restart" },
+  { kind: "scale", verb: "Scale" },
+  { kind: "rollback", verb: "Roll back" },
+  { kind: "setEnv", verb: "Update" },
+  { kind: "deletePod", verb: "Delete" },
+  { kind: "cordon", verb: "Cordon" },
+  { kind: "uncordon", verb: "Uncordon" },
+];
+
+const FIX_PR_PARAGRAPH = `Source-fix remediation (openFixPR) — available ONLY when the incident below is explicitly marked "autofix-eligible". It opens a pull request against the workload's GitOps source instead of touching the cluster, for when the root cause is a defect in the committed manifest/config (a bad image tag, a wrong env value, an incorrect/missing field) rather than a transient runtime fault. When eligible AND the root cause is such a defect, propose it INSTEAD of a kubectl action:
+  { "label": string, "kind": "openFixPR", "source": <the GitOps source name given below>,
+    "filePath": <repo-relative path of the SINGLE file to change>,
+    "content": <the COMPLETE corrected contents of that file>,
+    "title": <pull-request title>, "body": <pull-request body explaining the root cause and the fix> }
+Change exactly ONE file, make the MINIMAL edit that fixes the root cause, and NEVER emit openFixPR when the incident is not marked autofix-eligible.
+
+`;
+
+function systemPrompt(levels: ActionLevels): string {
+  const enabled = KUBECTL_KINDS.filter(({ kind }) => levels[kind] !== "off");
+  const fixPR = levels.openFixPR !== "off";
+  return `You are Rigel's autonomous cluster remediation assistant, running unattended inside a Kubernetes cluster while the operator is asleep.
 
 You investigate an incident using ONLY read-only kubectl (get/describe/logs/top/events/explain).
 
@@ -50,22 +73,16 @@ When in doubt, choose "uncertain" — NEVER "actionable".
 STEP 2 — Remediation. ONLY when your verdict is "actionable" you MAY propose AT MOST ONE remediation as a single fenced \`\`\`action block. For "acceptable" or "uncertain", emit NO action.
 
 kubectl remediation schema (emit a single object):
-  { "label": string, "kind": <one of: restart|scale|rollback|setEnv|deletePod|cordon|uncordon>,
+  { "label": string, "kind": <one of: ${enabled.map((k) => k.kind).join("|")}>,
     "deployment"?: string, "pod"?: string, "node"?: string, "namespace"?: string,
     "replicas"?: number, "env"?: {string:string} }
 
-Source-fix remediation (openFixPR) — available ONLY when the incident below is explicitly marked "autofix-eligible". It opens a pull request against the workload's GitOps source instead of touching the cluster, for when the root cause is a defect in the committed manifest/config (a bad image tag, a wrong env value, an incorrect/missing field) rather than a transient runtime fault. When eligible AND the root cause is such a defect, propose it INSTEAD of a kubectl action:
-  { "label": string, "kind": "openFixPR", "source": <the GitOps source name given below>,
-    "filePath": <repo-relative path of the SINGLE file to change>,
-    "content": <the COMPLETE corrected contents of that file>,
-    "title": <pull-request title>, "body": <pull-request body explaining the root cause and the fix> }
-Change exactly ONE file, make the MINIMAL edit that fixes the root cause, and NEVER emit openFixPR when the incident is not marked autofix-eligible.
-
-Guidance:
+${fixPR ? FIX_PR_PARAGRAPH : ""}Guidance:
 - Prefer the least invasive fix that addresses root cause. A pod stuck in CrashLoopBackOff after a recent rollout usually wants "rollback"; a transient crash wants "restart"; a wedged single pod managed by a controller wants "deletePod".
 - Only propose kubectl actions whose kind is in the list above. Anything destructive (deleting namespaces/PVCs/volumes, draining nodes, editing secrets/RBAC) is NOT available to you — if that is what's truly needed, do NOT emit an action; set the verdict to "uncertain" and explain in prose so it can be queued for the human.
 - Always include the namespace.
-- Write the "label" the way a helpful assistant would tell the operator what you're doing: start with the plain base verb for the kind (Restart / Scale / Roll back / Update / Delete / Cordon / Uncordon; for openFixPR use "Open a fix PR"), name the target, then say why in natural language. Example: "Restart backend-worker so Celery's heartbeat comes back and the readiness probes stop failing." One sentence, plain English, no jargon dumps and no trailing period.`;
+- Write the "label" the way a helpful assistant would tell the operator what you're doing: start with the plain base verb for the kind (${enabled.map((k) => k.verb).join(" / ")}${fixPR ? '; for openFixPR use "Open a fix PR"' : ""}), name the target, then say why in natural language. Example: "Restart backend-worker so Celery's heartbeat comes back and the readiness probes stop failing." One sentence, plain English, no jargon dumps and no trailing period.`;
+}
 
 export interface WorkerOutput {
   /** Triage verdict — defaults SAFELY to "uncertain" when absent/garbled. */
@@ -89,7 +106,7 @@ export async function runWorker(
     role: "worker",
     config: rc,
     prompt: buildPrompt(incidents, repo ?? null),
-    systemPrompt: SYSTEM_PROMPT,
+    systemPrompt: systemPrompt(rc.actionLevels),
     allowedReads: READ_ONLY_TOOLS,
     timeoutMs: 120_000,
   });
