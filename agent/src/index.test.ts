@@ -952,6 +952,12 @@ describe("tick() — action levels", () => {
     expect(captured()!.audit[0]).toMatchObject({ outcome: "queued", tier: "auto", actor: "pr" });
   });
 
+  test("an Ask fix PR notifies in the same format as an Ask kubectl action", async () => {
+    wireCluster({ configData: { ...budgetConfig("5"), webhookUrl: "http://hook", notifyChannels: "webhook", actionLevels: JSON.stringify({ openFixPR: "ask" }) }, deploymentJSON: DEPLOYMENT_JSON });
+    await tick(makeConfig(), newCb(), createLoopState());
+    expect(vi.mocked(sendToChannel)).toHaveBeenCalledWith(expect.anything(), "webhook", expect.stringContaining("▸ Waiting on your OK: Open fix PR — default/memos-7d9f-abc: CrashLoopBackOff (set to Ask me in Action levels)"));
+  });
+
   test("openFixPR at off skips the repo resolve entirely", async () => {
     vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [RESTART] }));
     wireCluster({ configData: { ...budgetConfig("5"), actionLevels: JSON.stringify({ openFixPR: "off" }) }, deploymentJSON: DEPLOYMENT_JSON });
@@ -1008,7 +1014,7 @@ describe("tick() — circuit breaker", () => {
     const { captured } = wireCluster({ configData: limits, pods: [], nodes: [OUR_CORDONED_NODE] });
     await tick(makeConfig(), cb, createLoopState());
     expect(mutated("uncordon")).toBe(false);
-    expect(captured()!.queue[0]!.reason).toBe("hit the action limit: circuit-breaker: resource node/k3s-slave hit its hourly cap (1)");
+    expect(captured()!.queue[0]!.reason).toBe("hit the action limit: resource node/k3s-slave hit its hourly cap (1)");
   });
 
   test("a breaker veto queues the action for approval with the breaker reason", async () => {
@@ -1017,7 +1023,7 @@ describe("tick() — circuit breaker", () => {
       configData: { enabled: "true", confirmPolls: "1", mode: "auto", webhookUrl: "http://hook", notifyChannels: "webhook", maxPerNight: "0" },
     });
     await tick(makeConfig(), newCb(), createLoopState());
-    const why = "hit the action limit: circuit-breaker: nightly total cap reached (0)";
+    const why = "hit the action limit: nightly total cap reached (0)";
     expect(mutated("rollout")).toBe(false);
     expect(captured()!.queue[0]).toMatchObject({ reason: why, action: { kind: "restart" } });
     expect(captured()!.audit[0]).toMatchObject({ outcome: "queued", tier: "auto", detail: "circuit-breaker: nightly total cap reached (0)" });
