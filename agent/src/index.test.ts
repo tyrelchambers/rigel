@@ -443,7 +443,7 @@ describe("tick() — openFixPR fix-quality supervisor", () => {
     expect(state!.audit[0]).toMatchObject({ outcome: "queued", verdict: "escalated", tier: "review" });
     expect(state!.audit[0]?.detail).toMatch(/Opus escalated the fix/);
     expect(state!.queue[0]).toMatchObject({ action: { kind: "openFixPR" } });
-    expect(state!.queue[0]?.reason).toMatch(/Opus escalated/);
+    expect(state!.queue[0]?.reason).toBe("fix PR, set to Review: Opus escalated: not confident");
   });
 
   test("supervisor THROW → fail-closed, queued for a human (never opens a PR)", async () => {
@@ -455,6 +455,7 @@ describe("tick() — openFixPR fix-quality supervisor", () => {
     const state = captured();
     expect(state!.audit[0]).toMatchObject({ outcome: "queued", verdict: "escalated", tier: "review" });
     expect(state!.audit[0]?.detail).toMatch(/fail-closed/);
+    expect(state!.queue[0]?.reason).toBe("fix PR, set to Review: supervisor error (fail-closed)");
   });
 
   test("a non-actionable verdict for an in-scope openFixPR → no PR, no supervisor call", async () => {
@@ -819,6 +820,31 @@ describe("tick() — action levels", () => {
     await tick(makeConfig(), newCb(), createLoopState());
     expect(vi.mocked(runSupervisor)).toHaveBeenCalled();
     expect(captured()!.audit[0]).toMatchObject({ outcome: "success", verdict: "approved", tier: "review" });
+  });
+
+  test("restart at review queues with a Review reason when Opus escalates", async () => {
+    vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [RESTART] }));
+    vi.mocked(runSupervisor).mockResolvedValue(sup("escalate", "not sure"));
+    const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "auto", actionLevels: JSON.stringify({ restart: "review" }) } });
+    await tick(makeConfig(), newCb(), createLoopState());
+    expect(captured()!.queue[0]).toMatchObject({ reason: "set to Review: Opus escalated: not sure", action: { kind: "restart" } });
+    expect(mutated("rollout")).toBe(false);
+  });
+
+  test("restart at review queues with a Review reason when the supervisor fails", async () => {
+    vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [RESTART] }));
+    vi.mocked(runSupervisor).mockRejectedValue(new Error("unreachable"));
+    const { captured } = wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "auto", actionLevels: JSON.stringify({ restart: "review" }) } });
+    await tick(makeConfig(), newCb(), createLoopState());
+    expect(captured()!.queue[0]).toMatchObject({ reason: "set to Review: supervisor error (fail-closed)", action: { kind: "restart" } });
+    expect(mutated("rollout")).toBe(false);
+  });
+
+  test("an Ask notification says why it is waiting", async () => {
+    vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [RESTART] }));
+    wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "auto", webhookUrl: "http://hook", notifyChannels: "webhook", actionLevels: JSON.stringify({ restart: "ask" }) } });
+    await tick(makeConfig(), newCb(), createLoopState());
+    expect(vi.mocked(sendToChannel)).toHaveBeenCalledWith(expect.anything(), "webhook", expect.stringContaining("Restart memos — default/memos-7d9f-abc: CrashLoopBackOff (set to Ask me in Action levels)"));
   });
 
   test("off records a skip with no notification", async () => {
