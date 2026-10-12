@@ -11,15 +11,15 @@ import {
   faCodePullRequest,
   faCircleInfo,
 } from "@awesome.me/kit-6050953220/icons/classic/solid";
-import { PRESETS, ACTION_LEVEL_KINDS, matchPreset, type ActionKind, type ActionLevel, type PresetId } from "@rigel/k8s";
+import { PRESETS, ACTION_LEVEL_KINDS, ACTION_LEVEL_LABELS, matchPreset, type ActionKind, type ActionLevel, type PresetId } from "@rigel/k8s";
 import { cn } from "@/lib/utils";
 import { useAssistantCtx } from "./AssistantContext";
 
 const LEVELS: { value: ActionLevel; label: string; dot: string; def: string }[] = [
-  { value: "auto", label: "Auto", dot: "bg-[var(--status-running)]", def: "Runs it" },
-  { value: "review", label: "Review", dot: "bg-[var(--accent-primary)]", def: "Opus must approve" },
-  { value: "ask", label: "Ask me", dot: "bg-[var(--status-pending)]", def: "Waits for your OK" },
-  { value: "off", label: "Off", dot: "bg-[var(--fg-tertiary)]", def: "Never does it" },
+  { value: "auto", label: ACTION_LEVEL_LABELS.auto, dot: "bg-[var(--status-running)]", def: "Runs it" },
+  { value: "review", label: ACTION_LEVEL_LABELS.review, dot: "bg-[var(--accent-primary)]", def: "Supervisor must approve" },
+  { value: "ask", label: ACTION_LEVEL_LABELS.ask, dot: "bg-[var(--status-pending)]", def: "Waits for your OK" },
+  { value: "off", label: ACTION_LEVEL_LABELS.off, dot: "bg-[var(--fg-tertiary)]", def: "Never does it" },
 ];
 
 const PRESET_OPTIONS: { id: PresetId; label: string }[] = [
