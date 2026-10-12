@@ -193,7 +193,7 @@ function openPr(over: Record<string, unknown> = {}): Record<string, unknown> {
 /** An autofix-on, in-scope config with a per-day fix-PR cap. */
 function budgetConfig(maxPerDay: string): Record<string, string> {
   return {
-    enabled: "true", confirmPolls: "1", autofixEnabled: "true",
+    enabled: "true", confirmPolls: "1", mode: "auto", autofixEnabled: "true",
     autofixScope: JSON.stringify({ projects: ["default/memos"] }),
     autofixMaxPerDay: maxPerDay,
   };
@@ -255,6 +255,7 @@ describe("tick() — openFixPR routing (I1 landmine)", () => {
       configData: {
         enabled: "true",
         confirmPolls: "1",
+        mode: "auto",
         autofixEnabled: "true",
         autofixScope: JSON.stringify({ projects: ["default/memos"] }),
       },
@@ -267,7 +268,7 @@ describe("tick() — openFixPR routing (I1 landmine)", () => {
     expect(state).toBeDefined();
     // The fix-quality supervisor cleared the change before it was dispatched.
     expect(vi.mocked(runSupervisor)).toHaveBeenCalledTimes(1);
-    expect(state!.audit[0]).toMatchObject({ proposal: OPEN_FIX_PR.title, outcome: "queued", tier: "medium", actor: "pr" });
+    expect(state!.audit[0]).toMatchObject({ proposal: OPEN_FIX_PR.title, outcome: "queued", tier: "review", actor: "pr" });
     expect(state!.audit[0]?.detail).toContain("fix-runner");
     expect(state!.queue[0]).toMatchObject({ suggestion: OPEN_FIX_PR.title, action: { kind: "openFixPR" } });
   });
@@ -277,7 +278,7 @@ describe("tick() — openFixPR routing (I1 landmine)", () => {
     // Deployment "memos" (not treat the pod name as the Deployment) to find the source.
     const { captured } = wireCluster({
       configData: {
-        enabled: "true", confirmPolls: "1", autofixEnabled: "true",
+        enabled: "true", confirmPolls: "1", mode: "auto", autofixEnabled: "true",
         autofixScope: JSON.stringify({ projects: ["default/memos"] }),
       },
       deploymentJSON: DEPLOYMENT_JSON,
@@ -286,7 +287,7 @@ describe("tick() — openFixPR routing (I1 landmine)", () => {
     await tick(makeConfig(), newCb(), createLoopState());
 
     const state = captured();
-    expect(state!.audit[0]).toMatchObject({ outcome: "queued", tier: "medium" });
+    expect(state!.audit[0]).toMatchObject({ outcome: "queued", tier: "review" });
     expect(state!.audit[0]?.detail).toContain("github.com/me/infra@main");
   });
 
@@ -394,7 +395,7 @@ describe("tick() — openFixPR fix-quality supervisor", () => {
   const tracked = () =>
     wireCluster({
       configData: {
-        enabled: "true", confirmPolls: "1", autofixEnabled: "true",
+        enabled: "true", confirmPolls: "1", mode: "auto", autofixEnabled: "true",
         autofixScope: JSON.stringify({ projects: ["default/memos"] }),
       },
       deploymentJSON: DEPLOYMENT_JSON,
@@ -410,7 +411,7 @@ describe("tick() — openFixPR fix-quality supervisor", () => {
     expect(vi.mocked(runSupervisor)).toHaveBeenCalledTimes(1);
     // The supervisor judged FIX QUALITY (empty command, not a kubectl preview).
     expect(vi.mocked(runSupervisor).mock.calls[0]![4]).toBe("");
-    expect(state!.audit[0]).toMatchObject({ outcome: "queued", tier: "medium" });
+    expect(state!.audit[0]).toMatchObject({ outcome: "queued", tier: "review" });
     expect(state!.queue[0]).toMatchObject({ action: { kind: "openFixPR" } });
     // The dispatch actually created the per-fix ConfigMap + one-shot Job.
     const applied = vi.mocked(kubectl).mock.calls
@@ -529,6 +530,7 @@ describe("tick() — fix-Job reconcile (Phase 4 loop close)", () => {
     await expect(tick(makeConfig(), newCb(), createLoopState())).resolves.toBeUndefined();
 
     expect(captured!.pullRequests).toHaveLength(1);
+    expect(captured!.audit[0]).toMatchObject({ outcome: "success", tier: "review", actor: "pr" });
     expect(captured!.pullRequests![0]).toMatchObject({
       status: "open", prUrl: "https://github.com/me/infra/pull/7", app: "memos", kind: "config",
     });
@@ -598,7 +600,7 @@ describe("tick() — per-day fix-PR budget", () => {
 
     const state = captured();
     expect(vi.mocked(runSupervisor)).toHaveBeenCalledTimes(1);
-    expect(state!.audit[0]).toMatchObject({ outcome: "queued", tier: "medium" });
+    expect(state!.audit[0]).toMatchObject({ outcome: "queued", tier: "review" });
     expect(dispatchedAFix()).toBe(true);
   });
 
@@ -629,7 +631,7 @@ describe("tick() — per-day fix-PR budget", () => {
 
     const state = captured();
     expect(vi.mocked(runSupervisor)).toHaveBeenCalledTimes(1);
-    expect(state!.audit[0]).toMatchObject({ outcome: "queued", tier: "medium" });
+    expect(state!.audit[0]).toMatchObject({ outcome: "queued", tier: "review" });
     expect(dispatchedAFix()).toBe(true);
   });
 
@@ -853,6 +855,31 @@ describe("tick() — action levels", () => {
     await tick(makeConfig(), newCb(), createLoopState());
     expect(vi.mocked(runSupervisor)).not.toHaveBeenCalled();
     expect(dispatchedAFix()).toBe(true);
+  });
+
+  test("openFixPR at auto in advisory mode is queued with its action, not dispatched", async () => {
+    const { captured } = wireCluster({ configData: { ...budgetConfig("5"), mode: "advisory", actionLevels: JSON.stringify({ openFixPR: "auto" }) }, deploymentJSON: DEPLOYMENT_JSON });
+    await tick(makeConfig(), newCb(), createLoopState());
+    expect(vi.mocked(runSupervisor)).not.toHaveBeenCalled();
+    expect(dispatchedAFix()).toBe(false);
+    expect(captured()!.queue[0]).toMatchObject({ action: { kind: "openFixPR" }, reason: "advisory mode — suggestion only" });
+    expect(captured()!.audit[0]).toMatchObject({ outcome: "queued", tier: "auto", detail: "advisory mode — suggestion only" });
+  });
+
+  test("openFixPR approved at review in advisory mode is queued, not dispatched", async () => {
+    const { captured } = wireCluster({ configData: { ...budgetConfig("5"), mode: "advisory" }, deploymentJSON: DEPLOYMENT_JSON });
+    await tick(makeConfig(), newCb(), createLoopState());
+    expect(vi.mocked(runSupervisor)).toHaveBeenCalledTimes(1);
+    expect(dispatchedAFix()).toBe(false);
+    expect(captured()!.queue[0]).toMatchObject({ action: { kind: "openFixPR" } });
+    expect(captured()!.audit[0]).toMatchObject({ outcome: "queued", tier: "review" });
+  });
+
+  test("a dispatched fix PR is recorded at the openFixPR level", async () => {
+    const { captured } = wireCluster({ configData: { ...budgetConfig("5"), actionLevels: JSON.stringify({ openFixPR: "auto" }) }, deploymentJSON: DEPLOYMENT_JSON });
+    await tick(makeConfig(), newCb(), createLoopState());
+    expect(dispatchedAFix()).toBe(true);
+    expect(captured()!.audit[0]).toMatchObject({ outcome: "queued", tier: "auto", actor: "pr" });
   });
 
   test("openFixPR at ask queues it, no dispatch", async () => {

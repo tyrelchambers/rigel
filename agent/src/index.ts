@@ -429,6 +429,10 @@ export async function tick(
       }
     }
 
+    const autonomyQueueWhy = decideAutonomy(rc.mode, rc.window, minOfDay(now)) === "queue"
+      ? rc.mode === "advisory" ? "advisory mode — suggestion only" : "outside quiet-hours window — queued for approval"
+      : null;
+
     // Stage B: decide + execute one incident at a time, in confirmed order, so the
     // circuit breaker and audit log stay deterministic regardless of which
     // diagnosis finished first.
@@ -562,7 +566,7 @@ export async function tick(
           const outcome = await dispatchRepoFix(repoFixDeps(), state, {
             at: ts, fingerprint: fp, incident: describe(incident), action, analysis,
             repo: e.repo, inScope: e.inScope, auditMaxEntries: cfg.auditMaxEntries,
-            namespace: cfg.stateNamespace, image: cfg.fixRunnerImage,
+            namespace: cfg.stateNamespace, image: cfg.fixRunnerImage, tier: level,
           });
           state = outcome.state;
           if (outcome.notification) notifications.push(outcome.notification);
@@ -633,12 +637,21 @@ export async function tick(
           }
           log(`Opus approved fix PR (conf ${sup.verdict.confidence.toFixed(2)}): ${action.label}`);
         }
+        if (autonomyQueueWhy) {
+          state = queue(state, cfg, ts, fp, describe(incident), action.label, autonomyQueueWhy, action);
+          state = record(state, cfg, {
+            at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
+            tier: level, outcome: "queued", detail: autonomyQueueWhy, analysis: truncate(analysis),
+          });
+          notifications.push(`▸ Waiting on your OK: ${action.label} — ${describe(incident)} (${autonomyQueueWhy})`);
+          continue;
+        }
         // Approved or Auto → create the fix ConfigMap + Job via the seam (dispatchRepoFix
         // queues it pending the fix-runner, which opens the actual PR).
         const outcome = await dispatchRepoFix(repoFixDeps(), state, {
           at: ts, fingerprint: fp, incident: describe(incident), action, analysis,
           repo: e.repo, inScope: e.inScope, auditMaxEntries: cfg.auditMaxEntries,
-          namespace: cfg.stateNamespace, image: cfg.fixRunnerImage,
+          namespace: cfg.stateNamespace, image: cfg.fixRunnerImage, tier: level,
         });
         state = outcome.state;
         if (outcome.notification) {
@@ -711,14 +724,13 @@ export async function tick(
       // Autonomy gate: advisory mode (or being outside the quiet-hours window)
       // queues the action for approval instead of auto-executing — even Auto and
       // Opus-approved Review.
-      if (decideAutonomy(rc.mode, rc.window, minOfDay(now)) === "queue") {
-        const why = rc.mode === "advisory" ? "advisory mode — suggestion only" : "outside quiet-hours window — queued for approval";
-        state = queue(state, cfg, ts, fp, describe(incident), action.label, why, action);
+      if (autonomyQueueWhy) {
+        state = queue(state, cfg, ts, fp, describe(incident), action.label, autonomyQueueWhy, action);
         state = record(state, cfg, {
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-          command, tier: level, outcome: "queued", detail: why, analysis: truncate(analysis),
+          command, tier: level, outcome: "queued", detail: autonomyQueueWhy, analysis: truncate(analysis),
         });
-        notifications.push(`▸ Waiting on your OK: ${action.label} — ${describe(incident)} (${why})`);
+        notifications.push(`▸ Waiting on your OK: ${action.label} — ${describe(incident)} (${autonomyQueueWhy})`);
         continue;
       }
 
@@ -765,7 +777,7 @@ export async function tick(
     // re-processes a still-present Job (dedup-safe) instead of losing an opened PR.
     try {
       const recon = await reconcileFixJobs(fixReconcileDeps(cfg), state, {
-        at: ts, auditMaxEntries: cfg.auditMaxEntries,
+        at: ts, auditMaxEntries: cfg.auditMaxEntries, tier: levelFor("openFixPR", rc.actionLevels),
       });
       state = recon.state;
       notifications.push(...recon.notifications);

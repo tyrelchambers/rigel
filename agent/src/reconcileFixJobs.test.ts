@@ -48,7 +48,7 @@ function deps(over: Partial<FixReconcileDeps> = {}): FixReconcileDeps {
   };
 }
 
-const ctx = { at: "2026-06-30T12:00:00.000Z", auditMaxEntries: 200 };
+const ctx = { at: "2026-06-30T12:00:00.000Z", auditMaxEntries: 200, tier: "review" as const };
 
 describe("reconcileFixJobs", () => {
   test("a succeeded Job records an opened PR, notifies once, and is queued for GC", async () => {
@@ -62,7 +62,7 @@ describe("reconcileFixJobs", () => {
     expect(r.notifications[0]).toBe(`Rigel opened a PR for memos: ${TITLE} (https://github.com/me/infra/pull/7)`);
     expect(r.gc).toEqual([JOB_NAME]);
     // The terminal audit entry was recorded.
-    expect(r.state.audit[0]).toMatchObject({ outcome: "success", proposal: TITLE, fingerprint: FP, actor: "pr" });
+    expect(r.state.audit[0]).toMatchObject({ outcome: "success", proposal: TITLE, fingerprint: FP, actor: "pr", tier: "review" });
     expect(r.state.audit[0]?.detail).toContain("pull/7");
   });
 
