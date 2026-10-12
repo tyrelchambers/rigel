@@ -609,7 +609,7 @@ export async function tick(
             sup = await runSupervisor(rc, incident, action, analysis, "");
           } catch (err) {
             // Fail closed: supervisor unreachable / malformed verdict → never open a PR.
-            state = queue(state, cfg, ts, fp, describe(incident), action.label, "fix PR — supervisor error (fail-closed)", action);
+            state = queue(state, cfg, ts, fp, describe(incident), action.label, "fix PR, set to Review: supervisor error (fail-closed)", action);
             state = record(state, cfg, {
               at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
               tier: level, verdict: "escalated", outcome: "queued",
@@ -626,7 +626,7 @@ export async function tick(
             continue;
           }
           if (sup.verdict.decision === "escalate") {
-            state = queue(state, cfg, ts, fp, describe(incident), action.label, `fix PR — Opus escalated: ${sup.verdict.reason}`, action);
+            state = queue(state, cfg, ts, fp, describe(incident), action.label, `fix PR, set to Review: Opus escalated: ${sup.verdict.reason}`, action);
             state = record(state, cfg, {
               at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
               tier: level, verdict: "escalated", outcome: "queued",
@@ -679,7 +679,7 @@ export async function tick(
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
           command, tier: level, outcome: "queued", detail: "set to Ask me in Action levels", analysis: truncate(analysis),
         });
-        notifications.push(`▸ Waiting on your OK: ${action.label} — ${describe(incident)}`);
+        notifications.push(`▸ Waiting on your OK: ${action.label} — ${describe(incident)} (set to Ask me in Action levels)`);
         continue;
       }
 
@@ -692,7 +692,7 @@ export async function tick(
           sup = await runSupervisor(rc, incident, action, analysis, command);
         } catch (e) {
           // Fail closed: supervisor unreachable / malformed verdict → never act.
-          state = queue(state, cfg, ts, fp, describe(incident), action.label, "medium-risk — supervisor error (fail-closed)", action);
+          state = queue(state, cfg, ts, fp, describe(incident), action.label, "set to Review: supervisor error (fail-closed)", action);
           state = record(state, cfg, {
             at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
             tier: level, verdict: "escalated", outcome: "queued", detail: `supervisor failed (fail-closed): ${String(e)}`,
@@ -708,7 +708,7 @@ export async function tick(
           continue;
         }
         if (sup.verdict.decision === "escalate") {
-          state = queue(state, cfg, ts, fp, describe(incident), action.label, `medium-risk — Opus escalated: ${sup.verdict.reason}`, action);
+          state = queue(state, cfg, ts, fp, describe(incident), action.label, `set to Review: Opus escalated: ${sup.verdict.reason}`, action);
           state = record(state, cfg, {
             at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
             tier: level, verdict: "escalated", outcome: "queued",
