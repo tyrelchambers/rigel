@@ -64,6 +64,8 @@ import {
   ACTION_LEVEL_VALUES,
   serializeActionLevels,
   type ActionLevels,
+  MAX_APPROVED_FIXES,
+  parseApprovedFixes,
 } from "@rigel/k8s";
 import { effectiveClaudeToken } from "./chatConfig";
 import { applyPolicy } from "./rbacApply";
@@ -133,6 +135,7 @@ export type AssistantAction =
   | "setLimits"
   | "setAutofix"
   | "setActionLevels"
+  | "approveQueuedFix"
   | "restart"
   | "silence"
   | "unsilence"
@@ -176,6 +179,8 @@ export interface AssistantRequest {
   autofixMaxPerDay?: number;
   autofixScope?: { projects?: string[] };
   actionLevels?: ActionLevels;
+  // approveQueuedFix — the queued fix PR's queuedSuggestionId (plus `fingerprint`).
+  queuedId?: string;
   monitorNamespaces?: string;
   mode?: string;
   window?: string;
@@ -591,6 +596,15 @@ export function setActionLevelsUpdates(req: AssistantRequest): Record<string, st
     throw new Error("setActionLevels requires a level for every action.");
   }
   return { actionLevels: serializeActionLevels(levels) };
+}
+
+/** Pure: append a one-shot approval for a queued fix PR to `approvedFixes`. The
+ *  agent opens the matching queued item on its next tick and stamps the token so
+ *  the marker never acts twice. Keeps only the newest approvals. */
+export function approveQueuedFixUpdates(existing: Record<string, string>, req: AssistantRequest): Record<string, string> {
+  if (!req.queuedId || !req.fingerprint) throw new Error("approveQueuedFix requires `queuedId` and `fingerprint`.");
+  const approval = { id: req.queuedId, fingerprint: req.fingerprint, token: crypto.randomUUID(), at: Date.now() };
+  return { approvedFixes: JSON.stringify([...parseApprovedFixes(existing["approvedFixes"]), approval].slice(-MAX_APPROVED_FIXES)) };
 }
 
 /** Live limit change: read-modify-write the limit keys in assistant-config. No
@@ -1237,6 +1251,8 @@ export async function handleAssistant(
       return setAutofix(context, namespace, req);
     case "setActionLevels":
       return patchConfig(context, namespace, setActionLevelsUpdates(req));
+    case "approveQueuedFix":
+      return patchConfig(context, namespace, approveQueuedFixUpdates(await readConfigMapData(context, namespace, "assistant-config"), req));
     case "restart":
       return restartAgent(context, namespace);
     case "silence":
