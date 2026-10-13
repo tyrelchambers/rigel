@@ -18,12 +18,11 @@ import { rigel, isDesktop, type AboutInfo } from "@/lib/desktop";
 import { useAppUpdate } from "@/shell/useAppUpdate";
 import { cn } from "@/lib/utils";
 
-/** Turn a release-notes markdown body into a short highlight list: strip bullet /
- *  heading markers, drop blanks, cap the count. */
+/** electron-updater hands over the GitHub release body as rendered HTML (from
+ *  the releases Atom feed), so the highlights are its list items, as text. */
 export function releaseHighlights(notes: string, max = 6): string[] {
-  return notes
-    .split("\n")
-    .map((l) => l.replace(/^\s*[-*#>]+\s*/, "").trim())
+  const doc = new DOMParser().parseFromString(notes, "text/html");
+  return Array.from(doc.querySelectorAll("li"), (li) => li.textContent?.replace(/\s+/g, " ").trim() ?? "")
     .filter(Boolean)
     .slice(0, max);
 }
