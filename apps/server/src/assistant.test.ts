@@ -1302,3 +1302,43 @@ describe("bumpAgentEntitlementRefresh", () => {
     expect(patchCalls).toBe(0);
   });
 });
+
+import { PRESETS } from "@rigel/k8s";
+import { setActionLevelsUpdates } from "./assistant";
+
+test("setActionLevels writes the whole map under actionLevels", () => {
+  const levels = { ...PRESETS.balanced, scale: "auto" as const };
+  expect(setActionLevelsUpdates({ action: "setActionLevels", actionLevels: levels })).toEqual({
+    actionLevels: JSON.stringify(levels),
+  });
+});
+
+test("setActionLevels rejects a missing or invalid map", () => {
+  expect(() => setActionLevelsUpdates({ action: "setActionLevels" })).toThrow();
+  expect(() => setActionLevelsUpdates({ action: "setActionLevels", actionLevels: { ...PRESETS.balanced, restart: "yes" } as never })).toThrow();
+});
+
+import { approveQueuedFixUpdates } from "./assistant";
+
+test("approveQueuedFix appends a one-shot approval marker under approvedFixes", () => {
+  const up = approveQueuedFixUpdates({}, { action: "approveQueuedFix", queuedId: "t|i|s", fingerprint: "fp" });
+  const list = JSON.parse(up.approvedFixes!) as { id: string; fingerprint: string; token: string; at: number }[];
+  expect(list).toHaveLength(1);
+  expect(list[0]).toMatchObject({ id: "t|i|s", fingerprint: "fp" });
+  expect(typeof list[0]!.token).toBe("string");
+  expect(typeof list[0]!.at).toBe("number");
+});
+
+test("approveQueuedFix keeps earlier approvals, capped to the newest", () => {
+  const prior = Array.from({ length: 20 }, (_, i) => ({ id: `q${i}`, fingerprint: "fp", token: `t${i}`, at: i }));
+  const up = approveQueuedFixUpdates({ approvedFixes: JSON.stringify(prior) }, { action: "approveQueuedFix", queuedId: "new", fingerprint: "fp" });
+  const list = JSON.parse(up.approvedFixes!) as { id: string }[];
+  expect(list).toHaveLength(20);
+  expect(list[0]!.id).toBe("q1");
+  expect(list.at(-1)!.id).toBe("new");
+});
+
+test("approveQueuedFix requires the queued item's id and fingerprint", () => {
+  expect(() => approveQueuedFixUpdates({}, { action: "approveQueuedFix", fingerprint: "fp" })).toThrow();
+  expect(() => approveQueuedFixUpdates({}, { action: "approveQueuedFix", queuedId: "t|i|s" })).toThrow();
+});

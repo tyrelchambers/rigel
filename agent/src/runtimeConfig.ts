@@ -4,6 +4,7 @@ import { parseAlertRules, type AlertRule } from "./alerts.js";
 import type { ProviderId, RoleSelection } from "./providers/types.js";
 import { parseDigests, type DigestSubscription } from "@rigel/k8s/src/digest.js";
 import { parseNotifyAllowlist, type ChannelId } from "@rigel/k8s/src/channels.js";
+import { parseActionLevels, parseApprovedFixes, type ActionLevels, type ApprovedFix } from "@rigel/k8s/src/actionLevels.js";
 
 export interface OperationalLimits {
   pollIntervalMs: number;
@@ -54,6 +55,7 @@ export interface TimeWindow {
 
 export interface RuntimeConfig {
   enabled: boolean;
+  actionLevels: ActionLevels;
   mode: AutonomyMode;
   window?: TimeWindow;
   silenced: Set<string>;
@@ -72,6 +74,9 @@ export interface RuntimeConfig {
   autofix: AutofixConfig;
   digests: DigestSubscription[];
   digestRunNow?: DigestRunNow;
+  /** Operator approvals of queued fix PRs from the desktop; each is acted on once
+   *  (by token) when it still matches a queued item. */
+  approvedFixes: ApprovedFix[];
   /** Broadcast allowlist for alert/remediation notifications (`notifyChannels`).
    *  null = the key is absent (legacy install) → broadcast to everything
    *  configured. Does NOT apply to digests, which target one chosen channel. */
@@ -275,7 +280,9 @@ function disabledDefaults(cfg: Config): RuntimeConfig {
     limits: parseLimits({}, cfg),
     autofix: parseAutofixConfig({}),
     digests: [],
+    approvedFixes: [],
     notifyAllowlist: null,
+    actionLevels: parseActionLevels(undefined),
   };
 }
 
@@ -323,7 +330,9 @@ export async function readRuntimeConfig(cfg: Config): Promise<RuntimeConfig> {
     autofix: parseAutofixConfig(data),
     digests: parseDigestsFromConfig(data),
     digestRunNow: parseDigestRunNow(data),
+    approvedFixes: parseApprovedFixes(data.approvedFixes),
     notifyAllowlist: parseNotifyAllowlist(data),
+    actionLevels: parseActionLevels(data.actionLevels),
     entitlementRefreshAt: data.entitlementRefreshAt && data.entitlementRefreshAt.trim() ? data.entitlementRefreshAt.trim() : undefined,
   };
 }

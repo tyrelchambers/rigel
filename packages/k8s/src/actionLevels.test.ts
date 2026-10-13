@@ -1,0 +1,87 @@
+import { describe, expect, test } from "vitest";
+import { ACTION_LEVEL_KINDS, PRESETS, matchPreset, parseActionLevels, serializeActionLevels, tierLabel, parseApprovedFixes, queuedSuggestionId } from "./actionLevels";
+
+describe("parseActionLevels", () => {
+  test("missing key → Balanced", () => {
+    expect(parseActionLevels(undefined)).toEqual(PRESETS.balanced);
+  });
+
+  test("a kind missing from the map uses its Balanced value", () => {
+    const l = parseActionLevels(JSON.stringify({ scale: "off" }));
+    expect(l.scale).toBe("off");
+    expect(l.uncordon).toBe(PRESETS.balanced.uncordon);
+  });
+
+  test("an unrecognised value fails closed to ask", () => {
+    expect(parseActionLevels(JSON.stringify({ restart: "yolo" })).restart).toBe("ask");
+  });
+
+  test.each(["{nope", "[]", "null", "42"])("unparseable or non-object %s → every kind ask", (raw) => {
+    const l = parseActionLevels(raw);
+    for (const k of ACTION_LEVEL_KINDS) expect(l[k.kind]).toBe("ask");
+  });
+
+  test("unknown kinds in the stored map are dropped", () => {
+    expect(Object.keys(parseActionLevels(JSON.stringify({ drain: "auto" })))).toEqual(ACTION_LEVEL_KINDS.map((k) => k.kind));
+  });
+});
+
+describe("presets", () => {
+  test("Balanced matches the spec table", () => {
+    expect(PRESETS.balanced).toEqual({
+      restart: "auto", rollback: "auto", deletePod: "auto", cordon: "auto",
+      uncordon: "auto", scale: "review", setEnv: "review", openFixPR: "review",
+    });
+  });
+
+  test("Loose and Strict match the spec table", () => {
+    expect(PRESETS.loose).toEqual({
+      restart: "auto", rollback: "auto", deletePod: "auto", cordon: "auto",
+      uncordon: "auto", scale: "auto", setEnv: "review", openFixPR: "review",
+    });
+    expect(PRESETS.strict).toEqual({
+      restart: "review", rollback: "ask", deletePod: "review", cordon: "ask",
+      uncordon: "ask", scale: "ask", setEnv: "ask", openFixPR: "ask",
+    });
+  });
+
+  test("matchPreset finds the equal preset, else null", () => {
+    expect(matchPreset(PRESETS.strict)).toBe("strict");
+    expect(matchPreset({ ...PRESETS.balanced, restart: "off" })).toBeNull();
+  });
+
+  test("serialize round-trips through parse", () => {
+    expect(parseActionLevels(serializeActionLevels(PRESETS.loose))).toEqual(PRESETS.loose);
+  });
+});
+
+describe("tierLabel", () => {
+  test.each([
+    ["auto", "Auto"],
+    ["review", "Review"],
+    ["ask", "Ask me"],
+    ["off", "Off"],
+    ["low", "low"],
+    ["blocked", "blocked"],
+  ])("%s → %s", (tier, label) => {
+    expect(tierLabel(tier)).toBe(label);
+  });
+});
+
+describe("queuedSuggestionId", () => {
+  test("joins at, incident and suggestion", () => {
+    expect(queuedSuggestionId({ at: "t", incident: "i", suggestion: "s" })).toBe("t|i|s");
+  });
+});
+
+describe("parseApprovedFixes", () => {
+  const ok = { id: "t|i|s", fingerprint: "fp", token: "tok", at: 1 };
+
+  test("keeps well-formed approvals and drops malformed ones", () => {
+    expect(parseApprovedFixes(JSON.stringify([ok, { id: "x" }, null, "junk"]))).toEqual([ok]);
+  });
+
+  test.each([undefined, "", "{nope", "{}"])("%s → empty", (raw) => {
+    expect(parseApprovedFixes(raw)).toEqual([]);
+  });
+});

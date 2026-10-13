@@ -7,7 +7,7 @@
  */
 import { scanLogsForErrors } from "./logScan.js";
 
-export type IncidentKind = "unhealthyPod" | "degradedDeployment" | "loggedError";
+export type IncidentKind = "unhealthyPod" | "degradedDeployment" | "loggedError" | "cordonedNode";
 
 export interface Incident {
   incidentKind: IncidentKind;
@@ -26,6 +26,14 @@ const BAD_WAITING_REASONS = new Set(["CrashLoopBackOff", "ImagePullBackOff", "Er
  * way each tick. */
 export function fingerprint(i: Incident): string {
   return `${i.incidentKind}|${i.namespace}|${i.name}|${i.reason}`;
+}
+
+/** The incident a fingerprint names (without its volatile detail), or null when
+ *  it isn't in the `kind|namespace|name|reason` shape. */
+export function incidentFromFingerprint(fp: string): Incident | null {
+  const [incidentKind, namespace, name, reason] = fp.split("|");
+  if (!incidentKind || namespace === undefined || !name) return null;
+  return { incidentKind: incidentKind as IncidentKind, namespace, name, reason: reason ?? "", detail: "" };
 }
 
 interface RawList {

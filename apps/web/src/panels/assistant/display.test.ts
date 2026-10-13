@@ -77,6 +77,7 @@ describe("actorLabel", () => {
     expect(actorLabel("autonomous")).toBe("Autonomous");
     expect(actorLabel("chat")).toBe("Approved by you");
     expect(actorLabel("pr")).toBe("Opened a PR");
+    expect(actorLabel("desktop")).toBe("Approved on desktop");
   });
   it("returns null for undefined or unknown actors", () => {
     expect(actorLabel(undefined)).toBeNull();

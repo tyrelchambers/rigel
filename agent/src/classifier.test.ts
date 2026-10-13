@@ -1,42 +1,15 @@
 import { describe, expect, test } from "vitest";
-import { classifyRisk, RiskTier } from "./classifier.js";
+import { levelFor } from "./classifier.js";
+import { PRESETS } from "@rigel/k8s/src/actionLevels.js";
 
-describe("classifyRisk", () => {
-  test("restart is LOW (auto-remediate)", () => {
-    expect(classifyRisk("restart")).toBe(RiskTier.Low);
+describe("levelFor", () => {
+  test("returns the configured level for a known kind", () => {
+    expect(levelFor("uncordon", { ...PRESETS.balanced, uncordon: "off" })).toBe("off");
+    expect(levelFor("scale", PRESETS.balanced)).toBe("review");
   });
 
-  test("rollback is LOW (auto-remediate)", () => {
-    expect(classifyRisk("rollback")).toBe(RiskTier.Low);
-  });
-
-  test("deletePod is LOW (crashlooping pod is recreated by its controller)", () => {
-    expect(classifyRisk("deletePod")).toBe(RiskTier.Low);
-  });
-
-  test("cordon is LOW", () => {
-    expect(classifyRisk("cordon")).toBe(RiskTier.Low);
-  });
-
-  test("scale is MEDIUM (Opus-gated)", () => {
-    expect(classifyRisk("scale")).toBe(RiskTier.Medium);
-  });
-
-  test("setEnv is MEDIUM (Opus-gated)", () => {
-    expect(classifyRisk("setEnv")).toBe(RiskTier.Medium);
-  });
-
-  test("uncordon is MEDIUM (Opus-gated)", () => {
-    expect(classifyRisk("uncordon")).toBe(RiskTier.Medium);
-  });
-
-  test("openFixPR is MEDIUM (supervisor vets it before a PR opens)", () => {
-    expect(classifyRisk("openFixPR")).toBe(RiskTier.Medium);
-  });
-
-  test("an unknown kind is BLOCKED (fail safe — never executable)", () => {
-    expect(classifyRisk("deleteNamespace")).toBe(RiskTier.Blocked);
-    expect(classifyRisk("drain")).toBe(RiskTier.Blocked);
-    expect(classifyRisk("totallyMadeUp")).toBe(RiskTier.Blocked);
+  test("an unknown kind is ask", () => {
+    expect(levelFor("command", PRESETS.loose)).toBe("ask");
+    expect(levelFor("drain", PRESETS.loose)).toBe("ask");
   });
 });

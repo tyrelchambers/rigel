@@ -957,8 +957,8 @@ export interface AssistantAuditEntry {
   detail: string;
   backupRef?: string;
   analysis?: string;
-  /** Who initiated this action: the autonomous loop, a chat approval, or the
-   * autofix-PR pipeline. Absent on entries written before actor stamping shipped. */
+  /** Who initiated this action: the autonomous loop, a chat or desktop approval,
+   * or the autofix-PR pipeline. Absent on entries written before actor stamping shipped. */
   actor?: string;
 }
 
@@ -967,7 +967,10 @@ export interface AssistantQueuedSuggestion {
   incident: string;
   suggestion: string;
   reason: string;
+  fingerprint?: string;
   action?: SuggestedAction;
+  /** Already dispatched (a fix PR being opened): shown, not approvable. */
+  pending?: true;
 }
 
 /**
@@ -1100,11 +1103,6 @@ export function parseIncidentFingerprint(fp: string): ParsedFingerprint | null {
 /** Stable identity for an audit entry (mirrors Swift `id`). */
 export function auditEntryId(e: AssistantAuditEntry): string {
   return `${e.at}|${e.fingerprint}|${e.proposal ?? ""}|${e.outcome}`;
-}
-
-/** Stable identity for a queued suggestion (mirrors Swift `id`). */
-export function queuedSuggestionId(q: AssistantQueuedSuggestion): string {
-  return `${q.at}|${q.incident}|${q.suggestion}`;
 }
 
 // ---------------------------------------------------------------------------

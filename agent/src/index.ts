@@ -1,7 +1,8 @@
 import { fileURLToPath } from "node:url";
 import { realpathSync } from "node:fs";
 import { getHours, getMinutes } from "date-fns";
-import { classifyRisk, RiskTier } from "./classifier.js";
+import { levelFor } from "./classifier.js";
+import { isActionKind } from "@rigel/k8s/src/actionLevels.js";
 import { evaluateAlertRules, emptyAlertState } from "./alerts.js";
 import { collectMetricSnapshot } from "./metrics.js";
 import { loadConfig, resolveFixRunnerImage, type Config } from "./config.js";
@@ -34,18 +35,19 @@ import {
   type Incident,
 } from "./detector.js";
 import { kubectl, kubectlApply } from "./kubectl.js";
-import { isRepoFixAction, toKubectlInvocations, type SuggestedAction } from "./action.js";
+import { isRepoFixAction, resourceKeyFor, toKubectlInvocations, type SuggestedAction } from "./action.js";
 import { conjugateDone, couldntPhrase, greeting } from "./notifyVoice.js";
 import type { RepoFixDeps } from "./repoFixDispatch.js";
 import { runThreadedDiagnosis } from "./threadedDiagnosis.js";
 import { runChatTurn } from "./chatTurn.js";
 import { routeChatReply } from "./chatHandler.js";
-import { pendingFixesContext, sameInvocations } from "./chatQueue.js";
+import { pendingFixesContext, sameAction } from "./chatQueue.js";
+import { approveQueuedFix, consumeFixApprovals, type ApproveFixContext, type ApproveFixDeps } from "./approveQueuedFix.js";
 import { runWorker } from "./worker.js";
 import { diagnoseConfirmed } from "./diagnosePool.js";
 import { runSupervisor, type SupervisorOutput } from "./supervisor.js";
 import { executeAction } from "./executor.js";
-import { CORDONED_BY_ANNOTATION, READY_STABLE_MS, selfCordonedNodes } from "./selfCordon.js";
+import { CORDONED_BY_ANNOTATION, detectSelfCordonedNodes, selfUncordonAction } from "./selfCordon.js";
 import { executeActionGuarded } from "./executeActionGuarded.js";
 import { CircuitBreaker } from "./guardrails.js";
 import { runSelfCheck, formatSelfCheck } from "./selfCheck.js";
@@ -54,6 +56,8 @@ import {
   autoSilence,
   countFixPrBudget,
   dispositionFromAudit,
+  fixBudgetHold,
+  isApprovable,
   readState,
   reconcileQueue,
   recordIncident,
@@ -63,6 +67,7 @@ import {
   writeState,
   type AssistantState,
   type AuditEntry,
+  type Tier,
 } from "./state.js";
 import { evaluateDigests } from "./digest.js";
 
@@ -106,6 +111,29 @@ function repoFixDeps(): RepoFixDeps {
     jobExists: async (name, namespace) =>
       (await kubectl(["get", "job", name, "-n", namespace, "-o", "name"])).code === 0,
     apply: (manifest) => kubectlApply(manifest),
+  };
+}
+
+/** The IO an operator-approved fix PR needs: the dispatch seam, the in-flight
+ *  fix Jobs for the budget, and a fresh eligibility resolve for its workload. */
+function approveFixDeps(cfg: Config, rc: RuntimeConfig): ApproveFixDeps {
+  return {
+    repoFix: repoFixDeps(),
+    listFixJobs: () => fixReconcileDeps(cfg).listFixJobs(),
+    eligibility: async (incident) => {
+      const res = await kubectl(["get", "pods", "-n", incident.namespace, "-o", "json"]);
+      return resolveAutofixEligibility(rc.autofix, incident, res.code === 0 ? itemsOf(safeParse(res.stdout)) : [], {
+        resolveRepo: (ns, dep) => resolveWorkloadRepo({ kubectl }, ns, dep, cfg.stateNamespace),
+      });
+    },
+  };
+}
+
+function approveFixContext(cfg: Config, rc: RuntimeConfig, actor: ApproveFixContext["actor"], nowMs: number): ApproveFixContext {
+  return {
+    at: new Date(nowMs).toISOString(), nowMs, actor, tier: levelFor("openFixPR", rc.actionLevels),
+    maxPerDay: rc.autofix.maxPerDay, auditMaxEntries: cfg.auditMaxEntries,
+    namespace: cfg.stateNamespace, image: cfg.fixRunnerImage,
   };
 }
 
@@ -161,10 +189,11 @@ function itemsOf(raw: unknown): Record<string, unknown>[] {
   return Array.isArray(list?.items) ? (list.items as Record<string, unknown>[]) : [];
 }
 
-async function detectAll(cfg: Config, autofix: AutofixConfig): Promise<{ incidents: Incident[]; pods: Record<string, unknown>[]; deps: Record<string, unknown>[]; podsOk: boolean; depsOk: boolean; logScanned: boolean }> {
-  const [podsRes, depsRes] = await Promise.all([
+async function detectAll(cfg: Config, autofix: AutofixConfig): Promise<{ incidents: Incident[]; pods: Record<string, unknown>[]; deps: Record<string, unknown>[]; nodes: Record<string, unknown>[]; podsOk: boolean; depsOk: boolean; nodesOk: boolean; staleCordonMarkers: string[]; logScanned: boolean }> {
+  const [podsRes, depsRes, nodesRes] = await Promise.all([
     kubectl(["get", "pods", ...nsArgs(cfg), "-o", "json"]),
     kubectl(["get", "deployments", ...nsArgs(cfg), "-o", "json"]),
+    kubectl(["get", "nodes", "-o", "json"]),
   ]);
   const parsedPods = podsRes.code === 0 ? safeParse(podsRes.stdout) : { items: [] };
   const parsedDeps = depsRes.code === 0 ? safeParse(depsRes.stdout) : { items: [] };
@@ -173,6 +202,9 @@ async function detectAll(cfg: Config, autofix: AutofixConfig): Promise<{ inciden
   let incidents: Incident[] = [];
   if (podsRes.code === 0) incidents.push(...detectUnhealthyPods(parsedPods));
   if (depsRes.code === 0) incidents.push(...detectDegradedDeployments(parsedDeps));
+  const nodes = nodesRes.code === 0 ? itemsOf(safeParse(nodesRes.stdout)) : [];
+  const selfCordon = detectSelfCordonedNodes(nodes, Date.now());
+  if (nodesRes.code === 0) incidents.push(...selfCordon.incidents);
 
   // Slice-1 bounded log scan: running pods the status checks didn't already flag
   // may be logging errors WITHOUT crashing. Gated to the autofix opt-in — OFF
@@ -191,67 +223,12 @@ async function detectAll(cfg: Config, autofix: AutofixConfig): Promise<{ inciden
     }
   }
   log(
-    `detect: pods exit=${podsRes.code} (${podsRes.stdout.length}b) deps exit=${depsRes.code} (${depsRes.stdout.length}b) → ${incidents.length} incident(s) before filter` +
+    `detect: pods exit=${podsRes.code} (${podsRes.stdout.length}b) deps exit=${depsRes.code} (${depsRes.stdout.length}b) nodes exit=${nodesRes.code} (${nodesRes.stdout.length}b) → ${incidents.length} incident(s) before filter` +
       (incidents.length ? `: ${incidents.map((i) => `${i.namespace}/${i.name}:${i.reason}`).join(", ")}` : "") +
       (podsRes.code !== 0 ? ` | pods stderr: ${podsRes.stderr.slice(0, 200)}` : ""),
   );
   // (namespace filtering moved to tick() so it uses the LIVE rc.limits.namespaces)
-  return { incidents, pods, deps, podsOk: podsRes.code === 0, depsOk: depsRes.code === 0, logScanned };
-}
-
-/** Node objects for node-scoped notReady alerts and for undoing the agent's own
- *  cordons (selfCordon). */
-async function collectNodes(): Promise<Record<string, unknown>[]> {
-  const res = await kubectl(["get", "nodes", "-o", "json"]);
-  return res.code === 0 ? itemsOf(safeParse(res.stdout)) : [];
-}
-
-/** Uncordon nodes the agent cordoned itself once they've been healthy for
- *  READY_STABLE_MS. Runs outside the supervisor, quiet-hours window and circuit
- *  breaker on purpose: it only reverses a cordon the agent made, and a cordon left
- *  in place strands every workload pinned to that node. */
-async function undoSelfCordons(
-  state: AssistantState,
-  cfg: Config,
-  nodes: Record<string, unknown>[],
-  now: number,
-  notifications: string[],
-): Promise<AssistantState> {
-  const ts = new Date(now).toISOString();
-  const plan = selfCordonedNodes(nodes, now);
-  for (const node of plan.stale) {
-    const res = await kubectl(["annotate", "node", node, `${CORDONED_BY_ANNOTATION}-`]);
-    log(res.code === 0 ? `cleared stale cordon marker on ${node}` : `couldn't clear cordon marker on ${node}: ${res.stderr.trim()}`);
-  }
-  for (const node of plan.uncordon) {
-    const action: SuggestedAction = {
-      label: `Uncordon ${node} now that it's been healthy again for ${READY_STABLE_MS / 60_000} minutes`,
-      kind: "uncordon",
-      node,
-    };
-    const incident = `node/${node}: cordoned by the assistant, Ready again`;
-    try {
-      const result = await executeAction(action);
-      let backupRef: string | undefined;
-      if (result.backupYaml) {
-        const key = `${ts}_uncordon_${node}`.replace(/[^A-Za-z0-9_.-]/g, "_");
-        backupRef = await storeBackup(cfg.backupsConfigMap, cfg.stateNamespace, key, result.backupYaml, cfg.maxBackups);
-      }
-      state = appendAudit(state, {
-        at: ts, fingerprint: `selfCordon|${node}`, incident, proposal: action.label,
-        command: result.commands.join(" && "), tier: "low", verdict: "auto",
-        outcome: result.success ? "success" : "failure", detail: truncate(result.output), backupRef, actor: "autonomous",
-      }, cfg.auditMaxEntries);
-      log(`${result.success ? "✓" : "✗"} ${action.label} — ${result.commands.join(" && ")}`);
-      notifications.push(result.success ? `✓ ${conjugateDone(action.kind, action.label)}` : `✗ ${couldntPhrase(action.label)}`);
-    } catch (e) {
-      state = appendAudit(state, {
-        at: ts, fingerprint: `selfCordon|${node}`, incident, proposal: action.label,
-        tier: "low", verdict: "auto", outcome: "failure", detail: String(e), actor: "autonomous",
-      }, cfg.auditMaxEntries);
-    }
-  }
-  return state;
+  return { incidents, pods, deps, nodes, podsOk: podsRes.code === 0, depsOk: depsRes.code === 0, nodesOk: nodesRes.code === 0, staleCordonMarkers: selfCordon.stale, logScanned };
 }
 
 export interface LoopState {
@@ -361,6 +338,7 @@ export async function tick(
       // would wrongly auto-clear a previously-queued loggedError item.
       if (detection.logScanned) checkedKinds.add("loggedError");
       if (detection.depsOk) checkedKinds.add("degradedDeployment");
+      if (detection.nodesOk) checkedKinds.add("cordonedNode");
       const recon = reconcileQueue(state.queue, presentNow, checkedKinds, now, cfg.queueTtlMs);
       if (recon.cleared.length > 0) {
         state = { ...state, queue: recon.kept };
@@ -384,8 +362,10 @@ export async function tick(
     // metrics backend; collectMetricSnapshot is a no-op (no cluster calls) unless
     // an enabled metricThreshold rule exists and a backend is detected.
     const metricSnapshot = await collectMetricSnapshot(rc.alertRules, now);
-    const nodes = await collectNodes();
-    state = await undoSelfCordons(state, cfg, nodes, now, notifications);
+    for (const node of detection.staleCordonMarkers) {
+      const r = await kubectl(["annotate", "node", node, `${CORDONED_BY_ANNOTATION}-`]);
+      log(r.code === 0 ? `cleared stale cordon marker on ${node}` : `couldn't clear cordon marker on ${node}: ${r.stderr.trim()}`);
+    }
     const alertResult = evaluateAlertRules(
       rc.alertRules,
       detection.pods,
@@ -393,7 +373,7 @@ export async function tick(
       state.alertState ?? emptyAlertState(),
       now,
       metricSnapshot,
-      nodes,
+      detection.nodes,
     );
     state = { ...state, alertState: alertResult.alertState };
     for (const ev of alertResult.events) notifications.push(ev.message);
@@ -409,11 +389,12 @@ export async function tick(
     // (only when a source actually resolved), and Stage B reuses it to route an
     // openFixPR proposal without re-resolving — and without the 2b bug of treating a
     // pod name as a Deployment name. Short-circuits to no cluster IO when autofix is
-    // off / out of scope, so this is cheap when autofix isn't in play.
+    // off / out of scope / openFixPR is Off, so this is cheap when autofix isn't in play.
     const eligibility = new Map<string, AutofixEligibility>(
       await Promise.all(
         confirmed.map(async (incident) => {
-          let e: AutofixEligibility;
+          let e: AutofixEligibility = { inScope: false, repo: null };
+          if (rc.actionLevels.openFixPR === "off") return [fingerprint(incident), e] as const;
           try {
             e = await resolveAutofixEligibility(rc.autofix, incident, detection.pods, {
               resolveRepo: (ns, dep) => resolveWorkloadRepo({ kubectl }, ns, dep, cfg.stateNamespace),
@@ -437,7 +418,9 @@ export async function tick(
     // deterministic guardrails stay in Stage B below.
     const packets = await diagnoseConfirmed(
       {
-        diagnose: (incident) => runWorker(rc, [incident], eligibility.get(fingerprint(incident))?.repo ?? null),
+        diagnose: (incident) => incident.incidentKind === "cordonedNode"
+          ? Promise.resolve({ verdict: "actionable", verdictReason: "node is Ready again", actions: [selfUncordonAction(incident.name)], analysis: describe(incident), costUsd: 0, failed: false })
+          : runWorker(rc, [incident], eligibility.get(fingerprint(incident))?.repo ?? null),
         limit: cfg.maxConcurrentDiagnoses,
       },
       confirmed,
@@ -449,8 +432,8 @@ export async function tick(
     // dispatches this tick are added via fixPrsDispatchedThisTick below, so the cap
     // holds even before the reconcile records them. The Jobs are listed ONCE (not
     // re-listed per dispatch) to dodge read-after-write races; the in-tick counter
-    // covers same-tick dispatches. Independent of the kubectl circuit breaker (that
-    // caps per-resource-per-hour cluster mutations; this caps PR creation per day).
+    // covers same-tick dispatches. An additional cap on top of the circuit breaker
+    // (that caps per-resource-per-hour actions; this caps PR creation per day).
     let fixBudgetBaseline = 0;
     let fixPrsDispatchedThisTick = 0;
     // Fail CLOSED: if the in-flight Job list can't be read this tick we can't verify
@@ -474,13 +457,16 @@ export async function tick(
       }
     }
 
+    const autonomyQueueWhy = decideAutonomy(rc.mode, rc.window, minOfDay(now)) === "queue"
+      ? rc.mode === "advisory" ? "advisory mode — suggestion only" : "outside quiet-hours window — queued for approval"
+      : null;
+
     // Stage B: decide + execute one incident at a time, in confirmed order, so the
     // circuit breaker and audit log stay deterministic regardless of which
     // diagnosis finished first.
     for (const packet of packets) {
       const incident = packet.incident;
       const fp = fingerprint(incident);
-      const resourceKey = `${incident.namespace}/${incident.name}`;
 
       // Diagnosed — mark handled so we don't re-dispatch next tick.
       loop.handled.add(fp);
@@ -543,10 +529,10 @@ export async function tick(
         }
       }
 
-      // Remediation. A kubectl action executes regardless of the verdict (the
-      // classifier / circuit breaker / MEDIUM supervisor below are the real safety
-      // net); an `openFixPR` additionally requires an "actionable" verdict (gated in
-      // its own branch). No proposed action ⇒ nothing to do (skipped, low-noise).
+      // Remediation. A kubectl action executes regardless of the verdict (its action
+      // level / supervisor / circuit breaker below are the real safety net); an
+      // `openFixPR` additionally requires an "actionable" verdict (gated in its own
+      // branch). No proposed action ⇒ nothing to do (skipped, low-noise).
       if (!actions || actions.length === 0) {
         state = record(state, cfg, {
           at: ts, fingerprint: fp, incident: describe(incident), tier: "low",
@@ -556,6 +542,24 @@ export async function tick(
       }
 
       const action = actions[0]!;
+      const level = levelFor(action.kind, rc.actionLevels);
+      if (!isActionKind(action.kind)) {
+        const reason = "not an action the agent can take; run it yourself in Rigel";
+        state = queue(state, cfg, ts, fp, describe(incident), action.label, reason);
+        state = record(state, cfg, {
+          at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
+          tier: "ask", outcome: "queued", detail: reason, analysis: truncate(analysis),
+        });
+        notifications.push(`▸ You'll need to run this one yourself in Rigel: ${action.label} (${describe(incident)})`);
+        continue;
+      }
+      if (level === "off") {
+        state = record(state, cfg, {
+          at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
+          tier: level, outcome: "skipped", detail: "turned off in Action levels", analysis: truncate(analysis),
+        });
+        continue;
+      }
 
       // Repo-fix proposals (openFixPR) never mutate the cluster — they open a PR
       // against the workload's GitOps source. They are routed entirely off the
@@ -564,15 +568,17 @@ export async function tick(
       //   1. the verdict must be "actionable" — a non-actionable verdict means no PR;
       //   2. the proposal must be DISPATCHABLE (in scope + a resolved GitOps source) —
       //      otherwise dispatchRepoFix records the precise skip and no review is spent;
-      //   3. the adversarial fix-quality supervisor (buildFixPrompt) must APPROVE the
-      //      proposed file change before a PR is opened on the user's behalf —
-      //      reject ⇒ skip, escalate / supervisor-error ⇒ queue for a human.
+      //   3. its action level: Ask me ⇒ queue for a human; Review ⇒ the adversarial
+      //      fix-quality supervisor (buildFixPrompt) must APPROVE the proposed file
+      //      change (reject ⇒ skip, escalate / supervisor-error ⇒ queue for a human);
+      //      Auto ⇒ dispatch;
+      //   4. then autonomy and the circuit breaker, like every action (a veto queues it).
       // Eligibility is reused from Stage A (the owning-Deployment walk), not
       // re-derived from the action (which mistook a pod name for a Deployment — 2b).
       if (isRepoFixAction(action.kind)) {
         if (packet.verdict !== "actionable") {
           state = record(state, cfg, {
-            at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label, tier: "medium",
+            at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label, tier: level,
             outcome: "skipped",
             detail: `openFixPR proposed, but the worker verdict was "${packet.verdict}" (not actionable) — no PR`,
             analysis: truncate(analysis),
@@ -588,7 +594,7 @@ export async function tick(
           const outcome = await dispatchRepoFix(repoFixDeps(), state, {
             at: ts, fingerprint: fp, incident: describe(incident), action, analysis,
             repo: e.repo, inScope: e.inScope, auditMaxEntries: cfg.auditMaxEntries,
-            namespace: cfg.stateNamespace, image: cfg.fixRunnerImage,
+            namespace: cfg.stateNamespace, image: cfg.fixRunnerImage, tier: level,
           });
           state = outcome.state;
           if (outcome.notification) notifications.push(outcome.notification);
@@ -599,61 +605,85 @@ export async function tick(
         // budget never spends an Opus review, and BEFORE any Job is created, so we
         // can never open more than the cap. An unreadable in-flight list defers ALL
         // dispatch this tick (fail closed). Skipped fixes are recorded for the audit.
-        const cap = rc.autofix.maxPerDay;
-        if (fixListUnreadable || fixBudgetBaseline + fixPrsDispatchedThisTick >= cap) {
-          const detail = fixListUnreadable
-            ? "fix-PR budget unverifiable (the in-flight fix-Job list was unreadable this tick): deferring"
-            : `daily fix-PR budget reached (${cap}/${cap}): not opening another fix PR until a slot frees up`;
+        const budgetHold = fixBudgetHold(fixListUnreadable ? null : fixBudgetBaseline + fixPrsDispatchedThisTick, rc.autofix.maxPerDay);
+        if (budgetHold) {
           state = record(state, cfg, {
             at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-            tier: "medium", outcome: "skipped", detail, analysis: truncate(analysis),
+            tier: level, outcome: "skipped", detail: budgetHold, analysis: truncate(analysis),
           });
-          log(fixListUnreadable
-            ? `fix-PR budget unverifiable (in-flight Job list unreadable); skipping ${action.label}`
-            : `fix-PR budget reached (${cap}/${cap}); skipping ${action.label}`);
+          log(`${budgetHold}; skipping ${action.label}`);
           continue;
         }
-        // Dispatchable: the fix-quality supervisor judges the PROPOSED FILE CHANGE
-        // (root-cause / minimal / safe-to-merge), NOT a kubectl command — pass an
-        // empty command so previewCommand (which THROWS for openFixPR) is never run.
-        let sup: SupervisorOutput;
-        try {
-          sup = await runSupervisor(rc, incident, action, analysis, "");
-        } catch (err) {
-          // Fail closed: supervisor unreachable / malformed verdict → never open a PR.
-          state = queue(state, cfg, ts, fp, describe(incident), action.label, "fix PR — supervisor error (fail-closed)", action);
+        if (level === "ask") {
+          state = queue(state, cfg, ts, fp, describe(incident), action.label, "fix PR, set to Ask me in Action levels", action);
           state = record(state, cfg, {
             at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-            tier: "medium", verdict: "escalated", outcome: "queued",
-            detail: `fix-quality supervisor failed (fail-closed): ${String(err)}`,
+            tier: level, outcome: "queued", detail: "set to Ask me in Action levels", analysis: truncate(analysis),
           });
+          notifications.push(`▸ Waiting on your OK: ${action.label} — ${describe(incident)} (set to Ask me in Action levels)`);
           continue;
         }
-        if (sup.verdict.decision === "reject") {
+        if (level === "review") {
+          // Dispatchable: the fix-quality supervisor judges the PROPOSED FILE CHANGE
+          // (root-cause / minimal / safe-to-merge), NOT a kubectl command — pass an
+          // empty command so previewCommand (which THROWS for openFixPR) is never run.
+          let sup: SupervisorOutput;
+          try {
+            sup = await runSupervisor(rc, incident, action, analysis, "");
+          } catch (err) {
+            // Fail closed: supervisor unreachable / malformed verdict → never open a PR.
+            state = queue(state, cfg, ts, fp, describe(incident), action.label, "fix PR, set to Review: supervisor error (fail-closed)", action);
+            state = record(state, cfg, {
+              at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
+              tier: level, verdict: "escalated", outcome: "queued",
+              detail: `fix-quality supervisor failed (fail-closed): ${String(err)}`,
+            });
+            continue;
+          }
+          if (sup.verdict.decision === "reject") {
+            state = record(state, cfg, {
+              at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
+              tier: level, verdict: "rejected", outcome: "skipped",
+              detail: `Opus rejected the fix (conf ${sup.verdict.confidence.toFixed(2)}): ${sup.verdict.reason}`, analysis: truncate(analysis),
+            });
+            continue;
+          }
+          if (sup.verdict.decision === "escalate") {
+            state = queue(state, cfg, ts, fp, describe(incident), action.label, `fix PR, set to Review: Opus escalated: ${sup.verdict.reason}`, action);
+            state = record(state, cfg, {
+              at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
+              tier: level, verdict: "escalated", outcome: "queued",
+              detail: `Opus escalated the fix (conf ${sup.verdict.confidence.toFixed(2)}): ${sup.verdict.reason}`, analysis: truncate(analysis),
+            });
+            notifications.push(`▸ I'd like your OK to open a fix PR: ${action.label} — ${describe(incident)}`);
+            continue;
+          }
+          log(`Opus approved fix PR (conf ${sup.verdict.confidence.toFixed(2)}): ${action.label}`);
+        }
+        if (autonomyQueueWhy) {
+          state = queue(state, cfg, ts, fp, describe(incident), action.label, autonomyQueueWhy, action);
           state = record(state, cfg, {
             at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-            tier: "medium", verdict: "rejected", outcome: "skipped",
-            detail: `Opus rejected the fix (conf ${sup.verdict.confidence.toFixed(2)}): ${sup.verdict.reason}`, analysis: truncate(analysis),
+            tier: level, outcome: "queued", detail: autonomyQueueWhy, analysis: truncate(analysis),
           });
+          notifications.push(`▸ Waiting on your OK: ${action.label} — ${describe(incident)} (${autonomyQueueWhy})`);
           continue;
         }
-        if (sup.verdict.decision === "escalate") {
-          state = queue(state, cfg, ts, fp, describe(incident), action.label, `fix PR — Opus escalated: ${sup.verdict.reason}`, action);
-          state = record(state, cfg, {
-            at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-            tier: "medium", verdict: "escalated", outcome: "queued",
-            detail: `Opus escalated the fix (conf ${sup.verdict.confidence.toFixed(2)}): ${sup.verdict.reason}`, analysis: truncate(analysis),
-          });
-          notifications.push(`▸ I'd like your OK to open a fix PR: ${action.label} — ${describe(incident)}`);
+        const fixKey = resourceKeyFor(action);
+        const fixVerdict = cb.canAct(fp, fixKey, now);
+        if (!fixVerdict.allowed) {
+          const held = holdForBreaker(state, cfg, ts, fp, incident, action, level, fixVerdict.reason, analysis);
+          state = held.state;
+          notifications.push(held.notification);
           continue;
         }
-        // approve → create the fix ConfigMap + Job via the seam (dispatchRepoFix
+        cb.record(fp, fixKey, now);
+        // Approved or Auto → create the fix ConfigMap + Job via the seam (dispatchRepoFix
         // queues it pending the fix-runner, which opens the actual PR).
-        log(`Opus approved fix PR (conf ${sup.verdict.confidence.toFixed(2)}): ${action.label}`);
         const outcome = await dispatchRepoFix(repoFixDeps(), state, {
           at: ts, fingerprint: fp, incident: describe(incident), action, analysis,
           repo: e.repo, inScope: e.inScope, auditMaxEntries: cfg.auditMaxEntries,
-          namespace: cfg.stateNamespace, image: cfg.fixRunnerImage,
+          namespace: cfg.stateNamespace, image: cfg.fixRunnerImage, tier: level,
         });
         state = outcome.state;
         if (outcome.notification) {
@@ -665,49 +695,55 @@ export async function tick(
         continue;
       }
 
-      const tier = classifyRisk(action.kind);
-      const tierStr = tier === RiskTier.Medium ? "medium" : "low";
-
-      if (tier === RiskTier.Blocked) {
-        state = queue(state, cfg, ts, fp, describe(incident), action.label, "destructive — RBAC-blocked; run manually in Rigel");
+      let command: string;
+      try {
+        command = previewCommand(action);
+      } catch (e) {
         state = record(state, cfg, {
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-          tier: "blocked", outcome: "queued", detail: "queued for human (destructive)", analysis: truncate(analysis),
+          tier: level, outcome: "skipped", detail: `malformed proposal: ${e instanceof Error ? e.message : String(e)}`, analysis: truncate(analysis),
         });
-        notifications.push(`▸ This one's destructive, so I'll wait for your OK: ${action.label} — ${describe(incident)}`);
+        continue;
+      }
+      if (level === "ask") {
+        state = queue(state, cfg, ts, fp, describe(incident), action.label, "set to Ask me in Action levels", action);
+        state = record(state, cfg, {
+          at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
+          command, tier: level, outcome: "queued", detail: "set to Ask me in Action levels", analysis: truncate(analysis),
+        });
+        notifications.push(`▸ Waiting on your OK: ${action.label} — ${describe(incident)} (set to Ask me in Action levels)`);
         continue;
       }
 
-      // MEDIUM actions must clear the adversarial Opus supervisor first. LOW
+      // Review actions must clear the adversarial Opus supervisor first. Auto
       // actions execute on the deterministic guardrails alone.
       let execVerdict: "auto" | "approved" = "auto";
-      if (tier === RiskTier.Medium) {
-        const command = previewCommand(action);
+      if (level === "review") {
         let sup: SupervisorOutput;
         try {
           sup = await runSupervisor(rc, incident, action, analysis, command);
         } catch (e) {
           // Fail closed: supervisor unreachable / malformed verdict → never act.
-          state = queue(state, cfg, ts, fp, describe(incident), action.label, "medium-risk — supervisor error (fail-closed)", action);
+          state = queue(state, cfg, ts, fp, describe(incident), action.label, "set to Review: supervisor error (fail-closed)", action);
           state = record(state, cfg, {
             at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-            tier: "medium", verdict: "escalated", outcome: "queued", detail: `supervisor failed (fail-closed): ${String(e)}`,
+            tier: level, verdict: "escalated", outcome: "queued", detail: `supervisor failed (fail-closed): ${String(e)}`,
           });
           continue;
         }
         if (sup.verdict.decision === "reject") {
           state = record(state, cfg, {
             at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-            tier: "medium", verdict: "rejected", outcome: "skipped",
+            tier: level, verdict: "rejected", outcome: "skipped",
             detail: `Opus rejected (conf ${sup.verdict.confidence.toFixed(2)}): ${sup.verdict.reason}`,
           });
           continue;
         }
         if (sup.verdict.decision === "escalate") {
-          state = queue(state, cfg, ts, fp, describe(incident), action.label, `medium-risk — Opus escalated: ${sup.verdict.reason}`, action);
+          state = queue(state, cfg, ts, fp, describe(incident), action.label, `set to Review: Opus escalated: ${sup.verdict.reason}`, action);
           state = record(state, cfg, {
             at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-            tier: "medium", verdict: "escalated", outcome: "queued",
+            tier: level, verdict: "escalated", outcome: "queued",
             detail: `Opus escalated (conf ${sup.verdict.confidence.toFixed(2)}): ${sup.verdict.reason}`, analysis: truncate(analysis),
           });
           notifications.push(`▸ I'd like your OK on this one: ${action.label} — ${describe(incident)}`);
@@ -718,26 +754,25 @@ export async function tick(
       }
 
       // Autonomy gate: advisory mode (or being outside the quiet-hours window)
-      // queues the action for approval instead of auto-executing — even LOW and
-      // Opus-approved MEDIUM.
-      if (decideAutonomy(rc.mode, rc.window, minOfDay(now)) === "queue") {
-        const why = rc.mode === "advisory" ? "advisory mode — suggestion only" : "outside quiet-hours window — queued for approval";
-        state = queue(state, cfg, ts, fp, describe(incident), action.label, why, action);
+      // queues the action for approval instead of auto-executing — even Auto and
+      // Opus-approved Review.
+      if (autonomyQueueWhy) {
+        state = queue(state, cfg, ts, fp, describe(incident), action.label, autonomyQueueWhy, action);
         state = record(state, cfg, {
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-          command: previewCommand(action), tier: tierStr, outcome: "queued", detail: why, analysis: truncate(analysis),
+          command, tier: level, outcome: "queued", detail: autonomyQueueWhy, analysis: truncate(analysis),
         });
-        notifications.push(`▸ Waiting on your OK: ${action.label} — ${describe(incident)} (${why})`);
+        notifications.push(`▸ Waiting on your OK: ${action.label} — ${describe(incident)} (${autonomyQueueWhy})`);
         continue;
       }
 
-      // LOW (auto) or MEDIUM (Opus-approved) — execute under the circuit breaker.
+      // Auto or Review (Opus-approved) — execute under the circuit breaker.
+      const resourceKey = resourceKeyFor(action);
       const cbVerdict = cb.canAct(fp, resourceKey, now);
       if (!cbVerdict.allowed) {
-        state = record(state, cfg, {
-          at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-          tier: tierStr, outcome: "skipped", detail: cbVerdict.reason ?? "blocked by circuit breaker", analysis: truncate(analysis),
-        });
+        const held = holdForBreaker(state, cfg, ts, fp, incident, action, level, cbVerdict.reason, analysis, command);
+        state = held.state;
+        notifications.push(held.notification);
         continue;
       }
 
@@ -751,7 +786,7 @@ export async function tick(
         }
         state = record(state, cfg, {
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-          command: result.commands.join(" && "), tier: tierStr, verdict: execVerdict,
+          command: result.commands.join(" && "), tier: level, verdict: execVerdict,
           outcome: result.success ? "success" : "failure", detail: truncate(result.output), backupRef, analysis: truncate(analysis),
         });
         log(`${result.success ? "✓" : "✗"} ${action.label} — ${result.commands.join(" && ")}`);
@@ -763,9 +798,16 @@ export async function tick(
       } catch (e) {
         state = record(state, cfg, {
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
-          tier: tierStr, verdict: execVerdict, outcome: "failure", detail: String(e), analysis: truncate(analysis),
+          tier: level, verdict: execVerdict, outcome: "failure", detail: String(e), analysis: truncate(analysis),
         });
       }
+    }
+
+    // Fix PRs the operator approved from the desktop since the last tick.
+    if (rc.approvedFixes.length > 0) {
+      const approved = await consumeFixApprovals(approveFixDeps(cfg, rc), cb, state, rc.approvedFixes, approveFixContext(cfg, rc, "desktop", now));
+      state = approved.state;
+      notifications.push(...approved.notifications);
     }
 
     // Phase-4 loop close: reconcile any FINISHED fix-runner Jobs — record the opened
@@ -774,7 +816,7 @@ export async function tick(
     // re-processes a still-present Job (dedup-safe) instead of losing an opened PR.
     try {
       const recon = await reconcileFixJobs(fixReconcileDeps(cfg), state, {
-        at: ts, auditMaxEntries: cfg.auditMaxEntries,
+        at: ts, auditMaxEntries: cfg.auditMaxEntries, tier: levelFor("openFixPR", rc.actionLevels),
       });
       state = recon.state;
       notifications.push(...recon.notifications);
@@ -859,36 +901,43 @@ function buildMessageHandler(
         timestamp,
         framed,
       );
-      return routeChatReply(reply, (action) => executeChatAction(cfg, cb, source, action));
+      return routeChatReply(reply, (action) => executeChatAction(cfg, rc, cb, source, action));
     },
     log,
   };
 }
 
 /** Run an action the operator confirmed over chat. The human is the approver, so
- * — like the queue-approve path — a MEDIUM-tier fix runs without the unattended
- * Opus supervisor, but every other guardrail still applies: BLOCKED/repo-fix
+ * — like the queue-approve path — a Review-level fix runs without the unattended
+ * Opus supervisor, but every other guardrail still applies: unknown-kind/repo-fix
  * items are refused, the circuit breaker can veto, and a backup is snapshotted
  * before mutating. When the action matches a fix the loop had queued (correlated
- * by its kubectl invocation), it inherits that item's fingerprint and is dropped
- * from the queue on run so the desktop UI stops showing it as pending. */
+ * by its kubectl invocation), it inherits that item's fingerprint, level and
+ * breaker key, skips the breaker check (the approval is the decision), and is
+ * dropped from the queue on run so the desktop UI stops showing it as pending.
+ * A queued fix PR the operator approves is opened via approveQueuedFix; a fix PR
+ * that matches nothing queued is refused. */
 async function executeChatAction(
   cfg: Config,
+  rc: RuntimeConfig,
   cb: CircuitBreaker,
   source: string,
   action: SuggestedAction,
 ): Promise<string> {
-  const tier = classifyRisk(action.kind);
-  const ns = action.namespace ?? "default";
-  const targetName = action.deployment ?? action.pod ?? action.node
-    ?? (action.args ? action.args.slice(0, 3).join("-") : action.label);
-  const resourceKey = `${ns}/${targetName}`;
   const pre = await readState(cfg.stateConfigMap, cfg.stateNamespace);
-  const matched = pre.queue.find((q) => q.action && sameInvocations(q.action, action));
+  const matched = pre.queue.filter(isApprovable).find((q) => sameAction(q.action, action));
+  if (matched && isRepoFixAction(matched.action.kind)) {
+    const out = await approveQueuedFix(approveFixDeps(cfg, rc), cb, pre, matched, approveFixContext(cfg, rc, "chat", Date.now()));
+    if (out.state !== pre) await writeState(cfg.stateConfigMap, cfg.stateNamespace, out.state);
+    return out.reply;
+  }
+  const target = matched?.action ?? action;
+  const level = levelFor(target.kind, rc.actionLevels);
+  const resourceKey = resourceKeyFor(target);
   const fp = matched?.fingerprint || matched?.incident || `chat|${source}`;
   const incident = matched?.incident || "chat request";
 
-  return executeActionGuarded(cb, { action, fingerprint: fp, resourceKey }, {
+  return executeActionGuarded(cb, { action, fingerprint: fp, resourceKey, approved: !!matched }, {
     now: () => Date.now(),
     execute: (a) => executeAction(a),
     storeBackup: async (key, yaml) => storeBackup(cfg.backupsConfigMap, cfg.stateNamespace, key, yaml, cfg.maxBackups),
@@ -896,7 +945,7 @@ async function executeChatAction(
       let s = await readState(cfg.stateConfigMap, cfg.stateNamespace);
       s = appendAudit(s, {
         at: new Date().toISOString(), fingerprint: fp, incident, proposal: action.label,
-        command, tier: tier === RiskTier.Medium ? "medium" : "low",
+        command, tier: level,
         verdict: "approved", outcome: success ? "success" : "failure",
         detail: truncate(`${matched ? "flagged fix approved" : "confirmed"} via chat — ${output}`), backupRef,
         actor: "chat",
@@ -904,7 +953,7 @@ async function executeChatAction(
       // Running a queued fix clears it (whether it succeeded or not — a failure is
       // in the audit log and re-detection re-queues); re-filter the fresh state by
       // value since `matched` came from an earlier read.
-      if (matched) s = { ...s, queue: s.queue.filter((q) => !(q.action && sameInvocations(q.action, action))) };
+      if (matched) s = { ...s, queue: s.queue.filter((q) => !(q.action && sameAction(q.action, action))) };
       await writeState(cfg.stateConfigMap, cfg.stateNamespace, s);
     },
     log,
@@ -998,6 +1047,30 @@ function record(state: AssistantState, cfg: Config, entry: AuditEntry): Assistan
   return next;
 }
 
+/** A circuit-breaker veto queues the action for the operator's approval (the
+ *  breaker caps unattended actions only) and says why. */
+function holdForBreaker(
+  state: AssistantState,
+  cfg: Config,
+  ts: string,
+  fp: string,
+  incident: Incident,
+  action: SuggestedAction,
+  level: Tier,
+  breakerReason: string | undefined,
+  analysis: string,
+  command?: string,
+): { state: AssistantState; notification: string } {
+  const reason = breakerReason ?? "blocked by circuit breaker";
+  const why = `hit the action limit: ${reason.replace(/^circuit-breaker: /, "")}`;
+  let next = queue(state, cfg, ts, fp, describe(incident), action.label, why, action);
+  next = record(next, cfg, {
+    at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
+    command, tier: level, outcome: "queued", detail: reason, analysis: truncate(analysis),
+  });
+  return { state: next, notification: `▸ Waiting on your OK: ${action.label} — ${describe(incident)} (${why})` };
+}
+
 /** Surface a loud report when the worker provider's credential is failing (an
  * expired Claude token, a bad API key, etc.). Provider-agnostic: the Assistant
  * tab shows which provider each role uses and where to update its credential.
@@ -1040,11 +1113,13 @@ function describe(i: Incident): string {
   return `${loc}: ${i.reason}${i.detail ? ` (${i.detail})` : ""}`;
 }
 
-/** A compact `namespace/name` for an incident fingerprint (kind|ns|name|reason),
- *  falling back to the raw fingerprint when it isn't in that shape. */
+/** A compact `namespace/name` (or just `name` when cluster-scoped) for an incident
+ *  fingerprint (kind|ns|name|reason), falling back to the raw fingerprint when it
+ *  isn't in that shape. */
 function shortFingerprint(fp: string): string {
   const p = fp.split("|");
-  return p.length >= 3 && p[1] && p[2] ? `${p[1]}/${p[2]}` : fp;
+  if (p.length < 3 || !p[2]) return fp;
+  return p[1] ? `${p[1]}/${p[2]}` : p[2];
 }
 
 const AUTO_SILENCE_PREFIX = "Auto-silenced ";

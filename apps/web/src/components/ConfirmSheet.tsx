@@ -690,7 +690,7 @@ export function ConfirmSheet({
                     ? applyState.pending
                     : isSudo
                       ? !canRunAsRoot
-                      : isPending || (!isPurge && !commandString && !previewError)
+                      : isPending || !!previewError || (!isPurge && !commandString)
               }
             >
               {isFix ? (

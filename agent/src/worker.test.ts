@@ -4,6 +4,7 @@ import * as runModelMod from "./runModel.js";
 import type { RuntimeConfig } from "./runtimeConfig.js";
 import type { Incident } from "./detector.js";
 import type { ResolvedRepo } from "./repoResolve.js";
+import { PRESETS } from "@rigel/k8s/src/actionLevels.js";
 
 function rc(): RuntimeConfig {
   return {
@@ -15,7 +16,8 @@ function rc(): RuntimeConfig {
     limits: { pollIntervalMs: 30000, maxPerResourcePerHour: 3, maxPerNight: 20, maxAttemptsPerIncident: 3, confirmPolls: 2, namespaces: [] },
     autofix: { enabled: false, scope: { projects: [] }, maxPerDay: 5 },
     digests: [],
-    notifyAllowlist: null,
+    notifyAllowlist: null, approvedFixes: [],
+    actionLevels: PRESETS.balanced,
   } as RuntimeConfig;
 }
 const INC: Incident = { incidentKind: "unhealthyPod", name: "nginx", namespace: "default", reason: "CrashLoopBackOff" } as Incident;
@@ -120,5 +122,61 @@ describe("runWorker", () => {
     await runWorker(rc(), [INC], null);
     const prompt = spy.mock.calls[0]![0].prompt;
     expect(prompt).toMatch(/not autofix-eligible/i);
+  });
+
+  test("the system prompt omits kinds set to Off", async () => {
+    const spy = vi.spyOn(runModelMod, "runModel").mockResolvedValue({ text: "", costUsd: 0, isError: false });
+    await runWorker({ ...rc(), actionLevels: { ...PRESETS.balanced, uncordon: "off", scale: "off" } }, [INC]);
+    const prompt = spy.mock.calls[0]![0].systemPrompt;
+    expect(prompt).toContain("<one of: restart|rollback|setEnv|deletePod|cordon>");
+    expect(prompt).not.toMatch(/\buncordon\b/i);
+  });
+
+  test("the openFixPR paragraph is dropped when openFixPR is Off", async () => {
+    const spy = vi.spyOn(runModelMod, "runModel").mockResolvedValue({ text: "", costUsd: 0, isError: false });
+    await runWorker({ ...rc(), actionLevels: { ...PRESETS.balanced, openFixPR: "off" } }, [INC]);
+    expect(spy.mock.calls[0]![0].systemPrompt).not.toMatch(/openFixPR/);
+  });
+
+  test("a resolved repo is not offered when openFixPR is Off", async () => {
+    const spy = vi.spyOn(runModelMod, "runModel").mockResolvedValue({ text: "", costUsd: 0, isError: false });
+    await runWorker({ ...rc(), actionLevels: { ...PRESETS.balanced, openFixPR: "off" } }, [INC], REPO);
+    expect(spy.mock.calls[0]![0].prompt).not.toContain("MAY propose an openFixPR");
+  });
+
+  test("the guidance example only names kinds that aren't Off", async () => {
+    const spy = vi.spyOn(runModelMod, "runModel").mockResolvedValue({ text: "", costUsd: 0, isError: false });
+    await runWorker(rc(), [INC]);
+    expect(spy.mock.calls[0]![0].systemPrompt).toContain('- Prefer the least invasive fix that addresses root cause. A pod stuck in CrashLoopBackOff after a recent rollout usually wants "rollback"; a transient crash wants "restart"; a wedged single pod managed by a controller wants "deletePod".\n');
+    await runWorker({ ...rc(), actionLevels: { ...PRESETS.balanced, rollback: "off", deletePod: "off" } }, [INC]);
+    const prompt = spy.mock.calls[1]![0].systemPrompt;
+    expect(prompt).toContain('- Prefer the least invasive fix that addresses root cause. A transient crash wants "restart".\n');
+    expect(prompt).not.toMatch(/rollback|deletePod/);
+  });
+
+  test("with every kubectl kind Off, the kubectl schema is dropped and the label example uses an enabled kind", async () => {
+    const spy = vi.spyOn(runModelMod, "runModel").mockResolvedValue({ text: "", costUsd: 0, isError: false });
+    const allKubectlOff = { restart: "off", rollback: "off", deletePod: "off", cordon: "off", uncordon: "off", scale: "off", setEnv: "off", openFixPR: "review" } as const;
+    await runWorker({ ...rc(), actionLevels: allKubectlOff }, [INC]);
+    const prompt = spy.mock.calls[0]![0].systemPrompt;
+    expect(prompt).not.toContain("kubectl remediation schema");
+    expect(prompt).not.toContain("<one of: >");
+    expect(prompt).not.toContain("Restart backend-worker");
+    expect(prompt).toContain('start with the plain base verb for the kind (for openFixPR use "Open a fix PR")');
+    expect(prompt).toMatch(/Example: "Open a fix PR/);
+  });
+
+  test("the Restart label example is kept verbatim while restart is enabled", async () => {
+    const spy = vi.spyOn(runModelMod, "runModel").mockResolvedValue({ text: "", costUsd: 0, isError: false });
+    await runWorker(rc(), [INC]);
+    expect(spy.mock.calls[0]![0].systemPrompt).toContain('Example: "Restart backend-worker so Celery\'s heartbeat comes back and the readiness probes stop failing." One sentence, plain English, no jargon dumps and no trailing period.');
+  });
+
+  test("with restart Off, the label example comes from another enabled kind", async () => {
+    const spy = vi.spyOn(runModelMod, "runModel").mockResolvedValue({ text: "", costUsd: 0, isError: false });
+    await runWorker({ ...rc(), actionLevels: { ...PRESETS.balanced, restart: "off" } }, [INC]);
+    const prompt = spy.mock.calls[0]![0].systemPrompt;
+    expect(prompt).not.toContain("Restart backend-worker");
+    expect(prompt).toMatch(/Example: "Scale /);
   });
 });

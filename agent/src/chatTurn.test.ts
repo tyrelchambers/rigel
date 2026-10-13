@@ -13,4 +13,9 @@ describe("chatTurn config", () => {
     expect(p).toMatch(/destructive/i);
     expect(p).toMatch(/action block/i);
   });
+  test("system prompt approves a queued item with the exact JSON shown, not a command", () => {
+    const p = chatSystemPrompt();
+    expect(p).toContain("the exact JSON shown for that item, unchanged");
+    expect(p).not.toMatch(/shown kubectl args as kind:"command"/);
+  });
 });

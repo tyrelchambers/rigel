@@ -2,6 +2,7 @@ import { describe, expect, test, vi, afterEach } from "vitest";
 import { parseVerdict, runSupervisor } from "./supervisor.js";
 import * as runModelMod from "./runModel.js";
 import type { RuntimeConfig } from "./runtimeConfig.js";
+import { PRESETS } from "@rigel/k8s/src/actionLevels.js";
 import type { Incident } from "./detector.js";
 import type { SuggestedAction } from "./action.js";
 
@@ -48,7 +49,8 @@ function rc(): RuntimeConfig {
     limits: { pollIntervalMs: 30000, maxPerResourcePerHour: 3, maxPerNight: 20, maxAttemptsPerIncident: 3, confirmPolls: 2, namespaces: [] },
     autofix: { enabled: false, scope: { projects: [] }, maxPerDay: 5 },
     digests: [],
-    notifyAllowlist: null,
+    notifyAllowlist: null, approvedFixes: [],
+    actionLevels: PRESETS.balanced,
   } as RuntimeConfig;
 }
 const INC = { incidentKind: "degradedDeployment", name: "api", namespace: "default", reason: "Unavailable" } as Incident;

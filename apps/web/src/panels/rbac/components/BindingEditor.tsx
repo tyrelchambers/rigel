@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import type { PolicyRule, RoleRef, Subject } from "../types";
 import { buildBindingYaml } from "../manifest";
 import { NamespaceField } from "@/components/NamespaceField";
-import { Segmented } from "./Segmented";
+import { Segmented } from "@/components/ui/segmented";
 import { SectionHeader } from "./SectionHeader";
 import { LabeledField, fieldInputClass, fieldSurface } from "./LabeledField";
 import { AccessTest } from "./AccessTest";
@@ -169,7 +169,9 @@ export function BindingEditor({
                   />
                 </LabeledField>
                 <Segmented
-                  options={["RoleBinding", "ClusterRoleBinding"] as const}
+                  options={(["RoleBinding", "ClusterRoleBinding"] as const).map((o) => ({ value: o, label: o }))}
+                  className="shrink-0"
+                  segmentClassName="whitespace-nowrap px-[14px] outline-none"
                   value={kind}
                   onChange={selectKind}
                   ariaLabel="Binding kind"
@@ -184,7 +186,9 @@ export function BindingEditor({
           <SectionHeader label="GRANTS ROLE" />
           <div className="flex items-center gap-[14px]">
             <Segmented
-              options={["Role", "ClusterRole"] as const}
+              options={(["Role", "ClusterRole"] as const).map((o) => ({ value: o, label: o }))}
+              className="shrink-0"
+              segmentClassName="whitespace-nowrap px-[14px] outline-none"
               value={(roleRef.kind as "Role" | "ClusterRole") ?? "Role"}
               onChange={(k) => setRoleRef({ ...roleRef, kind: k, name: "" })}
               disabled={kind === "ClusterRoleBinding"}
