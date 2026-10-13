@@ -42681,7 +42681,7 @@
     },
     "font-display": {
       "type": "string",
-      "value": "DM Sans"
+      "value": "Bricolage Grotesque"
     },
     "font-body": {
       "type": "string",
@@ -42690,6 +42690,46 @@
     "fuchsia": {
       "type": "color",
       "value": "#E879F9"
+    },
+    "bg": {
+      "type": "color",
+      "value": "#F6F4EF"
+    },
+    "surface": {
+      "type": "color",
+      "value": "#FFFFFF"
+    },
+    "ink": {
+      "type": "color",
+      "value": "#16151A"
+    },
+    "ink-2": {
+      "type": "color",
+      "value": "#5E5B66"
+    },
+    "ink-3": {
+      "type": "color",
+      "value": "#9A97A1"
+    },
+    "line": {
+      "type": "color",
+      "value": "#E6E2DA"
+    },
+    "avoid": {
+      "type": "color",
+      "value": "#D9412B"
+    },
+    "avoid-soft": {
+      "type": "color",
+      "value": "#FBE7E3"
+    },
+    "support": {
+      "type": "color",
+      "value": "#1F8A5B"
+    },
+    "support-soft": {
+      "type": "color",
+      "value": "#DFF2E8"
     }
   },
   "fileToken": "80b6aecf-5dbd-4b4a-8d47-ca1c44bab0cb"
