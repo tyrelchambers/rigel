@@ -312,7 +312,6 @@ const LABEL_META: Record<string, { color: string; description: string }> = {
   rigel: { color: "38BDF8", description: "Opened by Rigel" },
   "rigel:agent": { color: "A855F7", description: "Opened by the in-cluster Rigel agent" },
   "rigel:chat": { color: "22D3EE", description: "Opened by Rigel from chat" },
-  "rigel:voice": { color: "F472B6", description: "Opened by the Rigel voice assistant" },
 };
 
 /**

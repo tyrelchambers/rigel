@@ -186,7 +186,7 @@ function enqueue<T>(job: () => Promise<T>): Promise<T> {
 /**
  * Apply an edit to the cluster's config. `edit` runs INSIDE the write queue on
  * the freshly read data, so a caller that merges into one key's document (the
- * voice and agents blobs both do) cannot lose a concurrent edit to that same
+ * agents blob does) cannot lose a concurrent edit to that same
  * document. Throws when the cluster cannot be read or written: a save that goes
  * nowhere must not report success.
  */

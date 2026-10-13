@@ -347,7 +347,7 @@ describe("parseProposeFixRequest", () => {
     });
   });
 
-  test("accepts the typed-edit shape voice sends, defaulting the kind and namespace", () => {
+  test("accepts the typed-edit shape, defaulting the kind and namespace", () => {
     const parsed = parseProposeFixRequest({
       source: "default-web-82b3ade",
       title: "Annotate web",

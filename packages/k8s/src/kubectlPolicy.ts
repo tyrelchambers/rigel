@@ -215,8 +215,7 @@ export function classifyTier(command: string): TierVerdict {
  *
  * Deliberately NOT part of classifyCommand, which answers what a command does
  * rather than what its output carries. Whether a Secret read is refused depends
- * on whether the caller can redact: the voice read path can and does, the chat
- * shell cannot, so each applies this itself.
+ * on whether the caller can redact, so each caller applies this itself.
  */
 export function printsSecretValues(command: string): boolean {
   if (!/\bkubectl\b/.test(command)) return false;

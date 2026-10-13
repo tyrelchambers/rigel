@@ -58,11 +58,8 @@ import type { CloudCluster } from "@rigel/cloud-connect/src/index";
 import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusMetrics";
 import { handleUpdates, type UpdatesRequest } from "./updates";
 import { chatConfig, setClaudeToken } from "./chatConfig";
-import { voiceStatus, voiceEnabled, setVoiceConfig } from "./voiceConfig";
 import { readIssueMutes, writeIssueMutes } from "./issuesConfig";
 import { parseIssueMutes } from "@rigel/k8s/src/issues/mutes";
-import { checkWorkerToken, isVoiceWorkerRequest, maskedVoiceConfig, voiceConfigPatch, voiceTokenResponse, VOICE_WORKER_HEADER, type VoiceRole } from "./voiceRoutes";
-import { createVoiceDispatch, voiceDispatchStream } from "./voiceDispatch";
 import { recordAiAction } from "./aiActionLedger";
 import {
   enabledSshHosts,
@@ -176,8 +173,6 @@ const bootAccessReady = accessFor(bootContext).then((a) => {
 // for the server's lifetime; killed wholesale on shutdown so no zombie kubectl
 // survives. The forwards bind the SERVER's 127.0.0.1 — see the module caveat.
 const portForwards = new PortForwardManager(bootContext);
-
-const voiceDispatch = createVoiceDispatch();
 
 // Config writes land in a per-cluster Secret, so an unreachable cluster is the
 // expected failure and must reach the UI as its own message, not a bare 500.
@@ -536,7 +531,7 @@ async function handler(req: Request): Promise<Response> {
               context,
               buildAiActionEntry({
                 action: { ...body, host },
-                source: isVoiceWorkerRequest(req) ? "voice" : "chat",
+                source: "chat",
                 command,
                 outcome: result.code === 0 ? "success" : "failure",
                 detail: sshActionDetail(result.code, result.stdout, result.stderr),
@@ -568,67 +563,13 @@ async function handler(req: Request): Promise<Response> {
         context,
         buildAiActionEntry({
           action: body,
-          source: isVoiceWorkerRequest(req) ? "voice" : "chat",
+          source: "chat",
           command: ["kubectl", ...buildKubectlArgs(context, argv)].join(" "),
           outcome,
           detail: summarizeActionDetail(outcome, result.stdout, result.stderr),
         }),
       );
       return Response.json(result);
-    }
-
-    // POST /api/ai/unsupported — the operator asked for something no action
-    // kind expresses. Recorded rather than dropped: a vocabulary gap nobody can
-    // see is one that gets rediscovered one frustrating session at a time, and
-    // this is the ledger the app already keeps of what its assistants did.
-    if (url.pathname === "/api/ai/unsupported" && req.method === "POST") {
-      let body: { request?: string };
-      try {
-        body = (await req.json()) as typeof body;
-      } catch {
-        return Response.json({ error: "invalid JSON body" }, { status: 400 });
-      }
-      const request = (body.request ?? "").trim();
-      if (!request) return Response.json({ error: "missing request" }, { status: 422 });
-      await recordAiAction(
-        context,
-        buildAiActionEntry({
-          action: { kind: "unsupported" },
-          source: isVoiceWorkerRequest(req) ? "voice" : "chat",
-          command: "",
-          outcome: "unsupported",
-          trigger: request,
-        }),
-      );
-      return Response.json({ ok: true });
-    }
-
-    // GET /api/voice/status: is the voice feature flag on, and is it configured.
-    if (url.pathname === "/api/voice/status" && req.method === "GET") {
-      return Response.json(await voiceStatus(context));
-    }
-
-    // GET /api/voice/config: the Settings view of the credentials. Masked: the
-    // renderer holds the session secret, and stored secrets never cross to it.
-    // PUT /api/voice/config: a partial patch. An absent field is left alone, an
-    // empty string clears it. Env-supplied fields still win in voiceConfig(),
-    // so the panel reports them instead of offering them for edit.
-    if (url.pathname === "/api/voice/config" && req.method === "GET") {
-      return Response.json(await maskedVoiceConfig(context));
-    }
-    if (url.pathname === "/api/voice/config" && req.method === "PUT") {
-      let body: unknown;
-      try {
-        body = await req.json();
-      } catch {
-        return Response.json({ error: "invalid JSON body" }, { status: 400 });
-      }
-      try {
-        await setVoiceConfig(context, voiceConfigPatch(body));
-      } catch (err) {
-        return Response.json({ error: errorText(err) }, { status: 503 });
-      }
-      return Response.json(await maskedVoiceConfig(context));
     }
 
     // GET /api/issues/config: this cluster's issue mutes, keyed by fingerprint.
@@ -668,29 +609,6 @@ async function handler(req: Request): Promise<Response> {
       const known = await listSshConfigAliases();
       await setEnabledSshHosts((body.enabled as string[]).filter((h) => known.includes(h)));
       return Response.json({ hosts: await listSshHosts() });
-    }
-
-    // POST /api/voice/token: mint a fresh room for the renderer (or a phone,
-    // for the spike) and hand the worker a job to join it. The LiveKit API
-    // secret never leaves this process.
-    if (url.pathname === "/api/voice/token" && req.method === "POST") {
-      if (!voiceEnabled()) return Response.json({ error: "voice is disabled" }, { status: 404 });
-      const body = (await req.json().catch(() => ({}))) as { role?: string };
-      const role: VoiceRole = body.role === "phone" ? "phone" : "desktop";
-      return voiceTokenResponse(role, context, voiceDispatch);
-    }
-
-    // GET /api/voice/dispatch: the worker's job stream, a room JWT + provider
-    // keys per job. Gated by the worker token so the renderer (which holds only
-    // the session secret) can never read provider keys.
-    if (url.pathname === "/api/voice/dispatch" && req.method === "GET") {
-      if (!voiceEnabled()) return Response.json({ error: "voice is disabled" }, { status: 404 });
-      if (!checkWorkerToken(req.headers.get(VOICE_WORKER_HEADER))) {
-        return Response.json({ error: "forbidden" }, { status: 403 });
-      }
-      return new Response(voiceDispatchStream(voiceDispatch), {
-        headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
-      });
     }
 
     // POST /api/apply — MANIFEST apply, used by the catalog wizard and the
@@ -1223,7 +1141,6 @@ async function handler(req: Request): Promise<Response> {
       const found = findByDeployment(sources, parsed.source);
       if (!found) return Response.json({ error: "unknown source" }, { status: 404 });
       const token = await loadGithubToken(context);
-      const origin = isVoiceWorkerRequest(req) ? ("voice" as const) : ("chat" as const);
       const target = resolveTarget(found.repo, found.dep);
       // Adoption resolves to files here rather than in the repo-fix core,
       // because it reads the CLUSTER: discovery, export and cleaning are all
@@ -1241,7 +1158,7 @@ async function handler(req: Request): Promise<Response> {
         token,
         title: parsed.title,
         body: parsed.body,
-        origin,
+        origin: "chat" as const,
         ...change,
       };
       if (parsed.dryRun) return Response.json({ ...(await previewRepoFix(input)), included });
@@ -1259,15 +1176,13 @@ async function handler(req: Request): Promise<Response> {
           branch: result.branch ?? "",
           filePath: (result.filePaths ?? []).join(", "),
           createdAt: new Date().toISOString(),
-          origin,
+          origin: "chat",
         });
       }
       return Response.json({ ...result, included });
     }
 
-    // POST /api/git/merge — merge one pull request Rigel opened. Click-only:
-    // the action kind is excluded from AUTO_RUNNABLE_KINDS, because the review a
-    // pull request forces is exactly what makes opening one safe unattended.
+    // POST /api/git/merge — merge one pull request Rigel opened.
     if (url.pathname === "/api/git/merge" && req.method === "POST") {
       let body: { prUrl?: string };
       try {

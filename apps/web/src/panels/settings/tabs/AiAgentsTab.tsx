@@ -6,7 +6,6 @@ import { useAssistant } from "../../assistant/useAssistant";
 import { AssistantConfigSection } from "../../assistant/agents/AssistantConfigSection";
 import { AgentsTab as ConnectAgents } from "../agents/AgentsTab";
 import { SshHostsSection } from "../SshHostsSection";
-import { VoiceSection } from "../VoiceSection";
 
 export function AiAgentsTab() {
   const { data: agents } = useAgents();
@@ -64,8 +63,6 @@ export function AiAgentsTab() {
           />
         </div>
       </section>
-
-      <VoiceSection />
     </div>
   );
 }

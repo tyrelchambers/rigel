@@ -2,12 +2,12 @@
 // hold, so an app that exists only in the cluster becomes one that can be
 // redeployed from Git.
 //
-// This is the half of the request no model should do. It was asked for three
-// times over voice, and every attempt failed the same way: the assistant read
-// the resources into its own context and then had to retype them, which is
-// slow, lossy, and expressible only as an action kind that does not exist. Here
-// the model names the workload and nothing else; discovery, export, cleaning
-// and layout all happen server-side in one call.
+// This is the half of the request no model should do. Every attempt to have
+// the assistant do it failed the same way: it read the resources into its own
+// context and then had to retype them, which is slow, lossy, and expressible
+// only as an action kind that does not exist. Here the model names the
+// workload and nothing else; discovery, export, cleaning and layout all happen
+// server-side in one call.
 import { cleanExportedManifest } from "@rigel/k8s/src/manifestClean";
 import { redactSecretValues } from "@rigel/k8s/src/secretRedaction";
 import { kubectl } from "@rigel/k8s/src/run";

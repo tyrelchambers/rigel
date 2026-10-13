@@ -76,7 +76,7 @@ describe("resolveCommand", () => {
 describe("findConflict", () => {
   it("names the command already holding a combination", async () => {
     const { findConflict } = await load();
-    expect(findConflict({ mod: true, key: "J" }, "voice.toggle", {})).toBe("chat.toggle");
+    expect(findConflict({ mod: true, key: "J" }, "logs.toggleWrap", {})).toBe("chat.toggle");
   });
 
   it("does not report a command conflicting with itself", async () => {
@@ -86,13 +86,13 @@ describe("findConflict", () => {
 
   it("respects overrides on both sides", async () => {
     const { findConflict } = await load();
-    expect(findConflict({ mod: true, key: "J" }, "voice.toggle", { "chat.toggle": null })).toBeNull();
-    expect(findConflict({ mod: true, key: "M" }, "voice.toggle", { "chat.toggle": { mod: true, key: "M" } })).toBe("chat.toggle");
+    expect(findConflict({ mod: true, key: "J" }, "logs.toggleWrap", { "chat.toggle": null })).toBeNull();
+    expect(findConflict({ mod: true, key: "M" }, "logs.toggleWrap", { "chat.toggle": { mod: true, key: "M" } })).toBe("chat.toggle");
   });
 
   it("ignores aliases so ⌘← stays available to rebind onto", async () => {
     const { findConflict } = await load();
-    expect(findConflict({ mod: true, key: "ArrowLeft" }, "voice.toggle", {})).toBeNull();
+    expect(findConflict({ mod: true, key: "ArrowLeft" }, "logs.toggleWrap", {})).toBeNull();
   });
 });
 

@@ -376,7 +376,7 @@ function parseEdit(raw: unknown): ManifestEdit | string {
 /**
  * Validate a propose-fix body into the shape the repo-fix core takes, or return
  * the reason it cannot be. A request carries EITHER a complete replacement file
- * (chat) OR a workload and a typed edit (voice); both or neither is a refusal,
+ * (chat) OR a workload and a typed edit (Issues' Fix in Git); both or neither is a refusal,
  * never a silent preference for one of them.
  */
 export function parseProposeFixRequest(raw: unknown): ParsedProposeFix | string {

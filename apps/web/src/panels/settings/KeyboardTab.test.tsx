@@ -29,7 +29,7 @@ describe("KeyboardTab", () => {
   it("lists every command with its default binding", () => {
     render(<KeyboardTab />);
     expect(screen.getByText("Open the command palette")).toBeTruthy();
-    expect(screen.getByText("Start or end a voice session")).toBeTruthy();
+    expect(screen.getByText("Wrap log lines")).toBeTruthy();
     expect(screen.getAllByText("⌘K").length).toBeGreaterThan(0);
   });
 
@@ -50,9 +50,9 @@ describe("KeyboardTab", () => {
   it("refuses a combination another command already holds", async () => {
     const user = userEvent.setup();
     render(<KeyboardTab />);
-    await user.click(screen.getByRole("button", { name: "Record Start or end a voice session" }));
+    await user.click(screen.getByRole("button", { name: "Record Wrap log lines" }));
     fireEvent.keyDown(window, { key: "j", code: "KeyJ", metaKey: true });
-    expect(useShortcutStore.getState().overrides["voice.toggle"]).toBeUndefined();
+    expect(useShortcutStore.getState().overrides["logs.toggleWrap"]).toBeUndefined();
     expect(screen.getByText(/already Show or hide the chat pane/)).toBeTruthy();
   });
 
@@ -90,7 +90,7 @@ describe("KeyboardTab", () => {
         <KeyboardTab />
       </>,
     );
-    await user.click(screen.getByRole("button", { name: "Record Start or end a voice session" }));
+    await user.click(screen.getByRole("button", { name: "Record Wrap log lines" }));
     fireEvent.keyDown(window, { key: "k", code: "KeyK", metaKey: true });
     expect(fired).not.toHaveBeenCalled();
     expect(screen.getByText(/already Open the command palette/)).toBeTruthy();

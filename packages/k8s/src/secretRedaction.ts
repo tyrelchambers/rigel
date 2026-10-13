@@ -1,11 +1,9 @@
 // Secret values never reach the model.
 //
-// The voice agent reads the cluster with arbitrary kubectl arguments, which
-// means `get secret -o yaml` is reachable. The decision is to redact rather
-// than refuse: the agent should still see that a Secret exists, its name, type
-// and key names, so it can reason about a workload whose envFrom points at one
-// that is missing. It just never sees a value, and no value reaches the
-// transcript the app persists.
+// Adoption exports live resources into a repo, Secrets included. The decision
+// is to redact rather than refuse: the export still records that a Secret
+// exists, its name, type and key names, so a workload whose envFrom points at
+// one stays complete. It just never carries a value.
 //
 // This is an output filter, deliberately, not a prompt instruction. A model
 // asked not to read Secrets, or not to repeat what it read, is not a control.
@@ -23,20 +21,6 @@ import { isMap, isSeq, parseAllDocuments, parseDocument, type Document } from "y
 export const REDACTED = "(redacted by Rigel)";
 
 const VALUE_FIELDS = ["data", "stringData"];
-
-/** Output formats that print a bare value, leaving nothing to redact. */
-const EXTRACTING = /^(-o=?)?(jsonpath|go-template|custom-columns)/;
-
-/**
- * Whether a read must be refused outright because its output would be a Secret
- * value with no structure left to filter. Everything else about a Secret is
- * readable, so the refusal names the alternative.
- */
-export function refusesForSecretValues(args: string[]): boolean {
-  const targetsSecret = args.some((a) => a === "secret" || a === "secrets" || a.startsWith("secret/"));
-  if (!targetsSecret) return false;
-  return args.some((a, i) => EXTRACTING.test(a) || (a === "-o" && EXTRACTING.test(args[i + 1] ?? "")));
-}
 
 /** Blank every value under data/stringData of a Secret, in place. */
 function redactNode(node: unknown): boolean {
