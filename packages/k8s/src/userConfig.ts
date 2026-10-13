@@ -1,5 +1,5 @@
-// The per-cluster Secret holding the configuration a Rigel user enters: voice
-// credentials, per-agent auth, and the Claude subscription token. Shape, parse,
+// The per-cluster Secret holding the configuration a Rigel user enters:
+// per-agent auth, the Claude subscription token, and issue mutes. Shape, parse,
 // and manifest builders only; the kubectl I/O lives in
 // apps/server/src/clusterConfigStore.ts (same split as gitSources.ts + git.ts).
 //
@@ -13,19 +13,16 @@
  *  serialized read-modify-write trivially correct. */
 export const USER_CONFIG_SECRET = "rigel-user-config";
 
-export const VOICE_CONFIG_KEY = "voice.json";
 export const AGENTS_CONFIG_KEY = "agents.json";
 export const CLAUDE_TOKEN_KEY = "claude-oauth-token";
 export const ISSUES_CONFIG_KEY = "issues.json";
 
 export type UserConfigKey =
-  | typeof VOICE_CONFIG_KEY
   | typeof AGENTS_CONFIG_KEY
   | typeof CLAUDE_TOKEN_KEY
   | typeof ISSUES_CONFIG_KEY;
 
 export const USER_CONFIG_KEYS: readonly UserConfigKey[] = [
-  VOICE_CONFIG_KEY,
   AGENTS_CONFIG_KEY,
   CLAUDE_TOKEN_KEY,
   ISSUES_CONFIG_KEY,
@@ -37,7 +34,7 @@ const MANAGED_BY = { "app.kubernetes.io/managed-by": "rigel" };
 
 /** A config with every key present and empty: connected, nothing configured. */
 export function emptyUserConfigData(): UserConfigData {
-  return { [VOICE_CONFIG_KEY]: "", [AGENTS_CONFIG_KEY]: "", [CLAUDE_TOKEN_KEY]: "", [ISSUES_CONFIG_KEY]: "" };
+  return { [AGENTS_CONFIG_KEY]: "", [CLAUDE_TOKEN_KEY]: "", [ISSUES_CONFIG_KEY]: "" };
 }
 
 /** True when every key is blank, i.e. nothing has ever been saved. */

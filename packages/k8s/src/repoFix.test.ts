@@ -371,18 +371,6 @@ describe("proposeRepoFix", () => {
     expect(deleted).toBeDefined();
     expect(deleted).toContain(res.branch);
   });
-
-  test("labels a voice-opened PR as rigel:voice", async () => {
-    mockRun.mockImplementation(gitOk());
-    const fetchMock = vi.fn(async (_url: unknown, _init?: unknown) =>
-      new Response(JSON.stringify({ html_url: "https://github.com/owner/repo/pull/7", number: 7 }), { status: 201 }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-    await proposeRepoFix({ ...input, origin: "voice" });
-    const add = fetchMock.mock.calls.find((c) => String(c[0]).endsWith("/issues/7/labels"));
-    const sent = JSON.parse((add![1] as RequestInit).body as string) as { labels: string[] };
-    expect(sent.labels).toEqual(["rigel", "rigel:voice"]);
-  });
 });
 
 describe("a fix that writes several files", () => {

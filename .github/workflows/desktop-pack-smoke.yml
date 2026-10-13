@@ -4,10 +4,10 @@ name: Desktop pack smoke
 # packaging break is found by a pull request instead of by a tag push.
 #
 # desktop-release.yml only runs on `v*`, which means the packaged layout — the
-# forked server, node-pty's native addon, the SPA, and (once HELM-128 lands)
-# the voice worker's native bindings — is exercised for the first time during a
-# release. Everything here mirrors that workflow's setup so the two cannot
-# drift, then stops at `--dir`: no dmg/NSIS/AppImage, no signing, no publish.
+# forked server, node-pty's native addon and the SPA — is exercised for the
+# first time during a release. Everything here mirrors that workflow's setup so
+# the two cannot drift, then stops at `--dir`: no dmg/NSIS/AppImage, no
+# signing, no publish.
 on:
   workflow_dispatch:
   pull_request:
@@ -16,7 +16,6 @@ on:
     # anything that changes the app.
     paths:
       - "apps/desktop/**"
-      - "apps/voice/**"
       - "pnpm-workspace.yaml"
       - "pnpm-lock.yaml"
       - ".github/workflows/desktop-pack-smoke.yml"
@@ -66,7 +65,7 @@ jobs:
       - name: Install workspace
         run: pnpm install --frozen-lockfile
 
-      # Bundles main/preload/server/voice and builds the SPA — the same script
+      # Bundles main/preload/server and builds the SPA — the same script
       # the release runs, so a build break surfaces here first.
       - name: Build desktop bundles
         run: pnpm --filter desktop build

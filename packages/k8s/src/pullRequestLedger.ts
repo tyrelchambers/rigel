@@ -26,7 +26,7 @@ export interface ChatPrRecord {
   branch: string;
   filePath: string;
   createdAt: string;
-  /** Which surface opened it. Absent on records written before voice existed. */
+  /** Which surface opened it. Absent on older records. */
   origin?: RepoFixOrigin;
 }
 

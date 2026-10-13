@@ -7,13 +7,13 @@ function fingerprint(spec: { mod?: boolean; alt?: boolean; shift?: boolean; ctrl
 
 describe("COMMANDS", () => {
   it("has nine commands", () => {
-    expect(COMMANDS).toHaveLength(9);
+    expect(COMMANDS).toHaveLength(8);
   });
 
   it("gives every command a label and a group", () => {
     for (const cmd of COMMANDS) {
       expect(cmd.label.length).toBeGreaterThan(0);
-      expect(["Navigation", "Chat", "Voice", "Panels"]).toContain(cmd.group);
+      expect(["Navigation", "Chat", "Panels"]).toContain(cmd.group);
     }
   });
 
@@ -30,7 +30,7 @@ describe("COMMANDS", () => {
 
   it("indexes every command by id", () => {
     expect(COMMAND_BY_ID.size).toBe(COMMANDS.length);
-    expect(COMMAND_BY_ID.get("voice.toggle")?.defaultSpec).toEqual({ alt: true, mod: true, key: "V" });
+    expect(COMMAND_BY_ID.get("logs.toggleWrap")?.defaultSpec).toEqual({ alt: true, mod: true, key: "W" });
   });
 
   it("blocks the nav-history commands inside text fields", () => {

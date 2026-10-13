@@ -56,39 +56,11 @@ Special kinds:
   looks: labels feed Service selectors, NetworkPolicies and ArgoCD tracking, so
   a wrong one breaks routing with nothing visible to see.
 
-Confirmation, voice surface: no spoken word ever runs a change, and the agent
-never asks for one — anyone within earshot could say it. What the agent may do
-is keyed on the ACTION, not on what it hears:
-- Non-destructive kinds (`AUTO_RUNNABLE_KINDS`: restart, rollback, pause,
-  resume, suspend/resumeCronJob, uncordon, scale, setImage, setEnv,
-  setResources, annotate, createNamespace, command, proposeRepoFix,
-  adoptWorkload) run on the operator's own instruction. They destroy nothing and can be undone. `proposeRepoFix`
-  belongs here because a pull request changes no cluster state, lands on a
-  branch, and is read on GitHub before it merges; the reasoning is recorded
-  beside `AUTO_RUNNABLE_KINDS`.
-  `command` is admitted for a reason worth stating: it is the escape hatch for
-  anything the typed kinds do not model, so excluding it meant every unusual
-  request needed a tap. It carries literal kubectl arguments, which is exactly
-  what `classifyTier` reads, so the command classifier is a real second gate
-  here and a `command` whose argv tiers destructive is surfaced like anything
-  else.
-- Everything else is surfaced in the desktop popover for the operator to
-  approve: the delete family, drain, cordon, purge, raw patches (setEnvRef,
-  setImagePullSecrets), `applyManifest` (arbitrary content rather than a
-  command a classifier can read), plus `label` (feeds selectors) and
-  `triggerCronJob` (starts arbitrary work).
-- A destructive hint downgrades any kind, `scale` to 0 replicas is treated as
-  an outage rather than a scale, and `classifyTier` on the built command is the
-  second, stricter gate: a kind that would otherwise run is surfaced when its
-  actual command tiers destructive.
-
 Additional kinds:
 - `sshCommand` — run one command on an enabled SSH host. Fields `host`,
   `command`, optional `destructive`, optional `sudo`. The app runs
   `ssh -T -o BatchMode=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -- <host> <command>` after the confirm sheet and
-  records it (with the exit code) in the AI action ledger. Never
-  auto-runnable: it is not in `AUTO_RUNNABLE_KINDS`, so voice always surfaces
-  it for approval.
+  records it (with the exit code) in the AI action ledger.
   With `sudo: true` the remote command is one quoted word for the login shell:
   `sh -c 'sudo -S -p <prompt-marker> -v && printf %s <ok-marker> >&2 && exec </dev/null && sudo -n -- sh -c <command>'`.
   `sudo -v` authenticates first and is the only process that can read the
@@ -100,7 +72,7 @@ Additional kinds:
   the ok marker and before any stdout; otherwise (or with no password) stdin
   is closed, so sudo fails with its own message. Both markers are cut from the
   output. A sudo action runs only from the chat confirm dialog: REST
-  `/api/action` (and so voice) refuses to execute it, and batch runs skip it.
+  `/api/action` refuses to execute it, and batch runs skip it.
   Caveats: hosts with sudo `timestamp_timeout=0` fail the `sudo -n` step, and
   `sudo -v` asks for a password unless every sudoers entry for the user is
   NOPASSWD, so a host that is NOPASSWD only for some commands still needs one.
@@ -118,17 +90,14 @@ Additional kinds:
     and writes it. `edit` is one of `{"op":"annotate","annotations":{…}}`,
     `{"op":"label","labels":{…}}`, `{"op":"setImage","container":"…",
     "image":"…"}`, `{"op":"scale","replicas":N}`, with a null annotation or
-    label value removing the key. This is the voice shape.
+    label value removing the key. This is the shape Issues' "Fix in Git" sends.
 
-  Both or neither is a 422, never a silent preference. Voice sends only the
-  second shape, and its tool is schema-constrained (see below), so a near-miss
-  key like `sourceId` is refused naming `source` before the call is made. The manifest is located
+  Both or neither is a 422, never a silent preference. The manifest is located
   by matching kind + name + namespace across the source's directory; zero
   matches, several matches, or a templated (Helm) tree refuses with the reason
-  rather than editing on a guess. Nothing is applied to the cluster: the chat
-  path shows a `git diff` in the confirm sheet before the operator confirms,
-  and voice opens the PR itself and speaks its number and URL. The opened PR is
-  labelled `rigel` + `rigel:<chat|voice|agent>`.
+  rather than editing on a guess. Nothing is applied to the cluster: the confirm
+  sheet shows a `git diff` before the operator confirms. The opened PR is
+  labelled `rigel` + `rigel:<chat|agent>`.
 
 - `adoptWorkload` — export a live workload and everything around it into the
   repo as manifests, and open a pull request, so an app that exists only in the
@@ -146,25 +115,6 @@ Additional kinds:
   `<kind>-<name>.yaml.example` with its values redacted, which `kubectl apply
   -R` ignores, so a later sync can never write it over the live Secret. A Helm
   release refuses, naming it, because rendered manifests drift from the chart.
-
-### The voice tool is schema-constrained
-
-The chat surface emits action blocks as fenced JSON and `extractActionBlocks`
-parses them permissively, because the chat model is taught this contract in
-prose and has no schema in context.
-
-The voice tool is different: `proposeMutation` declares
-`packages/k8s/src/actionSchema.ts`, a `z.discriminatedUnion("kind", ...)` over
-every kind here. `@livekit/agents` validates against it BEFORE the tool runs, so
-the model sees the field names up front, a wrong kind comes back listing every
-valid one, and a wrong field comes back naming that field alone. Nothing in the
-worker checks the shape by hand.
-
-Two rules keep the schema honest, both tested in `actionSchema.test.ts`. Every
-field the server consumes must appear in its variant, because zod strips
-unknown keys and a missing one would be dropped before execute ever saw it. And
-no `.refine()`, because refinements do not survive `toJSONSchema` and would
-advertise a schema looser than the one that runs.
 
 Examples:
 

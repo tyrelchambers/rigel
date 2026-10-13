@@ -1,5 +1,5 @@
 // Server side of the AI-action audit ledger (HELM-18): the durable record of
-// every mutation the chat and voice surfaces perform, written to the
+// every mutation the chat surface performs, written to the
 // `rigel-chat-actions` ConfigMap. Mirrors git.ts's PR-ledger conventions
 // (kubectl get to read, applyManifest to write, best-effort on failure).
 

@@ -1,5 +1,5 @@
 // Per-cluster issue mutes, stored in the rigel-user-config Secret alongside the
-// voice and agent config. A mute belongs to the cluster whose issue it silences,
+// agent config. A mute belongs to the cluster whose issue it silences,
 // so it follows that cluster rather than the machine it was set from.
 import { ISSUES_CONFIG_KEY } from "@rigel/k8s/src/userConfig";
 import { parseIssueMutes, serializeIssueMutes, type IssueMutes } from "@rigel/k8s/src/issues/mutes";

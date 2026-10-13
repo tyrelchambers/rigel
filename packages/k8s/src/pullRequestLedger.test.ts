@@ -24,8 +24,8 @@ describe("addPrRecord", () => {
   });
 
   it("carries the surface that opened the pull request", () => {
-    const out = addPrRecord([], rec({ origin: "voice" }), { now: NOW });
-    expect(parsePullRequests(JSON.stringify(out))[0]!.origin).toBe("voice");
+    const out = addPrRecord([], rec({ origin: "agent" }), { now: NOW });
+    expect(parsePullRequests(JSON.stringify(out))[0]!.origin).toBe("agent");
   });
 
   it("dedupes by prUrl", () => {

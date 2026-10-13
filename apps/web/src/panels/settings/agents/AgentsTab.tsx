@@ -12,8 +12,8 @@ export function AgentsTab({ hideHeading = false }: { hideHeading?: boolean }) {
     return <p className="text-xs" style={{ color: "#8C8C95" }}>Loading agents…</p>;
   }
 
-  // Agent credentials live in the same per-cluster Secret the voice settings do,
-  // so an unreachable cluster is nowhere to save a key either.
+  // Agent credentials live in a per-cluster Secret, so an unreachable cluster
+  // is nowhere to save a key.
   const locked = clusterLocked(data.cluster);
   const note = data.cluster && <ClusterConfigNote cluster={data.cluster} />;
 

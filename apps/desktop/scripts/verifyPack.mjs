@@ -49,34 +49,6 @@ check(join(res, "server", "server-entry.mjs"), "main.ts forks this in a packaged
 check(join(res, "server", "server.mjs"), "the server bundle server-entry.mjs imports");
 check(join(res, "server", "node_modules", "node-pty"), "terminals need the native addon on the real filesystem, never inside an asar");
 check(join(res, "web", "dist", "index.html"), "WEB_DIST points here; without it the window loads nothing");
-
-// The voice worker and the flattened native deps it resolves from. These are
-// deliberately NOT collected into the asar: @livekit/rtc-node and
-// @livekit/local-inference are devDependencies of apps/desktop precisely so
-// electron-builder does not ship a second 52MB copy of the same addons that
-// only this worker ever loads.
-const voice = join(res, "voice");
-if (existsSync(voice)) {
-  check(join(voice, "voice-entry.mjs"), "forkVoiceWorker's packaged entry");
-  check(join(voice, "voice.mjs"), "the worker bundle voice-entry.mjs imports");
-  const bindings = join(voice, "node_modules", "@livekit");
-  check(bindings, "the worker resolves its native addons from here");
-  if (existsSync(bindings)) {
-    const dirs = readdirSync(bindings);
-    for (const [pkg, why] of [
-      ["rtc-ffi-bindings-", "no LiveKit room client for this platform/arch"],
-      ["local-inference-", "the VAD silently degrades to a no-op instead of failing"],
-    ]) {
-      if (!dirs.some((d) => d.startsWith(pkg))) {
-        problems.push(
-          `MISSING ${bindings}/${pkg}<platform>  (present: ${dirs.join(", ") || "nothing"})\n    → ${why}`,
-        );
-      }
-    }
-  }
-} else {
-  console.log("verifyPack: no voice/ in this build — skipping voice checks (expected until HELM-128 lands)");
-}
 }
 
 if (problems.length > 0) {

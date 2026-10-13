@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  AGENTS_CONFIG_KEY,
   CLAUDE_TOKEN_KEY,
   USER_CONFIG_KEYS,
   USER_CONFIG_SECRET,
-  VOICE_CONFIG_KEY,
   emptyUserConfigData,
   isSecretAbsent,
   isUserConfigEmpty,
@@ -17,10 +17,10 @@ const unb64 = (s: string) => Buffer.from(s, "base64").toString("utf8");
 describe("parseUserConfigSecret", () => {
   it("decodes the known keys", () => {
     const stdout = JSON.stringify({
-      data: { [VOICE_CONFIG_KEY]: b64('{"url":"wss://x"}'), [CLAUDE_TOKEN_KEY]: b64("tok") },
+      data: { [AGENTS_CONFIG_KEY]: b64('{"activeAgentId":"codex"}'), [CLAUDE_TOKEN_KEY]: b64("tok") },
     });
     const data = parseUserConfigSecret(stdout, unb64);
-    expect(data[VOICE_CONFIG_KEY]).toBe('{"url":"wss://x"}');
+    expect(data[AGENTS_CONFIG_KEY]).toBe('{"activeAgentId":"codex"}');
     expect(data[CLAUDE_TOKEN_KEY]).toBe("tok");
   });
 

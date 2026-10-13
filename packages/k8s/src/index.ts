@@ -120,7 +120,6 @@ export {
 
 export {
   USER_CONFIG_SECRET,
-  VOICE_CONFIG_KEY,
   AGENTS_CONFIG_KEY,
   CLAUDE_TOKEN_KEY,
   ISSUES_CONFIG_KEY,
@@ -150,8 +149,6 @@ export {
   type SuggestedQuestion,
   type QuestionField,
   ACTION_KINDS,
-  AUTO_RUNNABLE_KINDS,
-  isAutoRunnable,
   extractActionBlocks,
   extractAlertBlocks,
   extractQuestionBlocks,

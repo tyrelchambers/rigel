@@ -216,12 +216,12 @@ describe("ActionBlock as a ledger subject", () => {
     };
     const built = buildAiActionEntry({
       action,
-      source: "voice",
+      source: "chat",
       command: "kubectl scale deployment/web --replicas=5 -n prod",
       outcome: "success",
     });
     expect(built.kind).toBe("Scaled");
-    expect(built.source).toBe("voice");
+    expect(built.source).toBe("chat");
     expect(built.target).toEqual({ kind: "Deployment", name: "web", namespace: "prod" });
     expect(built.trigger).toBe("Scale web to 5");
   });

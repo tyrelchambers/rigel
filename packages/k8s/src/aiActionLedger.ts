@@ -1,5 +1,5 @@
-// The AI-action audit ledger (HELM-18): every cluster mutation Rigel's chat and
-// voice surfaces perform, recorded durably so it outlives Kubernetes's ~1h Event
+// The AI-action audit ledger (HELM-18): every cluster mutation Rigel's chat
+// surface performs, recorded durably so it outlives Kubernetes's ~1h Event
 // TTL. Stored as a newest-first, capped JSON array in the server-owned
 // `rigel-chat-actions` ConfigMap. Pure helpers only (no process spawning);
 // apps/server/src/aiActionLedger.ts owns the serialized read-modify-write.
@@ -16,7 +16,7 @@ export const AI_ACTIONS_LABEL_VALUE = "ai-actions";
 export const AI_ACTIONS_MAX = 200;
 /** Longest `detail` we persist; a ConfigMap is not a log store. */
 export const AI_ACTION_DETAIL_MAX = 200;
-/** Longest `trigger` we persist; it carries a chat label or a voice utterance. */
+/** Longest `trigger` we persist; it carries a chat label. */
 export const AI_ACTION_TRIGGER_MAX = 200;
 /** Longest `command` we persist. Long enough to keep a real kubectl invocation
  *  intact, short enough that the ring buffer cannot outgrow a ConfigMap. */
@@ -39,16 +39,10 @@ export function truncateForLedger(value: string, max: number): string {
   return `${value.slice(0, keep)}${AI_ACTION_TRUNCATED_MARKER}`.slice(0, Math.max(max, 0));
 }
 
-/** Which AI surface ran the action. Both execute through the same server seams. */
-export type AiActionSource = "chat" | "voice";
+/** Which AI surface ran the action. */
+export type AiActionSource = "chat";
 
-/**
- * "unsupported" is neither of the other two: nothing ran and nothing failed.
- * The operator asked for something the vocabulary cannot express, and that is
- * worth recording, because a gap nobody can see is one that gets rediscovered
- * one frustrating session at a time.
- */
-export type AiActionOutcome = "success" | "failure" | "unsupported";
+export type AiActionOutcome = "success" | "failure";
 
 export interface AiActionTarget {
   /** Resource kind as addressed, e.g. "Deployment", "Pod", "secret". */
@@ -101,7 +95,6 @@ export interface AiActionInput {
 
 /** Past-tense label per action kind (docs/parity/contracts.md § 1 kinds). */
 const KIND_LABELS: Record<string, string> = {
-  unsupported: "Could not do",
   restart: "Restarted",
   rollback: "Rolled back",
   pause: "Paused",

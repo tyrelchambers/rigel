@@ -75,11 +75,11 @@ describe("buildAiActionEntry", () => {
   it("targets the pod for deletePod, defaulting the namespace", () => {
     const built = buildAiActionEntry({
       action: { kind: "deletePod", pod: "api-abc" },
-      source: "voice",
+      source: "chat",
       command: "kubectl delete pod api-abc",
       outcome: "success",
     });
-    expect(built.source).toBe("voice");
+    expect(built.source).toBe("chat");
     expect(built.kind).toBe("Deleted");
     expect(built.target).toEqual({ kind: "Pod", name: "api-abc", namespace: "default" });
   });
@@ -151,7 +151,7 @@ describe("buildAiActionEntry", () => {
   it("prefers an explicit trigger over the action label", () => {
     const built = buildAiActionEntry({
       action: { kind: "restart", label: "Restart api", name: "api" },
-      source: "voice",
+      source: "chat",
       command: "kubectl rollout restart deployment/api",
       outcome: "success",
       trigger: "restart the api deployment",
@@ -197,7 +197,7 @@ describe("buildAiActionEntry", () => {
   it("caps a pathological trigger and detail with the same marker", () => {
     const built = buildAiActionEntry({
       action: { kind: "restart", name: "api" },
-      source: "voice",
+      source: "chat",
       command: "kubectl rollout restart deployment/api",
       outcome: "failure",
       trigger: "t".repeat(5_000),
@@ -366,22 +366,6 @@ describe("summarizeActionDetail", () => {
   it("returns undefined when both streams are empty", () => {
     expect(summarizeActionDetail("success", "", "")).toBeUndefined();
     expect(summarizeActionDetail("success", "  \n \n", "\n")).toBeUndefined();
-  });
-});
-
-describe("a request the vocabulary cannot express", () => {
-  it("records what was asked, with nothing pretending to have run", () => {
-    const entry = buildAiActionEntry({
-      action: { kind: "unsupported" },
-      source: "voice",
-      command: "",
-      outcome: "unsupported",
-      trigger: "open a PR adding manifests for reddex-deploy and its related resources",
-    });
-    expect(entry.kind).toBe("Could not do");
-    expect(entry.outcome).toBe("unsupported");
-    expect(entry.command).toBe("");
-    expect(entry.trigger).toContain("adding manifests");
   });
 });
 

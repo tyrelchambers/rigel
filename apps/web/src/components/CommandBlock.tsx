@@ -1,8 +1,6 @@
 /**
- * The command box. One implementation for every surface that shows an operator
- * the exact kubectl before it runs: the ConfirmSheet they approve it in, and
- * the voice popover that raised it. If these two ever look different, the
- * operator has to learn the same thing twice.
+ * The command box: how the ConfirmSheet shows an operator the exact kubectl
+ * before they approve it.
  */
 import type { ReactNode } from "react";
 

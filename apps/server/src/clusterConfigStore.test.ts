@@ -5,7 +5,6 @@ import { join } from "node:path";
 import {
   AGENTS_CONFIG_KEY,
   CLAUDE_TOKEN_KEY,
-  VOICE_CONFIG_KEY,
   emptyUserConfigData,
 } from "@rigel/k8s/src/userConfig";
 import {
@@ -115,17 +114,17 @@ describe("writeUserConfig", () => {
   it("serializes overlapping writes so neither update is lost", async () => {
     await Promise.all([
       writeUserConfig(CTX, (current) => ({
-        [VOICE_CONFIG_KEY]: JSON.stringify({ ...JSON.parse(current[VOICE_CONFIG_KEY] || "{}"), url: "wss://x" }),
+        [AGENTS_CONFIG_KEY]: JSON.stringify({ ...JSON.parse(current[AGENTS_CONFIG_KEY] || "{}"), activeAgentId: "codex" }),
       })),
       writeUserConfig(CTX, (current) => ({
-        [VOICE_CONFIG_KEY]: JSON.stringify({
-          ...JSON.parse(current[VOICE_CONFIG_KEY] || "{}"),
-          apiKey: "k",
+        [AGENTS_CONFIG_KEY]: JSON.stringify({
+          ...JSON.parse(current[AGENTS_CONFIG_KEY] || "{}"),
+          agents: { codex: { authMethod: "apiKey" } },
         }),
       })),
     ]);
-    const stored = JSON.parse(fake.secrets.get(CTX)![VOICE_CONFIG_KEY]);
-    expect(stored).toEqual({ url: "wss://x", apiKey: "k" });
+    const stored = JSON.parse(fake.secrets.get(CTX)![AGENTS_CONFIG_KEY]);
+    expect(stored).toEqual({ activeAgentId: "codex", agents: { codex: { authMethod: "apiKey" } } });
   });
 });
 
@@ -138,7 +137,6 @@ describe("migration from local files", () => {
   }
 
   it("pushes the local files into a cluster with no Secret, then removes them", async () => {
-    const voice = await writeLocal([".rigel", "rigel-voice.json"], JSON.stringify({ url: "wss://local" }));
     const agents = await writeLocal(
       [".claude", "rigel-agents.json"],
       JSON.stringify({ activeAgentId: "codex", agents: { codex: { authMethod: "apiKey", apiKey: "sk-c" } } }),
@@ -147,97 +145,45 @@ describe("migration from local files", () => {
 
     const read = await readUserConfig(CTX);
     expect(read.state).toBe("ok");
-    expect(JSON.parse(read.data[VOICE_CONFIG_KEY])).toEqual({ url: "wss://local" });
     expect(JSON.parse(read.data[AGENTS_CONFIG_KEY]).agents.codex.apiKey).toBe("sk-c");
     expect(read.data[CLAUDE_TOKEN_KEY]).toBe("sk-ant-oat-local");
 
-    for (const path of [voice, agents, token]) {
+    for (const path of [agents, token]) {
       await expect(readFile(path, "utf8")).rejects.toThrow();
     }
     expect(fake.logs.filter((l) => l.includes("moved local config"))).toHaveLength(1);
   });
 
   it("does not push again once the files have been drained", async () => {
-    await writeLocal([".rigel", "rigel-voice.json"], JSON.stringify({ url: "wss://local" }));
+    await writeLocal([".claude", "rigel-oauth-token"], "sk-ant-oat-local");
     await readUserConfig(CTX);
     __resetClusterConfigCache();
     fake.secrets.delete(CTX);
     const again = await readUserConfig(CTX);
-    expect(again.data[VOICE_CONFIG_KEY]).toBe("");
+    expect(again.data[CLAUDE_TOKEN_KEY]).toBe("");
     expect(fake.writes).toHaveLength(1);
   });
 
   it("leaves a value it cannot decrypt behind, keeps the file, and says so", async () => {
-    const voice = await writeLocal(
-      [".rigel", "rigel-voice.json"],
-      JSON.stringify({ url: "wss://local", apiSecret: "enc:v1:bm90LWRlY3J5cHRhYmxl" }),
-    );
+    await writeLocal([".claude", "rigel-agents.json"], JSON.stringify({ activeAgentId: "codex" }));
+    const token = await writeLocal([".claude", "rigel-oauth-token"], "enc:v1:bm90LWRlY3J5cHRhYmxl");
     const read = await readUserConfig(CTX);
-    expect(JSON.parse(read.data[VOICE_CONFIG_KEY])).toEqual({ url: "wss://local" });
-    expect(await readFile(voice, "utf8")).toContain("enc:v1:");
-    expect(fake.logs.join("\n")).toMatch(/voice\.apiSecret could not be decrypted/);
+    expect(JSON.parse(read.data[AGENTS_CONFIG_KEY])).toEqual({ activeAgentId: "codex" });
+    expect(read.data[CLAUDE_TOKEN_KEY]).toBe("");
+    expect(await readFile(token, "utf8")).toContain("enc:v1:");
+    expect(fake.logs.join("\n")).toMatch(/claudeToken could not be decrypted/);
   });
 
-  it("never overwrites a field the cluster already has, and drains the file once nothing local remains", async () => {
-    const voice = await writeLocal([".rigel", "rigel-voice.json"], JSON.stringify({ url: "wss://local" }));
-    fake.secrets.set(CTX, { ...emptyUserConfigData(), [VOICE_CONFIG_KEY]: JSON.stringify({ url: "wss://cluster" }) });
+  it("never overwrites a key the cluster already has, and drains the file", async () => {
+    const token = await writeLocal([".claude", "rigel-oauth-token"], "sk-ant-oat-local");
+    fake.secrets.set(CTX, { ...emptyUserConfigData(), [CLAUDE_TOKEN_KEY]: "sk-ant-oat-cluster" });
     const read = await readUserConfig(CTX);
-    expect(JSON.parse(read.data[VOICE_CONFIG_KEY])).toEqual({ url: "wss://cluster" });
-    await expect(readFile(voice, "utf8")).rejects.toThrow();
-  });
-
-  it("half-migrated: lifts the fields the Secret is missing without touching the one it already has", async () => {
-    fake.secrets.set(CTX, {
-      ...emptyUserConfigData(),
-      [VOICE_CONFIG_KEY]: JSON.stringify({ openrouterApiKey: "or-cluster" }),
-    });
-    const voice = await writeLocal(
-      [".rigel", "rigel-voice.json"],
-      JSON.stringify({
-        url: "wss://local",
-        apiKey: "key-local",
-        apiSecret: "secret-local",
-        openrouterApiKey: "or-local",
-        model: "openai/gpt-4.1-mini",
-        ttsModel: "cartesia/sonic-2",
-      }),
-    );
-
-    const read = await readUserConfig(CTX);
-    expect(JSON.parse(read.data[VOICE_CONFIG_KEY])).toEqual({
-      url: "wss://local",
-      apiKey: "key-local",
-      apiSecret: "secret-local",
-      openrouterApiKey: "or-cluster",
-      model: "openai/gpt-4.1-mini",
-      ttsModel: "cartesia/sonic-2",
-    });
-    await expect(readFile(voice, "utf8")).rejects.toThrow();
-  });
-
-  it("a field cleared through Settings is never resurrected from a local file kept around for an undecryptable one", async () => {
-    fake.secrets.set(CTX, {
-      ...emptyUserConfigData(),
-      [VOICE_CONFIG_KEY]: JSON.stringify({ model: "openai/gpt-4.1-mini" }),
-    });
-    const voice = await writeLocal(
-      [".rigel", "rigel-voice.json"],
-      JSON.stringify({ model: "openai/gpt-4.1-mini", apiSecret: "enc:v1:bm90LWRlY3J5cHRhYmxl" }),
-    );
-
-    const first = await readUserConfig(CTX);
-    expect(JSON.parse(first.data[VOICE_CONFIG_KEY])).toEqual({ model: "openai/gpt-4.1-mini" });
-    expect(await readFile(voice, "utf8")).not.toContain("openai/gpt-4.1-mini");
-    expect(await readFile(voice, "utf8")).toContain("enc:v1:");
-
-    __resetClusterConfigCache();
-    fake.secrets.set(CTX, { ...emptyUserConfigData(), [VOICE_CONFIG_KEY]: JSON.stringify({}) });
-    const cleared = await readUserConfig(CTX);
-    expect(JSON.parse(cleared.data[VOICE_CONFIG_KEY])).toEqual({});
+    expect(read.data[CLAUDE_TOKEN_KEY]).toBe("sk-ant-oat-cluster");
+    await expect(readFile(token, "utf8")).rejects.toThrow();
   });
 
   it("keeps the local files when the push fails", async () => {
-    const voice = await writeLocal([".rigel", "rigel-voice.json"], JSON.stringify({ url: "wss://local" }));
+    const token = await writeLocal([".claude", "rigel-oauth-token"], "sk-ant-oat-local");
     __setClusterConfigIO({
       read: async () => ({ code: 1, stdout: "", stderr: 'Error from server (NotFound): secrets "rigel-user-config" not found' }),
       write: async () => ({ code: 1, stdout: "", stderr: "secrets is forbidden" }),
@@ -246,8 +192,8 @@ describe("migration from local files", () => {
     __resetClusterConfigCache();
     const read = await readUserConfig(CTX);
     expect(read.state).toBe("ok");
-    expect(read.data[VOICE_CONFIG_KEY]).toBe("");
-    expect(await readFile(voice, "utf8")).toContain("wss://local");
+    expect(read.data[CLAUDE_TOKEN_KEY]).toBe("");
+    expect(await readFile(token, "utf8")).toContain("sk-ant-oat-local");
     expect(fake.logs.join("\n")).toMatch(/could not move local config/);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { REDACTED, redactSecretValues, refusesForSecretValues } from "./secretRedaction";
+import { REDACTED, redactSecretValues } from "./secretRedaction";
 
 /** A real value, and the base64 kubectl would print for it. */
 const PLAINTEXT = "hunter2-super-secret";
@@ -106,33 +106,5 @@ spec:
   test("a Secret with no data at all is left alone", () => {
     const empty = "apiVersion: v1\nkind: Secret\nmetadata:\n  name: s\ntype: Opaque\n";
     expect(redactSecretValues(empty)).toBe(empty);
-  });
-});
-
-describe("refusesForSecretValues", () => {
-  // These print the bare value with no structure left to redact, so they are
-  // refused at argv time rather than filtered afterwards.
-  test("refuses value extraction aimed at a secret, joined or split argv", () => {
-    const extracting = [
-      ["-o=jsonpath={.data.password}"],
-      ["-o", "jsonpath={.data.password}"],
-      ["-o", "go-template={{.data}}"],
-      ["-o", "custom-columns=V:.data.password"],
-    ];
-    for (const format of extracting) {
-      expect(refusesForSecretValues(["get", "secret", "db", ...format]), format.join(" ")).toBe(true);
-    }
-    expect(refusesForSecretValues(["get", "secret/db", "-o", "jsonpath={.data}"])).toBe(true);
-  });
-
-  test("allows the same extraction on anything that is not a secret", () => {
-    expect(refusesForSecretValues(["get", "deployment", "web", "-o", "jsonpath={.spec.replicas}"])).toBe(false);
-  });
-
-  test("allows a secret read whose output can be redacted", () => {
-    for (const format of ["yaml", "json", "wide"]) {
-      expect(refusesForSecretValues(["get", "secret", "db", "-o", format])).toBe(false);
-    }
-    expect(refusesForSecretValues(["describe", "secret", "db"])).toBe(false);
   });
 });

@@ -122,8 +122,8 @@ describe("printsSecretValues", () => {
   });
 
   // It is the caller's job to apply this, because the answer depends on whether
-  // the caller can redact its own output. The voice read path redacts and so
-  // allows these; only the chat shell, which cannot, refuses them.
+  // the caller can redact its own output. The chat shell cannot, so it refuses
+  // them.
   test("the shared classifier still calls a Secret read a read", () => {
     expect(classifyCommand("kubectl get secret db -o yaml", null)).toMatchObject({ decision: "allow" });
   });

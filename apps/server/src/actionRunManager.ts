@@ -223,10 +223,7 @@ export class ActionRunManager {
     });
   }
 
-  /**
-   * Append the finished run to the AI-action ledger. Always `chat`: the voice
-   * worker never opens a /ws connection, it runs actions over REST /api/action.
-   */
+  /** Append the finished run to the AI-action ledger. */
   private ledger(run: InFlightRun, code: number): void {
     const outcome = code === 0 ? "success" : "failure";
     this.record(

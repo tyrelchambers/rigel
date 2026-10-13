@@ -8,10 +8,9 @@ export type CommandId =
   | "chat.toggle"
   | "chat.focusComposer"
   | "terminal.toggle"
-  | "logs.toggleWrap"
-  | "voice.toggle";
+  | "logs.toggleWrap";
 
-export type CommandGroup = "Navigation" | "Chat" | "Voice" | "Panels";
+export type CommandGroup = "Navigation" | "Chat" | "Panels";
 
 export interface CommandDef {
   id: CommandId;
@@ -75,14 +74,8 @@ export const COMMANDS: CommandDef[] = [
     group: "Panels",
     defaultSpec: { alt: true, mod: true, key: "W" },
   },
-  {
-    id: "voice.toggle",
-    label: "Start or end a voice session",
-    group: "Voice",
-    defaultSpec: { alt: true, mod: true, key: "V" },
-  },
 ];
 
 export const COMMAND_BY_ID: Map<CommandId, CommandDef> = new Map(COMMANDS.map((c) => [c.id, c]));
 
-export const COMMAND_GROUPS: CommandGroup[] = ["Navigation", "Chat", "Panels", "Voice"];
+export const COMMAND_GROUPS: CommandGroup[] = ["Navigation", "Chat", "Panels"];

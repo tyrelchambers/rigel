@@ -1580,87 +1580,6 @@ export async function importKubeconfig(kubeconfig: string) {
   return r;
 }
 
-export interface VoiceStatus {
-  enabled: boolean;
-  configured: boolean;
-}
-
-/** Drives whether the voice affordance exists at all. A failed request reads as
- * "off" so the header stays quiet on an older server. Keyed by context: the
- * credentials live in the cluster, so "configured" is a per-cluster answer. */
-export function useVoiceStatus() {
-  const context = useCluster((s) => s.activeContext);
-  return useQuery({
-    queryKey: ["voice-status", context] as const,
-    queryFn: async (): Promise<VoiceStatus> => {
-      const res = await apiFetch("/api/voice/status");
-      if (!res.ok) return { enabled: false, configured: false };
-      return (await res.json()) as VoiceStatus;
-    },
-    staleTime: 60_000,
-  });
-}
-
-/** Voice fields the renderer may edit. Mirrors the server's VoiceConfig. */
-export type VoiceField =
-  | "url" | "apiKey" | "apiSecret" | "openrouterApiKey" | "model" | "sttModel" | "ttsModel";
-
-/** GET /api/voice/config. Secrets are set/unset booleans, never values. */
-export interface VoiceConfigView {
-  url: string;
-  apiKey: string;
-  model: string;
-  sttModel: string;
-  ttsModel: string;
-  apiSecretSet: boolean;
-  openrouterApiKeySet: boolean;
-  /** Field to the env var supplying it. Env wins, so these are not editable. */
-  env: Partial<Record<VoiceField, string>>;
-  status: VoiceStatus;
-  /** The cluster these values live in. Config is per cluster with no local
-   *  fallback, so the panel names it and refuses to save without one. */
-  cluster: ClusterConfigStatus;
-}
-
-/** Keyed by context: the credentials live in the cluster, so switching clusters
- *  asks a different question rather than reusing a stale answer. */
-export function useVoiceConfig() {
-  const context = useCluster((s) => s.activeContext);
-  return useQuery({
-    queryKey: ["voice-config", context] as const,
-    queryFn: async (): Promise<VoiceConfigView> => {
-      const res = await apiFetch("/api/voice/config");
-      if (!res.ok) throw new Error(`voice config failed: ${res.status}`);
-      return (await res.json()) as VoiceConfigView;
-    },
-    staleTime: 30_000,
-  });
-}
-
-/** Save a partial patch. An omitted field is left alone, "" clears it. */
-export function useSaveVoiceConfig() {
-  const qc = useQueryClient();
-  const context = useCluster((s) => s.activeContext);
-  return useMutation<VoiceConfigView, Error, Partial<Record<VoiceField, string>>>({
-    mutationFn: async (patch) => {
-      const res = await apiFetch("/api/voice/config", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(patch),
-      });
-      if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(err.error ?? "failed to save voice settings");
-      }
-      return (await res.json()) as VoiceConfigView;
-    },
-    onSuccess: (data) => {
-      qc.setQueryData(["voice-config", context], data);
-      qc.setQueryData(["voice-status", context], data.status);
-    },
-  });
-}
-
 export interface SshHostView {
   alias: string;
   hostName: string;
@@ -1699,24 +1618,6 @@ export function useSetSshHosts() {
     },
     onSuccess: (hosts) => qc.setQueryData(["ssh-hosts"], hosts),
   });
-}
-
-export class VoiceAgentUnavailableError extends Error {
-  constructor(message: string) { super(message); this.name = "VoiceAgentUnavailableError"; }
-}
-
-export async function fetchVoiceToken(): Promise<{ url: string; token: string; room: string }> {
-  const res = await apiFetch("/api/voice/token", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ role: "desktop" }),
-  });
-  if (res.status === 503) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new VoiceAgentUnavailableError(body.error ?? "The voice agent isn't running.");
-  }
-  if (!res.ok) throw new Error(`voice token failed: ${res.status}`);
-  return (await res.json()) as { url: string; token: string; room: string };
 }
 
 export interface ClusterHealth { ok: boolean; authExpired: boolean }

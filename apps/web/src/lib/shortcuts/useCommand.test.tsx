@@ -72,8 +72,8 @@ describe("useShortcutDispatch", () => {
 
   it("does not register while disabled", () => {
     const fn = vi.fn();
-    render(<><Dispatcher /><Consumer id="voice.toggle" fn={fn} enabled={false} /></>);
-    press({ key: "v", code: "KeyV", metaKey: true, altKey: true });
+    render(<><Dispatcher /><Consumer id="logs.toggleWrap" fn={fn} enabled={false} /></>);
+    press({ key: "w", code: "KeyW", metaKey: true, altKey: true });
     expect(fn).not.toHaveBeenCalled();
   });
 
