@@ -305,12 +305,35 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
                 </span>
               )}
             </div>
-            <span
-              className="inline-flex items-center text-xs"
-              style={{ gap: 6, borderRadius: 8, border: "1px solid rgba(255,255,255,0.07)", padding: "6px 11px", fontWeight: 500, color: WARN_MUTED }}
-            >
-              <FontAwesomeIcon icon={faClockRotateLeft} className="size-[13px]" /> Last hour
-            </span>
+            <div className="flex items-center" style={{ gap: 8 }}>
+              {recentWarnings.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => handoffToChat(buildWarningInvestigationPrompt(recentWarnings), { newThread: true })}
+                  title="Investigate the recent warnings with AI"
+                  className="inline-flex shrink-0 items-center text-xs"
+                  style={{
+                    gap: 6,
+                    background: "rgba(255,255,255,0.04)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    borderRadius: 7,
+                    padding: "5px 11px",
+                    fontWeight: 600,
+                    color: "#D8D8DE",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  <FontAwesomeIcon icon={faSparkles} className="size-[13px]" /> Investigate recent
+                </button>
+              )}
+              <span
+                className="inline-flex items-center text-xs"
+                style={{ gap: 6, borderRadius: 8, border: "1px solid rgba(255,255,255,0.07)", padding: "6px 11px", fontWeight: 500, color: WARN_MUTED }}
+              >
+                <FontAwesomeIcon icon={faClockRotateLeft} className="size-[13px]" /> Last hour
+              </span>
+            </div>
           </div>
 
           {recentWarnings.length === 0 ? (
@@ -322,7 +345,7 @@ export default function OverviewPanel({ onInvestigateCluster }: OverviewPanelPro
                   <WarningRow
                     key={e.metadata.uid}
                     event={e}
-                    onInvestigate={() => handoffToChat(buildWarningInvestigationPrompt(e), { newThread: true })}
+                    onInvestigate={() => handoffToChat(buildWarningInvestigationPrompt([e]), { newThread: true })}
                   />
                 ))}
               </div>
