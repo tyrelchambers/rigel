@@ -46499,6 +46499,412 @@
           ]
         }
       ]
+    },
+    {
+      "type": "frame",
+      "id": "iJh7O",
+      "x": 0,
+      "y": 5947,
+      "name": "Overview — Recent warnings · Investigate recent",
+      "clip": true,
+      "width": 900,
+      "fill": "$surface-primary",
+      "layout": "vertical",
+      "padding": 24,
+      "children": [
+        {
+          "type": "frame",
+          "id": "hFg5C",
+          "name": "Recent warnings card",
+          "width": "fill_container",
+          "fill": "$surface-elevated",
+          "cornerRadius": 8,
+          "stroke": "$border-subtle",
+          "layout": "vertical",
+          "gap": 16,
+          "padding": 18,
+          "children": [
+            {
+              "type": "frame",
+              "id": "xzvLk",
+              "name": "Header",
+              "width": "fill_container",
+              "gap": 16,
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "OFGeh",
+                  "name": "Title group",
+                  "gap": 11,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "mIXs6",
+                      "name": "Alert badge",
+                      "width": 30,
+                      "height": 30,
+                      "fill": "#FFFFFF14",
+                      "cornerRadius": 9,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "yKxgC",
+                          "name": "Alert icon",
+                          "width": 16,
+                          "height": 16,
+                          "icon": "triangle-alert",
+                          "library": "lucide",
+                          "fill": "$fg-primary"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "Gah3y",
+                      "name": "Title",
+                      "fill": "#FFFFFF",
+                      "content": "Recent warnings",
+                      "fontFamily": "$font-sans",
+                      "fontSize": 14,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "NvygU",
+                      "name": "Count pill",
+                      "fill": "#F8717126",
+                      "cornerRadius": 999,
+                      "padding": [
+                        3,
+                        10
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "CEq5p",
+                          "name": "Count",
+                          "fill": "#F87171",
+                          "content": "7",
+                          "fontFamily": "$font-sans",
+                          "fontSize": 12,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "R5DAdw",
+                  "name": "Header actions",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "K3LPC",
+                      "name": "Investigate recent button",
+                      "fill": "#FFFFFF0A",
+                      "cornerRadius": 7,
+                      "stroke": "#FFFFFF14",
+                      "gap": 6,
+                      "padding": [
+                        5,
+                        11
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "rdSua",
+                          "name": "Sparkles",
+                          "width": 13,
+                          "height": 13,
+                          "icon": "sparkles",
+                          "library": "lucide",
+                          "fill": "#D8D8DE"
+                        },
+                        {
+                          "type": "text",
+                          "id": "sCDwp",
+                          "name": "Label",
+                          "fill": "#D8D8DE",
+                          "content": "Investigate recent",
+                          "fontFamily": "$font-sans",
+                          "fontSize": 12,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "wuv1w",
+                      "name": "Window pill",
+                      "cornerRadius": 8,
+                      "stroke": "#FFFFFF12",
+                      "gap": 6,
+                      "padding": [
+                        6,
+                        11
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "AAjBM",
+                          "name": "Clock",
+                          "width": 13,
+                          "height": 13,
+                          "icon": "history",
+                          "library": "lucide",
+                          "fill": "$fg-tertiary"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Fom5y",
+                          "name": "Label",
+                          "fill": "$fg-tertiary",
+                          "content": "Last hour",
+                          "fontFamily": "$font-sans",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "agKFu",
+              "name": "Rows",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "PqDi7",
+                  "name": "Warning row",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF05",
+                  "cornerRadius": 8,
+                  "stroke": "#FFFFFF0F",
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "ellipse",
+                      "id": "y5fVm3",
+                      "name": "Status dot",
+                      "fill": "#F87171",
+                      "width": 8,
+                      "height": 8
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ycX7m",
+                      "name": "Body",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "TBdCA",
+                          "name": "Top",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "umvOp",
+                              "name": "Reason",
+                              "fill": "$fg-primary",
+                              "content": "BackOff",
+                              "fontFamily": "$font-sans",
+                              "fontSize": 13,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "c6Slhp",
+                              "name": "Object",
+                              "fill": "$fg-tertiary",
+                              "content": "Pod api-7c9f-x2k in prod",
+                              "fontFamily": "$font-mono",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "rz9cT",
+                          "name": "Message",
+                          "fill": "#B9B9C1",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Back-off restarting failed container api",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$font-sans",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ypJyY",
+                      "name": "Investigate",
+                      "fill": "#FFFFFF0A",
+                      "cornerRadius": 7,
+                      "stroke": "#FFFFFF14",
+                      "padding": [
+                        5,
+                        11
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "ZHjTh",
+                          "name": "Label",
+                          "fill": "#D8D8DE",
+                          "content": "Investigate",
+                          "fontFamily": "$font-sans",
+                          "fontSize": 12,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "phfgr",
+                  "name": "Warning row",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF05",
+                  "cornerRadius": 8,
+                  "stroke": "#FFFFFF0F",
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "ellipse",
+                      "id": "d9i5pK",
+                      "name": "Status dot",
+                      "fill": "#F87171",
+                      "width": 8,
+                      "height": 8
+                    },
+                    {
+                      "type": "frame",
+                      "id": "S0qfr",
+                      "name": "Body",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "lcUPZ",
+                          "name": "Top",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "Hqsfj",
+                              "name": "Reason",
+                              "fill": "$fg-primary",
+                              "content": "Unhealthy",
+                              "fontFamily": "$font-sans",
+                              "fontSize": 13,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "BuYNM",
+                              "name": "Object",
+                              "fill": "$fg-tertiary",
+                              "content": "Pod web-5d8b-q1 in default",
+                              "fontFamily": "$font-mono",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "di4NY",
+                          "name": "Message",
+                          "fill": "#B9B9C1",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Readiness probe failed: HTTP probe failed with statuscode: 503",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$font-sans",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "oKV3K",
+                      "name": "Investigate",
+                      "fill": "#FFFFFF0A",
+                      "cornerRadius": 7,
+                      "stroke": "#FFFFFF14",
+                      "padding": [
+                        5,
+                        11
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "i8yQ2s",
+                          "name": "Label",
+                          "fill": "#D8D8DE",
+                          "content": "Investigate",
+                          "fontFamily": "$font-sans",
+                          "fontSize": 12,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "Xk3iP",
+              "name": "Footer",
+              "fill": "$fg-tertiary",
+              "content": "Showing 2 of 7 warnings",
+              "fontFamily": "$font-sans",
+              "fontSize": 12,
+              "fontWeight": "normal"
+            }
+          ]
+        }
+      ]
     }
   ],
   "variables": {
