@@ -4,6 +4,7 @@ import type {
   CNPGCluster,
   CNPGScheduledBackup,
   DatabaseInstance,
+  DatabasePod,
   DatabasePodRaw,
   WorkloadDB,
 } from "./types";
@@ -21,7 +22,7 @@ import {
   latestCompletedBackup,
   matchPods,
   matchesDatabase,
-  phaseBadgeVariant,
+  podStatusBadge,
   podNodes,
   readyColorClass,
   relativeAge,
@@ -362,6 +363,14 @@ describe("matchPods", () => {
     expect(matched[0].node).toBe("node-a");
   });
 
+  test("counts ready containers from containerStatuses", () => {
+    const [p] = matchPods(inst, [
+      { metadata: { name: "pg-1", namespace: "default", labels: { "cnpg.io/cluster": "pg" } }, status: { phase: "Running", containerStatuses: [{ ready: true }, { ready: false }] } },
+    ]);
+    expect(p.readyContainers).toBe(1);
+    expect(p.totalContainers).toBe(2);
+  });
+
   test("returns empty when selector matches nothing", () => {
     const wl = instanceFromWorkload(workload(), "statefulset")!; // selector {app: redis}, ns monitoring
     expect(matchPods(wl, pods)).toEqual([]);
@@ -427,13 +436,25 @@ describe("badge helpers", () => {
   });
 });
 
-describe("phaseBadgeVariant", () => {
+describe("podStatusBadge", () => {
+  const pod = (phase: string, readyContainers = 0, totalContainers = 0): DatabasePod => ({
+    name: "pg-1",
+    phase,
+    readyContainers,
+    totalContainers,
+    isPrimary: false,
+  });
+
   test("maps pod phases to StatusBadge variants", () => {
-    expect(phaseBadgeVariant("Running")).toBe("healthy");
-    expect(phaseBadgeVariant("Pending")).toBe("pending");
-    expect(phaseBadgeVariant("Failed")).toBe("error");
-    expect(phaseBadgeVariant("Succeeded")).toBe("neutral");
-    expect(phaseBadgeVariant("Unknown")).toBe("neutral");
+    expect(podStatusBadge(pod("Running", 2, 2))).toEqual({ label: "Running", variant: "healthy" });
+    expect(podStatusBadge(pod("Pending")).variant).toBe("pending");
+    expect(podStatusBadge(pod("Failed")).variant).toBe("error");
+    expect(podStatusBadge(pod("Succeeded")).variant).toBe("neutral");
+    expect(podStatusBadge(pod("Unknown")).variant).toBe("neutral");
+  });
+
+  test("a Running pod with unready containers shows the ready count in amber", () => {
+    expect(podStatusBadge(pod("Running", 1, 2))).toEqual({ label: "Running · 1/2", variant: "pending" });
   });
 });
 

@@ -40,7 +40,7 @@ import {
   dsn,
   matchPods,
   matchesDatabase,
-  phaseBadgeVariant,
+  podStatusBadge,
   podNodes,
   readyFraction,
   relativeAge,
@@ -532,7 +532,7 @@ export function DatabaseDetail({
               <li key={p.name} className="flex items-center gap-2 text-xs">
                 <span className="text-muted-foreground/60">├─</span>
                 <span className="font-mono text-muted-foreground">{p.name}</span>
-                <StatusBadge label={p.phase} variant={phaseBadgeVariant(p.phase)} />
+                <StatusBadge {...podStatusBadge(p)} />
                 {p.isPrimary && (
                   <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-3xs font-medium text-primary">
                     primary

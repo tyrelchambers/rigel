@@ -290,6 +290,8 @@ export function matchPods(
     .map((p) => ({
       name: p.metadata.name,
       phase: p.status?.phase ?? "Unknown",
+      readyContainers: (p.status?.containerStatuses ?? []).filter((c) => c.ready).length,
+      totalContainers: p.status?.containerStatuses?.length ?? 0,
       node: p.spec?.nodeName,
       isPrimary: !!instance.cnpgPrimary && p.metadata.name === instance.cnpgPrimary,
     }))
@@ -466,17 +468,23 @@ export function kindColorClass(kind: DatabaseKind): string {
   }
 }
 
-/** Pod phase -> StatusBadge variant. */
-export function phaseBadgeVariant(phase: string): StatusBadgeVariant {
-  switch (phase) {
+/**
+ * Pod -> StatusBadge label + variant. A Running pod with unready containers
+ * shows its ready count in amber, since phase alone hides a failing probe.
+ */
+export function podStatusBadge(pod: DatabasePod): { label: string; variant: StatusBadgeVariant } {
+  const label = pod.phase;
+  switch (pod.phase) {
     case "Running":
-      return "healthy";
+      return pod.readyContainers < pod.totalContainers
+        ? { label: `Running · ${pod.readyContainers}/${pod.totalContainers}`, variant: "pending" }
+        : { label, variant: "healthy" };
     case "Pending":
-      return "pending";
+      return { label, variant: "pending" };
     case "Failed":
-      return "error";
+      return { label, variant: "error" };
     default: // Succeeded / Unknown / other
-      return "neutral";
+      return { label, variant: "neutral" };
   }
 }
 

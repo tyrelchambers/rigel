@@ -30,7 +30,7 @@ function instance(): DatabaseInstance {
 }
 
 const matchedPods: DatabasePod[] = [
-  { name: "pg-1", phase: "Running", node: "node-a", isPrimary: true },
+  { name: "pg-1", phase: "Running", readyContainers: 1, totalContainers: 1, node: "node-a", isPrimary: true },
 ];
 
 const caps: DatabaseCapabilities = { actions: [] };
