@@ -84,26 +84,37 @@ export function buildRbacAccessPrompt(subject: {
 }
 
 /**
- * Build the investigation prompt for a single Recent-warning event. Unlike
- * buildHandoffPrompt (keyed by kind/name/topic), this consumes a K8sEvent so it
- * can fold in the warning's reason and message — a distinct purpose, not a
- * variation of the topic prompts.
+ * Build the investigation prompt for one or more Recent-warning events. Unlike
+ * buildHandoffPrompt (keyed by kind/name/topic), this consumes K8sEvents so it
+ * can fold in each warning's reason and message. One event asks about that
+ * warning; several are listed so the AI can look for a shared root cause.
  */
-export function buildWarningInvestigationPrompt(event: K8sEvent): string {
-  const io = event.involvedObject;
-  const ns = io?.namespace ?? "default";
-  const target =
-    io?.kind && io?.name
-      ? `${io.kind} ${io.name} in namespace ${ns}`
-      : io?.name
-        ? `${io.name} in namespace ${ns}`
-        : `a resource in namespace ${ns}`;
-  const reason = event.reason ?? "Warning";
-  const parts = [
-    `Investigate this Kubernetes warning.`,
-    `Reason: ${reason}. Resource: ${target}.`,
-  ];
-  if (event.message) parts.push(`Message: "${event.message}".`);
-  parts.push(`Find the root cause and suggest a fix. Use read-only kubectl. Be concise.`);
-  return parts.join(" ");
+export function buildWarningInvestigationPrompt(events: K8sEvent[]): string {
+  const describe = (event: K8sEvent): string => {
+    const io = event.involvedObject;
+    const ns = io?.namespace ?? "default";
+    const target =
+      io?.kind && io?.name
+        ? `${io.kind} ${io.name} in namespace ${ns}`
+        : io?.name
+          ? `${io.name} in namespace ${ns}`
+          : `a resource in namespace ${ns}`;
+    const parts = [`Reason: ${event.reason ?? "Warning"}. Resource: ${target}.`];
+    if (event.message) parts.push(`Message: "${event.message}".`);
+    return parts.join(" ");
+  };
+  if (events.length === 1) {
+    return [
+      `Investigate this Kubernetes warning.`,
+      describe(events[0]),
+      `Find the root cause and suggest a fix. Use read-only kubectl. Be concise.`,
+    ].join(" ");
+  }
+  return [
+    `Investigate these ${events.length} recent Kubernetes warnings, newest first.`,
+    ``,
+    ...events.map((e, i) => `${i + 1}. ${describe(e)}`),
+    ``,
+    `Group related warnings, find the root cause(s), and suggest fixes. Use read-only kubectl. Be concise.`,
+  ].join("\n");
 }
