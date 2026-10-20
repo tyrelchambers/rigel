@@ -98,7 +98,7 @@ export interface WorkloadDB {
 export interface DatabasePodRaw {
   metadata: { name: string; namespace?: string; labels?: Record<string, string> };
   spec?: { nodeName?: string };
-  status?: { phase?: string };
+  status?: { phase?: string; containerStatuses?: { ready?: boolean }[] };
 }
 
 // --- Normalized panel models ------------------------------------------------
@@ -186,6 +186,8 @@ export interface DatabaseCapabilities {
 export interface DatabasePod {
   name: string;
   phase: string; // Running | Pending | Failed | Succeeded | Unknown
+  readyContainers: number;
+  totalContainers: number;
   node?: string;
   isPrimary: boolean;
 }
