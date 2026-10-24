@@ -1,6 +1,7 @@
 // Per-installed-app update targets — pure helpers so the Catalog panel can wire
-// the /api/updates query and the [Update] setImage action without leaking
-// matching logic into JSX. Mirrors the shared detection logic
+// the /api/updates query and the [Update] action without leaking matching logic
+// into JSX. Each target says HOW it updates (`via`): a setImage for plain
+// workloads, an in-place `helm upgrade` for Helm-managed installs, or blocked. Mirrors the shared detection logic
 // (`installedImages`) but additionally carries the workload coordinates a
 // setImage action needs: controller name, namespace, and container name.
 //
@@ -24,6 +25,57 @@ import {
 } from "@rigel/catalog";
 
 export type WorkloadKind = "deployment" | "statefulset" | "daemonset";
+
+/**
+ * How an installed app updates. A Helm-managed workload must move by chart
+ * version (`helm upgrade --reuse-values`), never by `kubectl set image`: that
+ * changes one container, leaves the release on its old chart, and skips chart
+ * hooks (e.g. SigNoz's schema migrator). When the Helm route can't be built,
+ * the update is `blocked` with a reason — there is no image-swap fallback.
+ */
+export type UpdateVia =
+  | { kind: "image" }
+  | { kind: "helm"; release: string; namespace: string; repoName: string; repoURL: string; chart: string }
+  | { kind: "blocked"; reason: string };
+
+type WorkloadMeta = { name?: string; namespace?: string; labels?: Record<string, string>; annotations?: Record<string, string> };
+
+const HELM_MANAGED_BY = "app.kubernetes.io/managed-by";
+const HELM_RELEASE_NAME = "meta.helm.sh/release-name";
+const HELM_RELEASE_NAMESPACE = "meta.helm.sh/release-namespace";
+
+/**
+ * Decide the update route for `app` running on a workload with `meta`. The
+ * catalog's install mode is the source of truth for the chart; the workload's
+ * Helm ownership annotations name the release to upgrade.
+ */
+export function updateVia(app: CatalogApp, meta: WorkloadMeta | undefined, workloadNamespace: string): UpdateVia {
+  const managedByHelm = meta?.labels?.[HELM_MANAGED_BY] === "Helm";
+  const release = meta?.annotations?.[HELM_RELEASE_NAME];
+  const releaseNamespace = meta?.annotations?.[HELM_RELEASE_NAMESPACE] ?? workloadNamespace;
+  const install = app.install;
+
+  if (install?.mode === "helm") {
+    if (!install.repoName || !install.repoURL || !install.chart) {
+      return { kind: "blocked", reason: `${app.name} installs from a Helm chart, but its catalog entry has no chart repo/name to upgrade with.` };
+    }
+    if (!managedByHelm || !release) {
+      return {
+        kind: "blocked",
+        reason: `${app.name} installs from a Helm chart, but this workload has no Helm release metadata — upgrade it with helm, not by swapping the image.`,
+      };
+    }
+    return { kind: "helm", release, namespace: releaseNamespace, repoName: install.repoName, repoURL: install.repoURL, chart: install.chart };
+  }
+  if (managedByHelm) {
+    const which = release ? ` ${releaseNamespace}/${release}` : "";
+    return {
+      kind: "blocked",
+      reason: `Managed by Helm release${which} — upgrade the chart; swapping the image would drift the release.`,
+    };
+  }
+  return { kind: "image" };
+}
 
 /**
  * Reconstruct a full image reference with a new tag — the exact `image` field a
@@ -84,11 +136,14 @@ export interface UpdateTarget {
   repoURL?: string;
   /** sha256:… the pod actually pulled (moving-tag digest tier context). */
   runningDigest?: string;
+  /** How [Update] applies — image swap, Helm chart upgrade, or blocked. */
+  via: UpdateVia;
 }
 
 interface RunningContainer {
   repo: string;
   image: string;
+  meta: WorkloadMeta | undefined;
   workloadName: string;
   workloadKind: WorkloadKind;
   namespace: string;
@@ -98,7 +153,7 @@ interface RunningContainer {
 /** A controller with its metadata + container list, tagged with its kind. */
 interface Workload {
   kind: WorkloadKind;
-  meta?: { name?: string; namespace?: string; annotations?: Record<string, string> };
+  meta?: WorkloadMeta;
   containers: Array<{ name?: string; image?: string }>;
 }
 
@@ -139,6 +194,7 @@ function runningContainers(wls: Workload[]): RunningContainer[] {
       out.push({
         repo: imageRepoPath(c.image),
         image: c.image,
+        meta: w.meta,
         workloadName,
         workloadKind: w.kind,
         namespace,
@@ -229,15 +285,17 @@ export function updateTargets(
       if (picked) {
         const repo = imageRepoPath(picked.image);
         const digest = digests.find((d) => repoPathsMatch(d.repo, repo))?.digest;
+        const namespace = bound.meta.namespace ?? "default";
         out.push({
           appID: app.id,
           image: picked.image,
           workloadName: bound.meta.name,
           workloadKind: bound.kind,
-          namespace: bound.meta.namespace ?? "default",
+          namespace,
           container: picked.name,
           repoURL: app.repoURL ?? undefined,
           runningDigest: digest,
+          via: updateVia(app, bound.meta, namespace),
         });
         continue;
       }
@@ -261,6 +319,7 @@ export function updateTargets(
       container: matched.container,
       repoURL: app.repoURL ?? undefined,
       runningDigest: digest,
+      via: updateVia(app, matched.meta, matched.namespace),
     });
   }
   return out;

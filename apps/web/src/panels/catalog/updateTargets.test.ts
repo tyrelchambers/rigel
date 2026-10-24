@@ -98,6 +98,7 @@ describe("updateTargets", () => {
         container: "plausible",
         repoURL: "https://github.com/plausible/analytics",
         runningDigest: undefined,
+        via: { kind: "image" },
       },
     ]);
   });
@@ -232,5 +233,64 @@ describe("updateTargets", () => {
     expect(targets).toHaveLength(1);
     expect(targets[0]?.workloadName).toBe("dep-dup");
     expect(targets[0]?.workloadKind).toBe("deployment");
+  });
+});
+
+// A Helm-managed install must be updated by upgrading its chart, never by
+// swapping one container image (that drifts the release: other containers and
+// chart hooks — e.g. SigNoz's schema migrator — are left behind).
+describe("updateTargets: Helm-managed workloads", () => {
+  const signozApp = app({
+    id: "signoz",
+    matchImages: ["signoz/signoz"],
+    install: { mode: "helm", repoName: "signoz", repoURL: "https://charts.signoz.io", chart: "signoz", version: "0.127.0" },
+  });
+  function signozSts(meta: { labels?: Record<string, string>; annotations?: Record<string, string> }): StatefulSetLike {
+    return {
+      metadata: { name: "signoz", namespace: "signoz", ...meta },
+      spec: { template: { spec: { containers: [{ name: "signoz", image: "docker.io/signoz/signoz:v0.126.1" }] } } },
+    } as StatefulSetLike;
+  }
+  const helmMeta = {
+    labels: { "app.kubernetes.io/managed-by": "Helm" },
+    annotations: { "meta.helm.sh/release-name": "signoz-prod", "meta.helm.sh/release-namespace": "observability" },
+  };
+
+  test("helm-mode catalog app on a Helm-managed workload → chart upgrade via its release", () => {
+    const [t] = updateTargets([signozApp], [], [signozSts(helmMeta)], [], []);
+    expect(t?.via).toEqual({
+      kind: "helm",
+      release: "signoz-prod",
+      namespace: "observability",
+      repoName: "signoz",
+      repoURL: "https://charts.signoz.io",
+      chart: "signoz",
+    });
+  });
+
+  test("helm-mode catalog app whose workload lacks Helm release metadata → blocked, no image swap", () => {
+    const [t] = updateTargets([signozApp], [], [signozSts({})], [], []);
+    expect(t?.via.kind).toBe("blocked");
+    expect(t?.via.kind === "blocked" && t.via.reason).toMatch(/no Helm release metadata/);
+  });
+
+  test("helm-mode catalog app without chart coordinates → blocked", () => {
+    const bare = app({ id: "signoz", matchImages: ["signoz/signoz"], install: { mode: "helm" } });
+    const [t] = updateTargets([bare], [], [signozSts(helmMeta)], [], []);
+    expect(t?.via.kind).toBe("blocked");
+    expect(t?.via.kind === "blocked" && t.via.reason).toMatch(/no chart repo/);
+  });
+
+  test("manifest-mode catalog app running on a Helm-managed workload → blocked, names the release", () => {
+    const plain = app({ id: "signoz", matchImages: ["signoz/signoz"] });
+    const [t] = updateTargets([plain], [], [signozSts(helmMeta)], [], []);
+    expect(t?.via.kind).toBe("blocked");
+    expect(t?.via.kind === "blocked" && t.via.reason).toMatch(/observability\/signoz-prod/);
+  });
+
+  test("a workload not managed by Helm keeps the image update path", () => {
+    const plain = app({ id: "signoz", matchImages: ["signoz/signoz"] });
+    const [t] = updateTargets([plain], [], [signozSts({})], [], []);
+    expect(t?.via).toEqual({ kind: "image" });
   });
 });

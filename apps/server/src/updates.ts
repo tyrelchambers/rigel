@@ -1,6 +1,9 @@
 /**
  * Update-check request handler for `POST /api/updates`.
  *
+ * Helm-managed installs (`charts`) are checked by chart version instead: the
+ * release's deployed chart (`helm status`) against the chart repo's index.
+ *
  * Takes a list of full running image references and, for each, resolves an
  * update status through the deterministic resolver tiers in
  * `@rigel/catalog` (registry version tags → moving-tag digests → GitHub
@@ -19,10 +22,13 @@ import {
   CATALOG,
   parseImageRef,
   repoURLForImage,
+  statusFromTags,
   UpdateResolver,
   type InstalledImage,
   type UpdateStatus,
 } from "@rigel/catalog";
+import { buildHelmStatusArgs, parseChartIndexVersions, validateHelmTarget, isHttpRepoURL } from "@rigel/k8s/src/helm";
+import { runProcess } from "@rigel/k8s/src/run";
 
 /** One installed image to check. `runningDigest` is the digest the pod actually
  *  pulled (from its `imageID`); it lets the moving-tag tier detect a stale pod
@@ -33,9 +39,19 @@ export interface UpdatesImage {
   runningDigest?: string | null;
 }
 
+/** One Helm-managed install to check: the release backing it plus the
+ *  catalog's chart coordinates. Its update is a chart version, never an image. */
+export interface UpdatesChart {
+  release: string;
+  namespace: string;
+  repoURL: string;
+  chart: string;
+}
+
 /** Request body for `POST /api/updates`. */
 export interface UpdatesRequest {
-  images: Array<string | UpdatesImage>;
+  images?: Array<string | UpdatesImage>;
+  charts?: UpdatesChart[];
 }
 
 /** One image's update outcome on the wire. Mirrors the spec `UpdateResult`. */
@@ -54,8 +70,74 @@ export interface UpdateResult {
   reason?: string;
 }
 
+/** One Helm release's update outcome on the wire. */
+export interface ChartUpdateResult {
+  release: string;
+  namespace: string;
+  chart: string;
+  /** Deployed chart version, or null when the release couldn't be read. */
+  currentVersion: string | null;
+  /** Newer stable chart version, or null when none / undeterminable. */
+  latest: string | null;
+  updateAvailable: boolean;
+  kind: "version" | "unknown";
+  reason?: string;
+}
+
 export interface UpdatesResponse {
   results: UpdateResult[];
+  /** Present only when the request carried `charts`. */
+  charts?: ChartUpdateResult[];
+}
+
+/** Injectable lookups for the chart tier (real helm + HTTP by default). */
+export interface ChartUpdateDeps {
+  /** The deployed chart (name + version) of a release, or null if unreadable. */
+  releaseChart: (release: string, namespace: string) => Promise<{ name: string; version: string } | null>;
+  /** Every version of `chart` in the repo's index, or null if unreadable. */
+  chartVersions: (repoURL: string, chart: string) => Promise<string[] | null>;
+}
+
+/** Real chart lookups: `helm status -o json` and the repo's `index.yaml`. */
+export function defaultChartDeps(context: string | null): ChartUpdateDeps {
+  return {
+    async releaseChart(release, namespace) {
+      const r = await runProcess("helm", buildHelmStatusArgs(release, namespace, context));
+      if (r.code !== 0) return null;
+      const meta = (JSON.parse(r.stdout) as { chart?: { metadata?: { name?: string; version?: string } } }).chart?.metadata;
+      return meta?.name && meta.version ? { name: meta.name, version: meta.version } : null;
+    },
+    async chartVersions(repoURL, chart) {
+      const res = await fetch(`${repoURL.replace(/\/+$/, "")}/index.yaml`);
+      if (!res.ok) return null;
+      return parseChartIndexVersions(await res.text(), chart);
+    },
+  };
+}
+
+/** Resolve one Helm release against its chart repo. Throws are the caller's to isolate. */
+async function resolveChart(c: UpdatesChart, deps: ChartUpdateDeps): Promise<ChartUpdateResult> {
+  const base = { release: c.release, namespace: c.namespace, chart: c.chart };
+  const unknown = (currentVersion: string | null, reason: string): ChartUpdateResult => ({
+    ...base, currentVersion, latest: null, updateAvailable: false, kind: "unknown", reason,
+  });
+  const invalid = validateHelmTarget(c.release, c.namespace) ?? (isHttpRepoURL(c.repoURL) ? null : "repo URL must be an http(s) URL");
+  if (invalid) return unknown(null, invalid);
+
+  const deployed = await deps.releaseChart(c.release, c.namespace);
+  if (!deployed) return unknown(null, `could not read Helm release ${c.namespace}/${c.release}`);
+  if (deployed.name !== c.chart) {
+    return unknown(deployed.version, `release ${c.namespace}/${c.release} runs chart ${deployed.name}, not ${c.chart}`);
+  }
+  const versions = await deps.chartVersions(c.repoURL, c.chart);
+  if (versions === null) return unknown(deployed.version, `could not read the chart index at ${c.repoURL}`);
+
+  const status = statusFromTags(deployed.version, versions);
+  if (status.kind === "unknown") return unknown(deployed.version, status.reason);
+  if (status.kind === "updateAvailable") {
+    return { ...base, currentVersion: deployed.version, latest: status.latest, updateAvailable: true, kind: "version" };
+  }
+  return { ...base, currentVersion: deployed.version, latest: null, updateAvailable: false, kind: "version" };
 }
 
 /**
@@ -140,6 +222,7 @@ async function resolveImage(
 export async function handleUpdates(
   body: UpdatesRequest,
   resolver: UpdateResolver = new UpdateResolver(),
+  chartDeps: ChartUpdateDeps = defaultChartDeps(null),
 ): Promise<UpdatesResponse> {
   const entries = Array.isArray(body?.images) ? body.images : [];
   const results: UpdateResult[] = [];
@@ -167,5 +250,19 @@ export async function handleUpdates(
     }
   }
 
-  return { results };
+  if (!Array.isArray(body?.charts)) return { results };
+
+  const charts: ChartUpdateResult[] = [];
+  for (const c of body.charts) {
+    try {
+      charts.push(await resolveChart(c, chartDeps));
+    } catch (err) {
+      charts.push({
+        release: c?.release, namespace: c?.namespace, chart: c?.chart,
+        currentVersion: null, latest: null, updateAvailable: false, kind: "unknown",
+        reason: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  return { results, charts };
 }

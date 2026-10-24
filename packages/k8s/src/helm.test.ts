@@ -191,3 +191,65 @@ test("isSafeHelmArg / isHttpRepoURL guards", () => {
   expect(isHttpRepoURL("file:///etc/passwd")).toBe(false);
   expect(isHttpRepoURL("--repo")).toBe(false);
 });
+
+import { buildHelmStatusArgs, parseChartIndexVersions } from "./helm";
+
+// Catalog [Update] on a Helm-managed app upgrades the existing release in place:
+// no `--install` (never create a fresh release with chart defaults), no
+// `--create-namespace`, no values file — `--reuse-values` keeps what's deployed.
+test("upgrade commands (reuseValues): repo add -> update -> upgrade --reuse-values, no --install", () => {
+  const src: HelmChartSource = { kind: "repo", repoName: "signoz", repoURL: "https://charts.signoz.io", chart: "signoz", version: "0.147.0" };
+  const cmds = buildHelmInstallCommands(src, { releaseName: "signoz", namespace: "signoz", reuseValues: true, context: "kind-test" });
+  expect(cmds[0]).toEqual(["repo", "add", "--", "signoz", "https://charts.signoz.io"]);
+  expect(cmds[1]).toEqual(["repo", "update", "--", "signoz"]);
+  expect(cmds[2]).toEqual([
+    "upgrade", "--version", "0.147.0", "--reuse-values",
+    "-n", "signoz", "--kube-context", "kind-test",
+    "--", "signoz", "signoz/signoz",
+  ]);
+});
+
+test("validateHelmInstall: a reuse-values upgrade must pin a chart version", () => {
+  const src: HelmChartSource = { kind: "repo", repoName: "signoz", repoURL: "https://charts.signoz.io", chart: "signoz", version: null };
+  expect(validateHelmInstall(src, "signoz", "signoz", { reuseValues: true })).toBe("an upgrade must pin a chart version");
+  expect(validateHelmInstall({ ...src, version: "0.147.0" }, "signoz", "signoz", { reuseValues: true })).toBeNull();
+  // Plain installs keep allowing an unpinned (latest) chart.
+  expect(validateHelmInstall(src, "signoz", "signoz")).toBeNull();
+});
+
+test("status args read one release as JSON", () => {
+  expect(buildHelmStatusArgs("signoz", "signoz", "kind-test")).toEqual([
+    "status", "-n", "signoz", "-o", "json", "--kube-context", "kind-test", "--", "signoz",
+  ]);
+  expect(buildHelmStatusArgs("signoz", "signoz", null)).toEqual(["status", "-n", "signoz", "-o", "json", "--", "signoz"]);
+});
+
+const INDEX = `apiVersion: v1
+entries:
+  signoz:
+  - apiVersion: v2
+    appVersion: v0.147.0
+    dependencies:
+    - name: clickhouse
+      version: 24.1.15
+    name: signoz
+    version: 0.147.0
+  - apiVersion: v2
+    name: signoz
+    version: 0.126.1
+  k8s-infra:
+  - name: k8s-infra
+    version: 0.13.0
+generated: "2026-10-23T00:00:00Z"
+`;
+
+test("parseChartIndexVersions lists one chart's versions, ignoring dependency versions", () => {
+  expect(parseChartIndexVersions(INDEX, "signoz")).toEqual(["0.147.0", "0.126.1"]);
+  expect(parseChartIndexVersions(INDEX, "k8s-infra")).toEqual(["0.13.0"]);
+});
+
+test("parseChartIndexVersions: absent chart → [], malformed index → null", () => {
+  expect(parseChartIndexVersions(INDEX, "nope")).toEqual([]);
+  expect(parseChartIndexVersions("entries: [unclosed", "signoz")).toBeNull();
+  expect(parseChartIndexVersions("just a string", "signoz")).toBeNull();
+});

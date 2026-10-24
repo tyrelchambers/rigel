@@ -11,15 +11,16 @@ export interface InstallResult {
   stderr: string;
 }
 
-export interface HelmInstallParams {
+/** `values` installs with those values; `reuseValues` upgrades the existing
+ *  release in place to the pinned `version`, keeping its deployed values. */
+export type HelmInstallParams = {
   repoName: string;
   repoURL: string;
   chart: string;
   version?: string | null;
   releaseName: string;
   namespace: string;
-  values: string;
-}
+} & ({ values: string; reuseValues?: never } | { reuseValues: true; values?: never });
 
 async function postJSON<T>(path: string, body: unknown): Promise<T> {
   const res = await apiFetch(path, {
@@ -39,7 +40,7 @@ export function applyManifest(yaml: string, source?: ApplySource): Promise<Insta
   return postJSON<InstallResult>("/api/apply", { yaml, ...(source ? { source } : {}) });
 }
 
-/** POST the helm descriptor + values to run `helm upgrade --install`. */
+/** POST the helm descriptor + values to run `helm upgrade --install` (or a reuse-values upgrade). */
 export function installHelm(params: HelmInstallParams): Promise<InstallResult> {
   return postJSON<InstallResult>("/api/helm", params);
 }

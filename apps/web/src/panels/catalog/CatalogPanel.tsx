@@ -26,7 +26,11 @@ import {
 } from "@rigel/catalog";
 import { useCluster } from "@/store/cluster";
 import { subscribe, unsubscribe } from "@/lib/ws";
-import { useUpdatesByImage, type UpdateResult, type ActionBlock } from "@/lib/api";
+import { useUpdateChecks, type UpdateCheck, type UpdateResult, type ActionBlock } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { buildHelmInstallCommands, type HelmChartSource } from "@rigel/k8s/src/helm";
+import { HelmConfirmModal } from "@/panels/helm/HelmConfirmModal";
+import { useInstallHelm } from "./installApi";
 import { ConfirmSheet } from "@/components/ConfirmSheet";
 import { InfoTooltip } from "@/components/InfoTooltip";
 import { iconFor } from "./icons";
@@ -74,6 +78,11 @@ export default function CatalogPanel() {
   const [wizardNodePin, setWizardNodePin] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<ActionBlock | null>(null);
   const [pendingNotice, setPendingNotice] = useState<string | null>(null);
+  // A Helm-managed app's [Update]: the chart upgrade awaiting confirmation.
+  const [pendingHelm, setPendingHelm] = useState<{ target: UpdateTarget; latest: string } | null>(null);
+  const [helmError, setHelmError] = useState<string | null>(null);
+  const helmUpgrade = useInstallHelm();
+  const queryClient = useQueryClient();
   // Images the user just updated: shown as current with no re-check. Populated
   // once the watch confirms the workload's image actually advanced.
   const [updatedImages, setUpdatedImages] = useState<ReadonlySet<string>>(() => new Set());
@@ -174,14 +183,40 @@ export default function CatalogPanel() {
     return m;
   }, [deployments, statefulSets, daemonSets]);
 
-  // One independent /api/updates check per installed image, so updating one app
-  // re-checks only that app and never blocks or refetches the others. Images the
-  // user just updated are skipped (shown as current, no network check).
-  const images = useMemo(
-    () => targets.map((t) => ({ image: t.image, runningDigest: t.runningDigest })),
+  // One independent /api/updates check per installed app, so updating one app
+  // re-checks only that app and never blocks or refetches the others. Plain
+  // workloads check their image; Helm-managed ones check their chart version;
+  // blocked ones aren't checked. Images the user just updated are skipped
+  // (shown as current, no network check).
+  const checks = useMemo(
+    () =>
+      targets.flatMap((t): UpdateCheck[] => {
+        if (t.via.kind === "helm") {
+          const { release, namespace, repoURL, chart } = t.via;
+          return [{ key: updateKey(t), chart: { release, namespace, repoURL, chart } }];
+        }
+        if (t.via.kind === "image") return [{ key: updateKey(t), image: t.image, runningDigest: t.runningDigest }];
+        return [];
+      }),
     [targets],
   );
-  const updatesByImage = useUpdatesByImage(images, updatedImages);
+  const updatesByKey = useUpdateChecks(checks, updatedImages);
+
+  // The status to show for a target: a blocked reason, "current" right after an
+  // image update, or the check's result.
+  function updateResultFor(t: UpdateTarget): { result: UpdateResult | undefined; checking: boolean } {
+    if (t.via.kind === "blocked") {
+      return {
+        result: { image: t.image, currentTag: null, latest: null, updateAvailable: false, kind: "unknown", reason: t.via.reason },
+        checking: false,
+      };
+    }
+    if (t.via.kind === "image" && updatedImages.has(t.image)) {
+      return { result: { image: t.image, currentTag: null, latest: null, updateAvailable: false, kind: "version" }, checking: false };
+    }
+    const u = updatesByKey.get(updateKey(t));
+    return { result: u?.result, checking: u?.isPending ?? false };
+  }
 
   // Clear a just-updated app once the watch confirms its image advanced.
   useEffect(() => {
@@ -198,8 +233,15 @@ export default function CatalogPanel() {
     if (changed) setUpdatedImages(next);
   }, [targetByApp, updatedImages]);
 
-  // Hand off an [Update] click to the guarded ConfirmSheet as a setImage action.
+  // Hand off an [Update] click: Helm-managed apps get a chart upgrade through
+  // the helm confirm modal; plain workloads a setImage through ConfirmSheet.
   function onUpdate(target: UpdateTarget, latest: string) {
+    if (target.via.kind === "helm") {
+      setHelmError(null);
+      setPendingHelm({ target, latest });
+      return;
+    }
+    if (target.via.kind !== "image") return;
     const newImage = withTag(target.image, latest);
     pendingUpdates.current.set(target.appID, newImage);
     setPendingNotice(majorUpgradeWarning(target.image, latest));
@@ -212,6 +254,52 @@ export default function CatalogPanel() {
       container: target.container,
       image: newImage,
     });
+  }
+
+  // The pending chart upgrade as a helm source + the exact commands it runs.
+  const helmSource: HelmChartSource | null =
+    pendingHelm?.target.via.kind === "helm"
+      ? {
+          kind: "repo",
+          repoName: pendingHelm.target.via.repoName,
+          repoURL: pendingHelm.target.via.repoURL,
+          chart: pendingHelm.target.via.chart,
+          version: pendingHelm.latest,
+        }
+      : null;
+  const helmCommands =
+    helmSource && pendingHelm?.target.via.kind === "helm"
+      ? buildHelmInstallCommands(helmSource, {
+          releaseName: pendingHelm.target.via.release,
+          namespace: pendingHelm.target.via.namespace,
+          reuseValues: true,
+          context: null,
+        })
+      : [];
+
+  function runHelmUpgrade() {
+    if (!pendingHelm || pendingHelm.target.via.kind !== "helm" || !helmSource || helmSource.kind !== "repo") return;
+    const { release, namespace } = pendingHelm.target.via;
+    setHelmError(null);
+    helmUpgrade.mutate(
+      {
+        repoName: helmSource.repoName,
+        repoURL: helmSource.repoURL,
+        chart: helmSource.chart,
+        version: pendingHelm.latest,
+        releaseName: release,
+        namespace,
+        reuseValues: true,
+      },
+      {
+        onSuccess: (r) => {
+          if (r.code !== 0) return setHelmError(r.stderr || `exit ${r.code}`);
+          setPendingHelm(null);
+          void queryClient.invalidateQueries({ queryKey: ["updates", "chart", namespace, release] });
+        },
+        onError: (e) => setHelmError(e.message),
+      },
+    );
   }
 
   // Resolve a link picker selection → linkCatalogApp action through ConfirmSheet.
@@ -356,12 +444,7 @@ export default function CatalogPanel() {
           {filtered.map((app) => {
             const installed = installedIDs.has(app.id);
             const target = targetByApp.get(app.id);
-            const isCurrent = !!target && updatedImages.has(target.image);
-            const u = target ? updatesByImage.get(target.image) : undefined;
-            const result: UpdateResult | undefined =
-              isCurrent && target
-                ? { image: target.image, currentTag: null, latest: null, updateAvailable: false, kind: "version" }
-                : u?.result;
+            const status = target ? updateResultFor(target) : null;
             return (
               <CatalogCard
                 key={app.id}
@@ -370,10 +453,10 @@ export default function CatalogPanel() {
                 onSelect={() => setDetailApp(app)}
                 onLink={() => setLinkApp(app)}
               >
-                {installed && target && (
+                {installed && target && status && (
                   <UpdateStatusRow
-                    checking={!isCurrent && (u?.isPending ?? false)}
-                    result={result}
+                    checking={status.checking}
+                    result={status.result}
                     onUpdate={(latest) => onUpdate(target, latest)}
                   />
                 )}
@@ -407,10 +490,7 @@ export default function CatalogPanel() {
           }}
           updateResult={(() => {
             const t = targetByApp.get(detailApp.id);
-            if (!t) return null;
-            if (updatedImages.has(t.image))
-              return { image: t.image, currentTag: null, latest: null, updateAvailable: false, kind: "version" };
-            return updatesByImage.get(t.image)?.result ?? null;
+            return t ? (updateResultFor(t).result ?? null) : null;
           })()}
           onUpdate={(latest) => {
             const t = targetByApp.get(detailApp.id);
@@ -459,6 +539,27 @@ export default function CatalogPanel() {
           onClose={() => setWizardApp(null)}
         />
       )}
+
+      {/* helm upgrade confirm for [Update] on a Helm-managed app */}
+      <HelmConfirmModal
+        open={pendingHelm !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setPendingHelm(null);
+            setHelmError(null);
+          }
+        }}
+        title={pendingHelm ? `Upgrade ${pendingHelm.target.appID} chart to ${pendingHelm.latest}?` : "Upgrade chart?"}
+        command={helmCommands[helmCommands.length - 1] ?? []}
+        notice={(() => {
+          const current = pendingHelm ? updatesByKey.get(updateKey(pendingHelm.target))?.result?.currentTag : null;
+          // majorUpgradeWarning reads the current version from an image-style `name:tag`.
+          return pendingHelm && current ? majorUpgradeWarning(`chart:${current}`, pendingHelm.latest) : null;
+        })()}
+        running={helmUpgrade.isPending}
+        error={helmError}
+        onConfirm={runHelmUpgrade}
+      />
 
       {/* setImage confirm sheet for the [Update] button */}
       <ConfirmSheet
@@ -666,6 +767,11 @@ function CatalogCard({
       </div>
     </motion.article>
   );
+}
+
+/** Map key for a target's update check: its Helm release, or its image. */
+function updateKey(t: UpdateTarget): string {
+  return t.via.kind === "helm" ? `helm:${t.via.namespace}/${t.via.release}` : t.image;
 }
 
 // ─── Update Status Row ────────────────────────────────────────────────────────

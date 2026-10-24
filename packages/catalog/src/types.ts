@@ -191,16 +191,16 @@ interface PodSpecTemplateLike {
   spec?: { containers?: ContainerLike[] };
 }
 export interface DeploymentLike {
-  metadata?: { name?: string; namespace?: string; annotations?: Record<string, string> };
+  metadata?: { name?: string; namespace?: string; labels?: Record<string, string>; annotations?: Record<string, string> };
   spec?: { template?: PodSpecTemplateLike };
 }
 export interface StatefulSetLike {
-  metadata?: { name?: string; namespace?: string; annotations?: Record<string, string> };
+  metadata?: { name?: string; namespace?: string; labels?: Record<string, string>; annotations?: Record<string, string> };
   spec?: { template?: PodSpecTemplateLike };
 }
 /** A DaemonSet, scanned for catalog detection (kubectl set image daemonset/… is valid). */
 export interface DaemonSetLike {
-  metadata?: { name?: string; namespace?: string; annotations?: Record<string, string> };
+  metadata?: { name?: string; namespace?: string; labels?: Record<string, string>; annotations?: Record<string, string> };
   spec?: { template?: PodSpecTemplateLike };
 }
 /** A single entry in pod `status.containerStatuses` (subset). */

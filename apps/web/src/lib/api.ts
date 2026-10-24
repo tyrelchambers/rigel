@@ -243,10 +243,33 @@ export interface UpdateResult {
   kind: "version" | "digest" | "none" | "unknown";
   /** For "unknown": why we couldn't decide (tooltip). */
   reason?: string;
+  /** Set when this result is a Helm chart check (the version is a chart version). */
+  chart?: UpdateChart;
+}
+
+/** A Helm-managed install to check by chart version — mirrors the server `UpdatesChart`. */
+export interface UpdateChart {
+  release: string;
+  namespace: string;
+  repoURL: string;
+  chart: string;
+}
+
+/** Per-release chart outcome — mirrors the server `ChartUpdateResult`. */
+interface ChartUpdateResult {
+  release: string;
+  namespace: string;
+  chart: string;
+  currentVersion: string | null;
+  latest: string | null;
+  updateAvailable: boolean;
+  kind: "version" | "unknown";
+  reason?: string;
 }
 
 export interface UpdatesResponse {
   results: UpdateResult[];
+  charts?: ChartUpdateResult[];
 }
 
 /** An installed image to check: its spec tag plus the digest the pod actually
@@ -257,12 +280,15 @@ export interface UpdateImageInput {
   runningDigest?: string | null;
 }
 
-/** POST a batch of images (tag + running digest) to the update checker. */
-async function fetchUpdates(images: UpdateImageInput[]): Promise<UpdatesResponse> {
+/** One update check: an image (tag + running digest) or a Helm chart, under a stable map `key`. */
+export type UpdateCheck = { key: string } & (UpdateImageInput | { chart: UpdateChart });
+
+/** POST images and/or Helm charts to the update checker. */
+async function fetchUpdates(body: { images?: UpdateImageInput[]; charts?: UpdateChart[] }): Promise<UpdatesResponse> {
   const res = await apiFetch("/api/updates", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ images }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -282,37 +308,64 @@ export interface ImageUpdate {
   isPending: boolean;
 }
 
+/** A chart outcome in the shared display shape (its versions are chart versions). */
+function chartToResult(c: ChartUpdateResult, chart: UpdateChart): UpdateResult {
+  return {
+    image: `${chart.namespace}/${chart.release}`,
+    currentTag: c.currentVersion,
+    latest: c.latest,
+    updateAvailable: c.updateAvailable,
+    kind: c.kind,
+    ...(c.reason ? { reason: c.reason } : {}),
+    chart,
+  };
+}
+
 /**
- * One independent update check per image, keyed by that image alone — so
- * updating a single app re-checks only that app and never refetches or blocks
- * the others. Images in `skip` are treated as current: their query is disabled
- * (no network check). Returns a Map keyed by image string.
+ * One independent update check per item (image or Helm chart), keyed by its
+ * `key` alone — so updating a single app re-checks only that app and never
+ * refetches or blocks the others. Keys in `skip` are treated as current: their
+ * query is disabled (no network check). Returns a Map keyed by `key`.
  */
-export function useUpdatesByImage(
-  images: UpdateImageInput[],
+export function useUpdateChecks(
+  checks: UpdateCheck[],
   skip?: ReadonlySet<string>,
 ): Map<string, ImageUpdate> {
   const results = useQueries({
-    queries: images.map((i) => {
+    queries: checks.map((i) => {
+      if ("chart" in i) {
+        const c = i.chart;
+        return {
+          queryKey: ["updates", "chart", c.namespace, c.release, c.repoURL, c.chart],
+          queryFn: async (): Promise<UpdateResult | undefined> => {
+            const r = (await fetchUpdates({ charts: [c] })).charts?.[0];
+            return r ? chartToResult(r, c) : undefined;
+          },
+          enabled: !skip?.has(i.key),
+          staleTime: 10 * 60_000,
+          gcTime: 10 * 60_000,
+        };
+      }
       const runningDigest = i.runningDigest ?? null;
       return {
         queryKey: ["updates", i.image, runningDigest],
-        queryFn: () => fetchUpdates([{ image: i.image, runningDigest }]),
-        enabled: !skip?.has(i.image),
+        queryFn: async (): Promise<UpdateResult | undefined> =>
+          (await fetchUpdates({ images: [{ image: i.image, runningDigest }] })).results?.[0],
+        enabled: !skip?.has(i.key),
         staleTime: 10 * 60_000, // 10 min — registries don't move that fast.
         gcTime: 10 * 60_000,
       };
     }),
   });
-  const byImage = new Map<string, ImageUpdate>();
-  images.forEach((i, idx) => {
+  const byKey = new Map<string, ImageUpdate>();
+  checks.forEach((i, idx) => {
     const q = results[idx];
-    byImage.set(i.image, {
-      result: q?.data?.results?.[0],
+    byKey.set(i.key, {
+      result: q?.data,
       isPending: (q?.isPending ?? false) && q?.fetchStatus !== "idle",
     });
   });
-  return byImage;
+  return byKey;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 // Helm release reading + argv construction, shared by the server (execution)
 // and the web app (live release derivation + command preview).
 import { gunzipSync, strFromU8 } from "fflate";
+import { parse as parseYaml } from "yaml";
 import { isValidDNS1123Subdomain } from "./dockerconfigjson";
 
 export interface HelmReleasePayload {
@@ -127,12 +128,17 @@ export type HelmChartSource =
   | { kind: "oci"; ref: string; version?: string | null }
   | { kind: "local"; path: string };
 
-export interface HelmInstallOpts {
+/**
+ * `valuesFile` installs (or upgrades) with the given values via
+ * `upgrade --install`. `reuseValues` upgrades an EXISTING release in place —
+ * the catalog [Update] path: no `--install` (never create a fresh release with
+ * chart defaults), no `--create-namespace`, and the deployed values are kept.
+ */
+export type HelmInstallOpts = {
   releaseName: string;
   namespace: string;
-  valuesFile: string;
   context: string | null;
-}
+} & ({ valuesFile: string; reuseValues?: never } | { reuseValues: true; valuesFile?: never });
 
 function ctxArgs(context: string | null): string[] {
   return context ? ["--kube-context", context] : [];
@@ -155,11 +161,13 @@ export function buildHelmInstallCommands(src: HelmChartSource, o: HelmInstallOpt
   // can never be interpreted as helm flags (e.g. an injected `--post-renderer`
   // or `--kubeconfig`), even for a caller that skips validateHelmInstall. All
   // real flags must therefore precede it.
-  const upgrade = [
-    "upgrade", "--install", ...version,
-    "-n", o.namespace, "--create-namespace", "-f", o.valuesFile, ...ctxArgs(o.context),
-    "--", o.releaseName, chartRef(src),
-  ];
+  const upgrade = o.reuseValues
+    ? ["upgrade", ...version, "--reuse-values", "-n", o.namespace, ...ctxArgs(o.context), "--", o.releaseName, chartRef(src)]
+    : [
+        "upgrade", "--install", ...version,
+        "-n", o.namespace, "--create-namespace", "-f", o.valuesFile, ...ctxArgs(o.context),
+        "--", o.releaseName, chartRef(src),
+      ];
   if (src.kind === "repo") {
     return [["repo", "add", "--", src.repoName, src.repoURL], ["repo", "update", "--", src.repoName], upgrade];
   }
@@ -172,6 +180,32 @@ export function buildHelmRollbackArgs(release: string, revision: number, namespa
 
 export function buildHelmUninstallArgs(release: string, namespace: string, context: string | null): string[] {
   return ["uninstall", "-n", namespace, ...ctxArgs(context), "--", release];
+}
+
+/** `helm status` for one release as JSON — the authoritative deployed chart version. */
+export function buildHelmStatusArgs(release: string, namespace: string, context: string | null): string[] {
+  return ["status", "-n", namespace, "-o", "json", ...ctxArgs(context), "--", release];
+}
+
+/**
+ * Every published version of `chart` in a chart repo's `index.yaml`
+ * (`entries.<chart>[].version`), in index order. `[]` when the repo doesn't
+ * carry the chart; null when the document isn't a parseable Helm index.
+ */
+export function parseChartIndexVersions(indexYaml: string, chart: string): string[] | null {
+  let doc: unknown;
+  try {
+    doc = parseYaml(indexYaml);
+  } catch {
+    return null;
+  }
+  const entries = (doc as { entries?: unknown } | null)?.entries;
+  if (!entries || typeof entries !== "object" || Array.isArray(entries)) return null;
+  const list = (entries as Record<string, unknown>)[chart];
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((e) => (e as { version?: unknown } | null)?.version)
+    .filter((v): v is string => typeof v === "string" && v.length > 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -219,9 +253,17 @@ export function validateHelmTarget(release: string, namespace: string): string |
  * Validate the user-controlled fields of a Helm install/upgrade request.
  * Returns an error message, or null when the request is safe to execute.
  */
-export function validateHelmInstall(src: HelmChartSource, releaseName: string, namespace: string): string | null {
+export function validateHelmInstall(
+  src: HelmChartSource,
+  releaseName: string,
+  namespace: string,
+  opts: { reuseValues?: boolean } = {},
+): string | null {
   const nameErr = validateHelmTarget(releaseName, namespace);
   if (nameErr) return nameErr;
+  // An in-place upgrade must name the version it moves to; an unpinned
+  // `--reuse-values` upgrade would silently jump to whatever is newest.
+  if (opts.reuseValues && (src.kind === "local" || !src.version)) return "an upgrade must pin a chart version";
   if (src.kind !== "local" && src.version != null && src.version !== "" && !isSafeHelmArg(src.version)) {
     return "chart version is invalid";
   }
