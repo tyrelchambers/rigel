@@ -20,7 +20,7 @@ class MockTagSource implements TagSource {
 describe("handleUpdates", () => {
   test("empty / missing images → empty results", async () => {
     expect(await handleUpdates({ images: [] })).toEqual({ results: [] });
-    // @ts-expect-error exercising the defensive non-array guard
+    // Both arrays are optional now (charts-only checks); an empty body is a no-op.
     expect(await handleUpdates({})).toEqual({ results: [] });
   });
 
@@ -205,5 +205,57 @@ describe("handleUpdates", () => {
       updateAvailable: true,
       kind: "version",
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Helm-managed apps — compare the deployed chart version against the chart
+// repo's index (never the container image tag).
+// ---------------------------------------------------------------------------
+describe("handleUpdates charts", () => {
+  const signoz = { release: "signoz", namespace: "signoz", repoURL: "https://charts.signoz.io", chart: "signoz" };
+  const noImages = new UpdateResolver({ tagSourceFor: () => null, githubSource: null });
+  const deps = (over: Partial<import("./updates").ChartUpdateDeps> = {}): import("./updates").ChartUpdateDeps => ({
+    releaseChart: async () => ({ name: "signoz", version: "0.126.1" }),
+    chartVersions: async () => ["0.148.0-rc.1", "0.147.0", "0.126.1"],
+    ...over,
+  });
+
+  test("newer stable chart → updateAvailable with the chart version (prereleases ignored)", async () => {
+    const res = await handleUpdates({ images: [], charts: [signoz] }, noImages, deps());
+    expect(res).toEqual({
+      results: [],
+      charts: [{ release: "signoz", namespace: "signoz", chart: "signoz", currentVersion: "0.126.1", latest: "0.147.0", updateAvailable: true, kind: "version" }],
+    });
+  });
+
+  test("already on the newest chart → up to date", async () => {
+    const res = await handleUpdates({ charts: [signoz] }, noImages, deps({ releaseChart: async () => ({ name: "signoz", version: "0.147.0" }) }));
+    expect(res.charts![0]).toEqual({ release: "signoz", namespace: "signoz", chart: "signoz", currentVersion: "0.147.0", latest: null, updateAvailable: false, kind: "version" });
+  });
+
+  test("release missing → unknown with a reason", async () => {
+    const res = await handleUpdates({ charts: [signoz] }, noImages, deps({ releaseChart: async () => null }));
+    expect(res.charts![0]).toMatchObject({ currentVersion: null, updateAvailable: false, kind: "unknown", reason: "could not read Helm release signoz/signoz" });
+  });
+
+  test("release runs a different chart than the catalog's → unknown (never upgrade across charts)", async () => {
+    const res = await handleUpdates({ charts: [signoz] }, noImages, deps({ releaseChart: async () => ({ name: "k8s-infra", version: "0.13.0" }) }));
+    expect(res.charts![0]).toMatchObject({ currentVersion: "0.13.0", updateAvailable: false, kind: "unknown", reason: "release signoz/signoz runs chart k8s-infra, not signoz" });
+  });
+
+  test("unreadable chart index → unknown", async () => {
+    const res = await handleUpdates({ charts: [signoz] }, noImages, deps({ chartVersions: async () => null }));
+    expect(res.charts![0]).toMatchObject({ updateAvailable: false, kind: "unknown", reason: "could not read the chart index at https://charts.signoz.io" });
+  });
+
+  test("a throwing lookup is isolated per chart", async () => {
+    const res = await handleUpdates(
+      { charts: [signoz, { ...signoz, release: "other" }] },
+      noImages,
+      deps({ releaseChart: async (release) => { if (release === "signoz") throw new Error("helm not found"); return { name: "signoz", version: "0.147.0" }; } }),
+    );
+    expect(res.charts![0]).toMatchObject({ kind: "unknown", reason: "helm not found" });
+    expect(res.charts![1]).toMatchObject({ release: "other", kind: "version", updateAvailable: false });
   });
 });

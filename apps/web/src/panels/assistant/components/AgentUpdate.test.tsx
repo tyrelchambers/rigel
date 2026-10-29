@@ -75,7 +75,7 @@ let updatesValue: Map<string, { result?: UpdateResult; isPending: boolean }>;
 vi.mock("../AssistantContext", () => ({ useAssistantCtx: () => ctxValue }));
 vi.mock("@/lib/api", async (orig) => ({
   ...(await orig<typeof import("@/lib/api")>()),
-  useUpdatesByImage: () => updatesValue,
+  useUpdateChecks: () => updatesValue,
 }));
 
 describe("AgentUpdate (smart wrapper)", () => {

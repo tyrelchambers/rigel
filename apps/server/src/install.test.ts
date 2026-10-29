@@ -95,3 +95,48 @@ describe("applyManifest ledger recording", () => {
     expect(ledgerRun).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Catalog [Update] on a Helm-managed app — in-place reuse-values upgrade
+// ---------------------------------------------------------------------------
+import { installHelm } from "./install";
+
+test("installHelm reuse-values upgrade runs repo add → update → upgrade with no values file", async () => {
+  const calls: string[][] = [];
+  const run = async (argv: string[]) => {
+    calls.push(argv);
+    return { code: 0, stdout: "", stderr: "" };
+  };
+  const r = await installHelm(
+    "kind-test",
+    {
+      source: { kind: "repo", repoName: "signoz", repoURL: "https://charts.signoz.io", chart: "signoz", version: "0.147.0" },
+      releaseName: "signoz",
+      namespace: "signoz",
+      reuseValues: true,
+    },
+    run,
+  );
+  expect(r.code).toBe(0);
+  expect(calls).toEqual([
+    ["repo", "add", "--", "signoz", "https://charts.signoz.io"],
+    ["repo", "update", "--", "signoz"],
+    ["upgrade", "--version", "0.147.0", "--reuse-values", "-n", "signoz", "--kube-context", "kind-test", "--", "signoz", "signoz/signoz"],
+  ]);
+});
+
+test("installHelm with values still writes a values file and runs upgrade --install", async () => {
+  const calls: string[][] = [];
+  const run = async (argv: string[]) => {
+    calls.push(argv);
+    return { code: 0, stdout: "", stderr: "" };
+  };
+  await installHelm(
+    null,
+    { source: { kind: "oci", ref: "oci://r/c", version: "1.0.0" }, releaseName: "web", namespace: "apps", values: "a: 1\n" },
+    run,
+  );
+  expect(calls).toHaveLength(1);
+  expect(calls[0]!.slice(0, 2)).toEqual(["upgrade", "--install"]);
+  expect(calls[0]).toContain("-f");
+});

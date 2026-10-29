@@ -201,12 +201,16 @@ export function CatalogDetailSheet({
                     </div>
                   </div>
                   <div className="detail-sheet-installed-field">
-                    <span className="detail-sheet-installed-flabel">Image</span>
+                    <span className="detail-sheet-installed-flabel">
+                      {updateResult?.chart ? "Helm release" : "Image"}
+                    </span>
                     <span
                       className="detail-sheet-installed-image"
                       title={updateResult?.image ?? undefined}
                     >
-                      {updateResult?.image ?? "—"}
+                      {updateResult?.chart
+                        ? `${updateResult.image} · chart ${updateResult.chart.chart}`
+                        : (updateResult?.image ?? "—")}
                     </span>
                   </div>
                 </div>

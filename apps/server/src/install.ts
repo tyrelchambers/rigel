@@ -5,6 +5,8 @@
 //                    interpolated into a shell).
 //   helm mode     → `helm repo add` → `helm repo update` → `helm upgrade
 //                    --install` in sequence, values written to a temp file.
+//                    A catalog [Update] instead upgrades the existing release
+//                    in place with `--reuse-values` (no values file).
 //
 // Commands are built from typed argv arrays — no shell, no free-form strings —
 // mirroring the Swift WorkloadCommander / HelmCommander invocations.
@@ -100,12 +102,12 @@ export async function deleteManifest(context: string | null, yaml: string): Prom
   return runProcessWithStdin("kubectl", buildDeleteArgs(context), yaml);
 }
 
-export interface HelmInstallRequest {
+/** `values` installs with those values; `reuseValues` upgrades the existing release keeping its values. */
+export type HelmInstallRequest = {
   source: HelmChartSource;
   releaseName: string;
   namespace: string;
-  values: string;
-}
+} & ({ values: string; reuseValues?: never } | { reuseValues: true; values?: never });
 
 function runHelm(args: string[]): Promise<RunResult> {
   return runProcess("helm", args);
@@ -118,23 +120,29 @@ function isAlreadyExists(r: RunResult): boolean {
 /**
  * Run the ordered helm install/upgrade commands. Repo `add` tolerates the
  * benign "already exists"; any other non-zero aborts with that result. Values
- * are written to a temp file and removed afterwards. code -1 if helm is missing.
+ * are written to a temp file and removed afterwards; a `reuseValues` upgrade
+ * writes none. code -1 if helm is missing. `run` is injectable for tests.
  */
-export async function installHelm(context: string | null, req: HelmInstallRequest): Promise<RunResult> {
+export async function installHelm(
+  context: string | null,
+  req: HelmInstallRequest,
+  run: (args: string[]) => Promise<RunResult> = runHelm,
+): Promise<RunResult> {
   let valuesFile: string | null = null;
   try {
-    valuesFile = `${process.env.TMPDIR ?? "/tmp"}/rigel-values-${req.releaseName}-${process.pid}-${counter()}.yaml`;
-    await writeFile(valuesFile, req.values);
-    const cmds = buildHelmInstallCommands(req.source, {
-      releaseName: req.releaseName,
-      namespace: req.namespace,
-      valuesFile,
-      context,
-    });
+    const base = { releaseName: req.releaseName, namespace: req.namespace, context };
+    let cmds: string[][];
+    if (req.reuseValues) {
+      cmds = buildHelmInstallCommands(req.source, { ...base, reuseValues: true });
+    } else {
+      valuesFile = `${process.env.TMPDIR ?? "/tmp"}/rigel-values-${req.releaseName}-${process.pid}-${counter()}.yaml`;
+      await writeFile(valuesFile, req.values);
+      cmds = buildHelmInstallCommands(req.source, { ...base, valuesFile });
+    }
     let out = "";
     let err = "";
     for (let i = 0; i < cmds.length; i++) {
-      const r = await runHelm(cmds[i]!);
+      const r = await run(cmds[i]!);
       out += r.stdout;
       err += r.stderr;
       const isRepoAdd = cmds[i]![0] === "repo" && cmds[i]![1] === "add";

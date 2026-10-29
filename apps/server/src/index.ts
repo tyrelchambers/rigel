@@ -56,7 +56,7 @@ import { canConnect, setEntitlement, canBeAutonomous, unlockedAuditsEnv, type Co
 import { cloudGateResponse } from "./cloudGate";
 import type { CloudCluster } from "@rigel/cloud-connect/src/index";
 import { getUsageHistory, detectAllBackends, flavorForPort } from "./prometheusMetrics";
-import { handleUpdates, type UpdatesRequest } from "./updates";
+import { defaultChartDeps, handleUpdates, type UpdatesRequest } from "./updates";
 import { chatConfig, setClaudeToken } from "./chatConfig";
 import { readIssueMutes, writeIssueMutes } from "./issuesConfig";
 import { parseIssueMutes } from "@rigel/k8s/src/issues/mutes";
@@ -737,9 +737,12 @@ async function handler(req: Request): Promise<Response> {
     }
 
     // POST /api/helm — catalog wizard HELM install. Runs repo add (idempotent)
-    // → repo update → upgrade --install in sequence. Returns { code, stdout, stderr }.
+    // → repo update → upgrade --install in sequence. With `reuseValues: true`
+    // (catalog [Update] on a Helm-managed app) it instead upgrades the existing
+    // release in place to the pinned `version`, keeping its deployed values.
+    // Returns { code, stdout, stderr }.
     if (url.pathname === "/api/helm" && req.method === "POST") {
-      let body: { repoName?: string; repoURL?: string; chart?: string; version?: string | null; releaseName?: string; namespace?: string; values?: string };
+      let body: { repoName?: string; repoURL?: string; chart?: string; version?: string | null; releaseName?: string; namespace?: string; values?: string; reuseValues?: boolean };
       try {
         body = (await req.json()) as typeof body;
       } catch {
@@ -751,10 +754,10 @@ async function handler(req: Request): Promise<Response> {
         !body.chart ||
         !body.releaseName ||
         !body.namespace ||
-        typeof body.values !== "string"
+        (body.reuseValues !== true && typeof body.values !== "string")
       ) {
         return Response.json(
-          { error: "missing required helm fields (repoName, repoURL, chart, releaseName, namespace, values)" },
+          { error: "missing required helm fields (repoName, repoURL, chart, releaseName, namespace, values or reuseValues)" },
           { status: 422 },
         );
       }
@@ -765,14 +768,14 @@ async function handler(req: Request): Promise<Response> {
         chart: body.chart,
         version: body.version ?? null,
       };
-      const invalid = validateHelmInstall(source, body.releaseName, body.namespace);
+      const reuseValues = body.reuseValues === true;
+      const invalid = validateHelmInstall(source, body.releaseName, body.namespace, { reuseValues });
       if (invalid) return Response.json({ error: invalid }, { status: 422 });
-      const result = await installHelm(context, {
-        source,
-        releaseName: body.releaseName,
-        namespace: body.namespace,
-        values: body.values,
-      });
+      const target = { source, releaseName: body.releaseName, namespace: body.namespace };
+      const result = await installHelm(
+        context,
+        reuseValues ? { ...target, reuseValues: true } : { ...target, values: body.values! },
+      );
       return Response.json(result);
     }
 
@@ -1274,10 +1277,12 @@ async function handler(req: Request): Promise<Response> {
 
     // POST /api/updates — check running images for newer stable releases.
     //
-    // Body { images: string[] }. For each image, resolves an update status via
-    // the deterministic resolver tiers (registry version → moving-tag digest →
-    // GitHub Releases). Per-image failures degrade to { kind:"unknown" } rather
-    // than failing the batch. Always HTTP 200 with { results: UpdateResult[] }.
+    // Body { images?: string[], charts?: UpdatesChart[] }. For each image, resolves
+    // an update status via the deterministic resolver tiers (registry version →
+    // moving-tag digest → GitHub Releases). Each chart (a Helm-managed install)
+    // compares the release's deployed chart version with the chart repo index.
+    // Per-item failures degrade to { kind:"unknown" } rather than failing the
+    // batch. Always HTTP 200 with { results: UpdateResult[], charts? }.
     if (url.pathname === "/api/updates" && req.method === "POST") {
       let body: UpdatesRequest;
       try {
@@ -1285,10 +1290,10 @@ async function handler(req: Request): Promise<Response> {
       } catch {
         return Response.json({ error: "invalid JSON body" }, { status: 400 });
       }
-      if (!Array.isArray(body?.images)) {
-        return Response.json({ error: "missing images array" }, { status: 422 });
+      if (!Array.isArray(body?.images) && !Array.isArray(body?.charts)) {
+        return Response.json({ error: "missing images or charts array" }, { status: 422 });
       }
-      const result = await handleUpdates(body);
+      const result = await handleUpdates(body, undefined, defaultChartDeps(context));
       return Response.json(result);
     }
 

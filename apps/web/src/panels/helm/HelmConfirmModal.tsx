@@ -18,10 +18,12 @@ interface HelmConfirmModalProps {
   error?: string | null;
   /** Red confirm treatment for removals (e.g. uninstall). */
   destructive?: boolean;
+  /** Optional caution shown above the command (e.g. a major version jump). */
+  notice?: string | null;
   onConfirm: () => void;
 }
 
-export function HelmConfirmModal({ open, onOpenChange, title, command, running, error, destructive, onConfirm }: HelmConfirmModalProps) {
+export function HelmConfirmModal({ open, onOpenChange, title, command, running, error, destructive, notice, onConfirm }: HelmConfirmModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
@@ -29,6 +31,7 @@ export function HelmConfirmModal({ open, onOpenChange, title, command, running, 
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         <DialogBody>
+          {notice && <p className="mb-3 text-sm text-amber-400">{notice}</p>}
           <p className="mb-2 text-sm text-muted-foreground">This will run:</p>
           <pre className="overflow-x-auto rounded-md bg-black/30 p-3 text-xs">
             {["helm", ...command].join(" ")}
