@@ -19,6 +19,7 @@ const VERB: Record<string, [string, string]> = {
   cordon: ["Cordon", "Cordoned"],
   uncordon: ["Uncordon", "Uncordoned"],
   openFixPR: ["Open", "Opened"],
+  repairDatabase: ["Repair", "Repaired"],
 };
 
 function lowerFirst(s: string): string {

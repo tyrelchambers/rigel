@@ -31,6 +31,7 @@ vi.mock("./notify.js", async (importOriginal) => {
     notifyMatrix: vi.fn(), notifyDiscord: vi.fn(), markMatrixRead: vi.fn(),
     setMatrixTyping: vi.fn(), receiveMatrix: vi.fn(),
     sendToChannel: vi.fn(),
+    deliver: vi.fn(async () => ({ delivered: ["webhook"], failed: [] })),
   };
 });
 vi.mock("./runModel.js", () => ({ runModel: vi.fn() }));
@@ -38,7 +39,7 @@ vi.mock("./runModel.js", () => ({ runModel: vi.fn() }));
 import { kubectl } from "./kubectl.js";
 import { runWorker } from "./worker.js";
 import { runSupervisor } from "./supervisor.js";
-import { sendToChannel, receiveSignal } from "./notify.js";
+import { sendToChannel, receiveSignal, deliver } from "./notify.js";
 import { runModel } from "./runModel.js";
 import { tick, createLoopState, queue } from "./index.js";
 import { CircuitBreaker } from "./guardrails.js";
@@ -148,6 +149,8 @@ function wireCluster(opts: {
   /** Force the `get jobs` list to FAIL: a non-zero exit, or a spawn-style throw. */
   failJobsList?: "nonzero" | "throw";
   nodes?: Record<string, unknown>[];
+  deployments?: Record<string, unknown>[];
+  clusters?: Record<string, unknown>[];
 }): { captured: () => AssistantState | undefined } {
   const pods = opts.pods ?? [CRASH_POD];
   let captured: AssistantState | undefined;
@@ -161,7 +164,9 @@ function wireCluster(opts: {
     if (cm === "assistant-config") return res(JSON.stringify({ data: opts.configData }));
     if (cm === "rigel-git-sources") return res(JSON.stringify({ data: { "sources.json": JSON.stringify(GIT_SOURCES) } }));
     if (args[0] === "get" && args[1] === "pods") return res(JSON.stringify({ items: pods }));
-    if (args[0] === "get" && args[1] === "deployments") return res(JSON.stringify({ items: [] }));
+    if (args[0] === "get" && args[1] === "deployments") return res(JSON.stringify({ items: opts.deployments ?? [] }));
+    if (args[0] === "get" && args[1] === "clusters.postgresql.cnpg.io") return opts.clusters ? res(JSON.stringify({ items: opts.clusters })) : res("", 1);
+    if (args[0] === "patch") return res("cluster.postgresql.cnpg.io/postgres patched");
     if (args[0] === "get" && args[1] === "nodes") return res(JSON.stringify({ items: opts.nodes ?? [] }));
     if (args[0] === "get" && args[1] === "jobs") {
       if (opts.failJobsList === "throw") throw new Error("spawn kubectl ENOENT");
@@ -304,13 +309,7 @@ describe("tick() — openFixPR routing (I1 landmine)", () => {
 
     await tick(makeConfig(), newCb(), createLoopState());
 
-    // webhook + signal are both runtime-complete, but notifyChannels allows only
-    // webhook — so the real notifyTargets filters signal out and tick() dispatches
-    // to webhook alone. Asserting on the (stubbed) sendToChannel exercises the real
-    // notifyTargets filtering, not a test reimplementation of it.
-    const rc = expect.objectContaining({ notifyAllowlist: ["webhook"] });
-    expect(vi.mocked(sendToChannel)).toHaveBeenCalledWith(rc, "webhook", expect.any(String));
-    expect(vi.mocked(sendToChannel)).not.toHaveBeenCalledWith(rc, "signal", expect.any(String));
+    expect(vi.mocked(deliver)).toHaveBeenCalledWith(expect.objectContaining({ notifyAllowlist: ["webhook"] }), expect.any(String));
   });
 });
 
@@ -845,7 +844,8 @@ describe("tick() — action levels", () => {
     vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [RESTART] }));
     wireCluster({ configData: { enabled: "true", confirmPolls: "1", mode: "auto", webhookUrl: "http://hook", notifyChannels: "webhook", actionLevels: JSON.stringify({ restart: "ask" }) } });
     await tick(makeConfig(), newCb(), createLoopState());
-    expect(vi.mocked(sendToChannel)).toHaveBeenCalledWith(expect.anything(), "webhook", expect.stringContaining("Restart memos — default/memos-7d9f-abc: CrashLoopBackOff (set to Ask me in Action levels)"));
+    expect(vi.mocked(runModel)).toHaveBeenCalledWith(expect.objectContaining({ prompt: expect.stringContaining("Waiting on your OK: Restart memos (set to Ask me in Action levels)") }));
+    expect(vi.mocked(deliver)).toHaveBeenCalledWith(expect.anything(), "Quiet night.");
   });
 
   test("off records a skip with no notification", async () => {
@@ -955,7 +955,8 @@ describe("tick() — action levels", () => {
   test("an Ask fix PR notifies in the same format as an Ask kubectl action", async () => {
     wireCluster({ configData: { ...budgetConfig("5"), webhookUrl: "http://hook", notifyChannels: "webhook", actionLevels: JSON.stringify({ openFixPR: "ask" }) }, deploymentJSON: DEPLOYMENT_JSON });
     await tick(makeConfig(), newCb(), createLoopState());
-    expect(vi.mocked(sendToChannel)).toHaveBeenCalledWith(expect.anything(), "webhook", expect.stringContaining("▸ Waiting on your OK: Open fix PR — default/memos-7d9f-abc: CrashLoopBackOff (set to Ask me in Action levels)"));
+    expect(vi.mocked(runModel)).toHaveBeenCalledWith(expect.objectContaining({ prompt: expect.stringContaining("▸ Waiting on your OK: Open fix PR (set to Ask me in Action levels)") }));
+    expect(vi.mocked(deliver)).toHaveBeenCalledWith(expect.anything(), "Quiet night.");
   });
 
   test("openFixPR at off skips the repo resolve entirely", async () => {
@@ -1027,7 +1028,8 @@ describe("tick() — circuit breaker", () => {
     expect(mutated("rollout")).toBe(false);
     expect(captured()!.queue[0]).toMatchObject({ reason: why, action: { kind: "restart" } });
     expect(captured()!.audit[0]).toMatchObject({ outcome: "queued", tier: "auto", detail: "circuit-breaker: nightly total cap reached (0)" });
-    expect(vi.mocked(sendToChannel)).toHaveBeenCalledWith(expect.anything(), "webhook", expect.stringContaining(`Waiting on your OK: Restart memos — default/memos-7d9f-abc: CrashLoopBackOff (${why})`));
+    expect(vi.mocked(runModel)).toHaveBeenCalledWith(expect.objectContaining({ prompt: expect.stringContaining(`Waiting on your OK: Restart memos (${why})`) }));
+    expect(vi.mocked(deliver)).toHaveBeenCalledWith(expect.anything(), "Quiet night.");
   });
 });
 
@@ -1218,5 +1220,77 @@ describe("queue — dedup by incident + label + action args", () => {
     let state = queue(emptyState(), cfg, "t1", "chat|+1555", "chat request", "delete orphaned PVC", "destructive — reply yes to run", deletePvc as any);
     state = queue(state, cfg, "t2", "chat|+1555", "chat request", "delete orphaned PVC", "destructive — reply yes to run", { ...deletePvc } as any);
     expect(state.queue).toHaveLength(1);
+  });
+});
+
+describe("tick() — keeping the database up", () => {
+  const ON = { enabled: "true", confirmPolls: "1", mode: "auto", webhookUrl: "http://hook" };
+  const replica = (name: string) => ({
+    metadata: { name, namespace: "default", labels: { "cnpg.io/cluster": "postgres", "cnpg.io/instanceName": name }, ownerReferences: [{ apiVersion: "postgresql.cnpg.io/v1", kind: "Cluster", name: "postgres", controller: true, uid: "c1" }] },
+    status: { phase: "Running", conditions: [{ type: "Ready", status: "False" }], containerStatuses: [] },
+  });
+  const STUCK = {
+    metadata: { name: "postgres", namespace: "default" },
+    spec: { instances: 3, failoverDelay: 0, probes: { readiness: { type: "streaming" } } },
+    status: { currentPrimary: "postgres-25", phase: "Cluster in healthy state" },
+  };
+  const FP = "databaseNotReady|default|postgres|NoPrimary";
+  const patched = () => vi.mocked(kubectl).mock.calls.some((c) => c[0][0] === "patch" && c[0][1] === "clusters.postgresql.cnpg.io");
+
+  test("repairs a database stuck without a primary once the operator had its chance", async () => {
+    const { captured } = wireCluster({ configData: ON, pods: [replica("postgres-24"), replica("postgres-26")], clusters: [STUCK] });
+    const loop = createLoopState();
+    loop.firstSeen.set(FP, Date.now() - 6 * 60_000);
+    await tick(makeConfig(), newCb(), loop);
+    expect(patched()).toBe(true);
+    expect(vi.mocked(runWorker)).not.toHaveBeenCalled();
+    expect(captured()!.verifications).toEqual([expect.objectContaining({ fingerprint: FP, action: expect.objectContaining({ kind: "repairDatabase" }) })]);
+  });
+
+  test("gives the operator time first, without diagnosing or acting", async () => {
+    wireCluster({ configData: ON, pods: [replica("postgres-24"), replica("postgres-26")], clusters: [STUCK] });
+    await tick(makeConfig(), newCb(), createLoopState());
+    expect(patched()).toBe(false);
+    expect(vi.mocked(runWorker)).not.toHaveBeenCalled();
+  });
+
+  test("an outage it can't fix reaches the operator", async () => {
+    vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [], verdict: "uncertain", verdictReason: "both replicas are stuck in recovery" }));
+    wireCluster({ configData: ON, pods: [replica("postgres-24")], clusters: [{ ...STUCK, spec: { instances: 3 } }] });
+    await tick(makeConfig(), newCb(), createLoopState());
+    expect(vi.mocked(runModel)).toHaveBeenCalledWith(expect.objectContaining({ prompt: expect.stringContaining("The postgres database is down and I don't have a safe fix, so it needs you") }));
+  });
+
+  test("a fix that didn't work is reported and remembered for the next diagnosis", async () => {
+    const atMs = Date.now() - 11 * 60_000;
+    const { captured } = wireCluster({
+      configData: ON, pods: [],
+      deployments: [{ metadata: { name: "memos", namespace: "default" }, spec: { replicas: 1 }, status: { readyReplicas: 0 } }],
+      stateSeed: { audit: [], queue: [], report: "", verifications: [{ atMs, fingerprint: "fp", incident: "memos", label: "Restart memos", action: RESTART, databasesDownBefore: [] }] },
+    });
+    await tick(makeConfig(), newCb(), createLoopState());
+    expect(captured()!.verifications).toEqual([]);
+    expect(captured()!.failedFixes).toEqual([expect.objectContaining({ label: "Restart memos", why: "memos has 0 of 1 copies running" })]);
+    expect(vi.mocked(runModel)).toHaveBeenCalledWith(expect.objectContaining({ prompt: expect.stringContaining("That didn't fix it") }));
+  });
+
+  test("when no channel gets through, the update is held and shown in the app", async () => {
+    vi.mocked(runWorker).mockResolvedValue(workerOut({ actions: [RESTART] }));
+    vi.mocked(deliver).mockResolvedValueOnce({ delivered: [], failed: ["matrix"] });
+    const { captured } = wireCluster({ configData: ON });
+    await tick(makeConfig(), newCb(), createLoopState());
+    expect(captured()!.delivery).toMatchObject({ channels: ["matrix"], missed: ["Quiet night."] });
+    expect(captured()!.report).toContain("I can't reach you on matrix");
+  });
+
+  test("the first update that lands carries what was missed", async () => {
+    const { captured } = wireCluster({
+      configData: ON, pods: [],
+      stateSeed: { audit: [], queue: [], report: "⚠️ I can't reach you on matrix. What you missed: x", delivery: { since: "t", channels: ["matrix"], missed: ["The API went down; I restarted it."] } },
+    });
+    await tick(makeConfig(), newCb(), createLoopState());
+    expect(vi.mocked(deliver)).toHaveBeenCalledWith(expect.anything(), expect.stringContaining("The API went down; I restarted it."));
+    expect(captured()!.delivery).toBeUndefined();
+    expect(captured()!.report).not.toContain("can't reach you");
   });
 });

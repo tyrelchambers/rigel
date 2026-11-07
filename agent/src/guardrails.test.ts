@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { CircuitBreaker } from "./guardrails.js";
+import { CircuitBreaker, operatorManagedPodReason } from "./guardrails.js";
 
 const HOUR = 3_600_000;
 
@@ -74,5 +74,20 @@ describe("CircuitBreaker.updateLimits (live limit changes)", () => {
     cb.record("loop", "default/api", 2);
     // maxAttemptsPerIncident is untouched (still 3) → blocked.
     expect(cb.canAct("loop", "default/api", 3).allowed).toBe(false);
+  });
+});
+
+describe("operatorManagedPodReason", () => {
+  const owned = (apiVersion: string, kind: string) => ({ metadata: { name: "p", ownerReferences: [{ apiVersion, kind, name: "owner" }] } });
+
+  test("blocks pods owned by a custom resource", () => {
+    expect(operatorManagedPodReason(owned("postgresql.cnpg.io/v1", "Cluster"))).toContain("Cluster owner");
+  });
+
+  test("allows pods owned by built-in controllers or nothing", () => {
+    expect(operatorManagedPodReason(owned("apps/v1", "ReplicaSet"))).toBeNull();
+    expect(operatorManagedPodReason(owned("apps/v1", "StatefulSet"))).toBeNull();
+    expect(operatorManagedPodReason(owned("batch/v1", "Job"))).toBeNull();
+    expect(operatorManagedPodReason({ metadata: { name: "bare" } })).toBeNull();
   });
 });

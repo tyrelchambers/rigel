@@ -94,6 +94,7 @@ STEP 2 — Remediation. ONLY when your verdict is "actionable" you MAY propose A
 ${kubectlSchema}${fixPR ? FIX_PR_PARAGRAPH : ""}Guidance:
 - Prefer the least invasive fix that addresses root cause.${examples ? ` ${examples[0]!.toUpperCase()}${examples.slice(1)}.` : ""}
 - ${enabled.length > 0 ? "Only propose kubectl actions whose kind is in the list above." : "No kubectl actions are available to you."} Anything destructive (deleting namespaces/PVCs/volumes, draining nodes, editing secrets/RBAC) is NOT available to you — if that is what's truly needed, do NOT emit an action; set the verdict to "uncertain" and explain in prose so it can be queued for the human.
+- Never delete a pod owned by an operator's custom resource (a CloudNativePG database instance, a broker, etc.): the operator decides when it is recreated, and Rigel refuses to run it. For a database that has lost its primary, fix what the database depends on or leave it uncertain.
 - Always include the namespace.${labelExample ? `
 - Write the "label" the way a helpful assistant would tell the operator what you're doing: start with the plain base verb for the kind (${verbs}), name the target, then say why in natural language. Example: "${labelExample}" One sentence, plain English, no jargon dumps and no trailing period.` : ""}`;
 }
@@ -115,11 +116,12 @@ export async function runWorker(
   rc: RuntimeConfig,
   incidents: Incident[],
   repo?: ResolvedRepo | null,
+  tried: string[] = [],
 ): Promise<WorkerOutput> {
   const result = await runModel({
     role: "worker",
     config: rc,
-    prompt: buildPrompt(incidents, rc.actionLevels.openFixPR === "off" ? null : repo ?? null),
+    prompt: buildPrompt(incidents, rc.actionLevels.openFixPR === "off" ? null : repo ?? null, tried),
     systemPrompt: systemPrompt(rc.actionLevels),
     allowedReads: READ_ONLY_TOOLS,
     timeoutMs: 120_000,
@@ -175,7 +177,7 @@ export function parseTriageVerdict(text: string): { verdict: TriageVerdict; reas
   return fallback;
 }
 
-function buildPrompt(incidents: Incident[], repo: ResolvedRepo | null): string {
+function buildPrompt(incidents: Incident[], repo: ResolvedRepo | null, tried: string[]): string {
   const lines = incidents.map((i) => {
     const loc = i.namespace ? `${i.namespace}/${i.name}` : i.name;
     const restarts = i.restarts !== undefined ? `, restarts=${i.restarts}` : "";
@@ -185,7 +187,10 @@ function buildPrompt(incidents: Incident[], repo: ResolvedRepo | null): string {
   const eligibility = repo
     ? `\n\nThis workload is autofix-eligible. Its GitOps source is "${repo.source}" (repo ${repo.repoURL}@${repo.branch}, manifest directory "${repo.path}"). If the root cause is a defect in its committed manifest/config, you MAY propose an openFixPR against that source instead of a kubectl action.`
     : `\n\nThis workload is NOT autofix-eligible — do NOT propose an openFixPR. Only a kubectl action or no action.`;
+  const triedText = tried.length > 0
+    ? `\n\nAlready tried in this namespace recently, and it did NOT work. Do not repeat these; find the real cause:\n${tried.map((t) => `- ${t}`).join("\n")}`
+    : "";
   return `The following incident(s) were just detected in the cluster:\n\n${lines.join(
     "\n",
-  )}${eligibility}\n\nInvestigate with read-only kubectl, then emit your \`\`\`verdict block and (only if actionable) at most one \`\`\`action block.`;
+  )}${eligibility}${triedText}\n\nInvestigate with read-only kubectl, then emit your \`\`\`verdict block and (only if actionable) at most one \`\`\`action block.`;
 }

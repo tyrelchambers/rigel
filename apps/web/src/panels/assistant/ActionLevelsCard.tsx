@@ -10,6 +10,7 @@ import {
   faSliders,
   faCodePullRequest,
   faCircleInfo,
+  faDatabase,
 } from "@awesome.me/kit-6050953220/icons/classic/solid";
 import { PRESETS, ACTION_LEVEL_KINDS, ACTION_LEVEL_LABELS, matchPreset, type ActionKind, type ActionLevel, type PresetId } from "@rigel/k8s";
 import { cn } from "@/lib/utils";
@@ -38,6 +39,7 @@ const KIND_ICONS: Record<ActionKind, IconDefinition> = {
   scale: faLayerGroup,
   setEnv: faSliders,
   openFixPR: faCodePullRequest,
+  repairDatabase: faDatabase,
 };
 
 export function ActionLevelsCard() {

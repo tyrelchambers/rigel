@@ -32,6 +32,7 @@ export const MATRIX_RESOURCES: { apiGroup: string; resource: string; secret?: bo
   { apiGroup: "batch", resource: "jobs" },
   { apiGroup: "batch", resource: "cronjobs" },
   { apiGroup: "networking.k8s.io", resource: "ingresses" },
+  { apiGroup: "postgresql.cnpg.io", resource: "clusters", onlyVerbs: ["patch"] },
 ];
 
 const REPRESENTABLE = new Set(
@@ -95,10 +96,10 @@ const WRITE_VERBS: Verb[] = ["create", "update", "patch"];
  *  excludes them to avoid granting/duplicating a read the policy doesn't control. */
 const SCALE_SUBRESOURCES = ["deployments/scale", "statefulsets/scale"];
 const readResources = MATRIX_RESOURCES.filter(
-  (r) => !r.secret && !["pods/eviction", "pods/exec"].includes(r.resource) && !SCALE_SUBRESOURCES.includes(r.resource),
+  (r) => !r.secret && !["pods/eviction", "pods/exec", "clusters"].includes(r.resource) && !SCALE_SUBRESOURCES.includes(r.resource),
 );
 const writeResources = MATRIX_RESOURCES.filter(
-  (r) => !r.secret && !["pods/eviction", "pods/exec", "nodes"].includes(r.resource),
+  (r) => !r.secret && !["pods/eviction", "pods/exec", "nodes", "clusters"].includes(r.resource),
 );
 
 export const CAPABILITIES: Capability[] = [
@@ -136,6 +137,11 @@ export const CAPABILITIES: Capability[] = [
     ],
   },
   {
+    id: "repairDatabase", label: "Repair databases",
+    description: "Unstick a Postgres cluster whose failover has stalled", risk: "safe",
+    cells: [cell("postgresql.cnpg.io", "clusters", "patch")],
+  },
+  {
     id: "drain", label: "Drain nodes", description: "Evict pods off a node", risk: "destructive",
     cells: [cell("", "pods/eviction", "create")],
   },
@@ -149,7 +155,7 @@ export const CAPABILITIES: Capability[] = [
 const CAP_BY_ID = new Map(CAPABILITIES.map((c) => [c.id, c]));
 
 export const DEFAULT_POLICY: RbacPolicy = {
-  cells: [...new Set(["reversible", "deletePods", "cordon"].flatMap((id) => CAP_BY_ID.get(id)!.cells))].sort(),
+  cells: [...new Set(["reversible", "deletePods", "cordon", "repairDatabase"].flatMap((id) => CAP_BY_ID.get(id)!.cells))].sort(),
 };
 
 /** The get/list/watch cells that ship as part of the non-editable baseline

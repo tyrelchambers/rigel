@@ -156,7 +156,7 @@ describe("runWorker", () => {
 
   test("with every kubectl kind Off, the kubectl schema is dropped and the label example uses an enabled kind", async () => {
     const spy = vi.spyOn(runModelMod, "runModel").mockResolvedValue({ text: "", costUsd: 0, isError: false });
-    const allKubectlOff = { restart: "off", rollback: "off", deletePod: "off", cordon: "off", uncordon: "off", scale: "off", setEnv: "off", openFixPR: "review" } as const;
+    const allKubectlOff = { restart: "off", rollback: "off", deletePod: "off", cordon: "off", uncordon: "off", scale: "off", setEnv: "off", openFixPR: "review", repairDatabase: "off" } as const;
     await runWorker({ ...rc(), actionLevels: allKubectlOff }, [INC]);
     const prompt = spy.mock.calls[0]![0].systemPrompt;
     expect(prompt).not.toContain("kubectl remediation schema");

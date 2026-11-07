@@ -30,18 +30,18 @@ describe("presets", () => {
   test("Balanced matches the spec table", () => {
     expect(PRESETS.balanced).toEqual({
       restart: "auto", rollback: "auto", deletePod: "auto", cordon: "auto",
-      uncordon: "auto", scale: "review", setEnv: "review", openFixPR: "review",
+      uncordon: "auto", scale: "review", setEnv: "review", openFixPR: "review", repairDatabase: "auto",
     });
   });
 
   test("Loose and Strict match the spec table", () => {
     expect(PRESETS.loose).toEqual({
       restart: "auto", rollback: "auto", deletePod: "auto", cordon: "auto",
-      uncordon: "auto", scale: "auto", setEnv: "review", openFixPR: "review",
+      uncordon: "auto", scale: "auto", setEnv: "review", openFixPR: "review", repairDatabase: "auto",
     });
     expect(PRESETS.strict).toEqual({
       restart: "review", rollback: "ask", deletePod: "review", cordon: "ask",
-      uncordon: "ask", scale: "ask", setEnv: "ask", openFixPR: "ask",
+      uncordon: "ask", scale: "ask", setEnv: "ask", openFixPR: "ask", repairDatabase: "review",
     });
   });
 

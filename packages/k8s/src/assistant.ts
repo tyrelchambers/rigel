@@ -459,6 +459,7 @@ const BASELINE_RULES: PolicyRule[] = [
   { apiGroups: ["networking.k8s.io"], resources: ["ingresses", "networkpolicies"], verbs: ["get", "list", "watch"] },
   { apiGroups: ["events.k8s.io"], resources: ["events"], verbs: ["get", "list", "watch"] },
   { apiGroups: ["metrics.k8s.io"], resources: ["pods", "nodes"], verbs: ["get", "list"] },
+  { apiGroups: ["postgresql.cnpg.io"], resources: ["clusters"], verbs: ["get", "list", "watch"] },
 ];
 
 function rulesToYaml(rules: PolicyRule[]): string {

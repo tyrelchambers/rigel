@@ -30,7 +30,11 @@ export interface SuggestedAction {
   body?: string;
   /** `command` only — raw kubectl/helm args (no binary, no --context). */
   args?: string[];
+  cluster?: string;
 }
+
+export const CNPG_CLUSTER_RESOURCE = "clusters.postgresql.cnpg.io";
+export const PG_ISREADY_READINESS_PATCH = JSON.stringify({ spec: { probes: { readiness: { type: "pg_isready" } } } });
 
 /**
  * Kinds that are NOT kubectl mutations: instead of touching the cluster they open
@@ -123,6 +127,8 @@ export function toKubectlInvocations(action: SuggestedAction): string[][] {
       const node = need(action.node, "node");
       return [["uncordon", node], ["annotate", "node", node, `${CORDONED_BY_ANNOTATION}-`]];
     }
+    case "repairDatabase":
+      return [["patch", CNPG_CLUSTER_RESOURCE, need(action.cluster, "cluster"), "-n", ns, "--type", "merge", "-p", PG_ISREADY_READINESS_PATCH]];
     case "openFixPR":
       // Not a kubectl action — opening a PR against the GitOps source is the
       // fix-runner's job. Fail loudly here so it can never silently run a command.
@@ -136,7 +142,7 @@ export function toKubectlInvocations(action: SuggestedAction): string[][] {
 
 export function resourceKeyFor(action: SuggestedAction): string {
   if (action.node) return `node/${action.node}`;
-  const target = action.deployment ?? action.pod ?? action.source ?? (action.args ? action.args.slice(0, 3).join("-") : action.label);
+  const target = action.deployment ?? action.pod ?? action.cluster ?? action.source ?? (action.args ? action.args.slice(0, 3).join("-") : action.label);
   return `${action.namespace ?? "default"}/${target}`;
 }
 
@@ -162,6 +168,8 @@ export function backupTarget(action: SuggestedAction): BackupTarget {
     case "cordon":
     case "uncordon":
       return { kind: "node", name: need(action.node, "node"), namespace: null };
+    case "repairDatabase":
+      return { kind: CNPG_CLUSTER_RESOURCE, name: need(action.cluster, "cluster"), namespace: ns };
     case "openFixPR":
       // No cluster resource to snapshot — the fix-runner opens a PR; reverting is
       // a git operation, not a `kubectl apply` of a backup.
