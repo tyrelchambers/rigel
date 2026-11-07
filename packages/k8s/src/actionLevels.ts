@@ -1,5 +1,5 @@
 export type ActionLevel = "auto" | "review" | "ask" | "off";
-export type ActionKind = "restart" | "rollback" | "deletePod" | "cordon" | "uncordon" | "scale" | "setEnv" | "openFixPR";
+export type ActionKind = "restart" | "rollback" | "deletePod" | "cordon" | "uncordon" | "scale" | "setEnv" | "openFixPR" | "repairDatabase";
 export type ActionLevels = Record<ActionKind, ActionLevel>;
 export type PresetId = "loose" | "balanced" | "strict";
 
@@ -20,12 +20,13 @@ export const ACTION_LEVEL_KINDS: readonly { kind: ActionKind; label: string; des
   { kind: "scale", label: "Scale", description: "Change how many replicas a deployment runs" },
   { kind: "setEnv", label: "Set env", description: "Change a deployment's environment variables" },
   { kind: "openFixPR", label: "Open fix PR", description: "Open a pull request against the workload's repo" },
+  { kind: "repairDatabase", label: "Repair database", description: "Unstick a Postgres cluster whose failover has stalled" },
 ];
 
 export const PRESETS: Record<PresetId, ActionLevels> = {
-  loose: { restart: "auto", rollback: "auto", deletePod: "auto", cordon: "auto", uncordon: "auto", scale: "auto", setEnv: "review", openFixPR: "review" },
-  balanced: { restart: "auto", rollback: "auto", deletePod: "auto", cordon: "auto", uncordon: "auto", scale: "review", setEnv: "review", openFixPR: "review" },
-  strict: { restart: "review", rollback: "ask", deletePod: "review", cordon: "ask", uncordon: "ask", scale: "ask", setEnv: "ask", openFixPR: "ask" },
+  loose: { restart: "auto", rollback: "auto", deletePod: "auto", cordon: "auto", uncordon: "auto", scale: "auto", setEnv: "review", openFixPR: "review", repairDatabase: "auto" },
+  balanced: { restart: "auto", rollback: "auto", deletePod: "auto", cordon: "auto", uncordon: "auto", scale: "review", setEnv: "review", openFixPR: "review", repairDatabase: "auto" },
+  strict: { restart: "review", rollback: "ask", deletePod: "review", cordon: "ask", uncordon: "ask", scale: "ask", setEnv: "ask", openFixPR: "ask", repairDatabase: "review" },
 };
 
 export function isActionKind(kind: string): kind is ActionKind {

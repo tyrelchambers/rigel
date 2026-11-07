@@ -93,3 +93,13 @@ export class CircuitBreaker {
     this.history.push({ fingerprint, resourceKey, at: now });
   }
 }
+
+const BUILTIN_OWNER_API_VERSIONS = new Set(["v1", "apps/v1", "batch/v1"]);
+
+export function operatorManagedPodReason(pod: Record<string, any>): string | null {
+  const owners: Record<string, any>[] = pod.metadata?.ownerReferences ?? [];
+  const operatorOwner = owners.find((o) => !BUILTIN_OWNER_API_VERSIONS.has(String(o.apiVersion ?? "")));
+  if (!operatorOwner) return null;
+  const name = pod.metadata?.name ?? "this pod";
+  return `${name} is managed by ${operatorOwner.kind} ${operatorOwner.name} (${operatorOwner.apiVersion}), so its operator decides when it is recreated`;
+}

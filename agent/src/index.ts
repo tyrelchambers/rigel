@@ -13,7 +13,7 @@ import { resolveAutofixEligibility, type AutofixEligibility } from "./autofixEli
 import { dispatchRepoFix } from "./repoFixDispatch.js";
 import { reconcileFixJobs, type FixReconcileDeps } from "./reconcileFixJobs.js";
 import { FIX_LABEL, FIX_LABEL_VALUE } from "./fixJob.js";
-import { notifySignal, receiveSignal, notifyMatrix, receiveMatrix, markMatrixRead, setMatrixTyping, joinMatrixRoom, notifyTargets, sendToChannel } from "./notify.js";
+import { notifySignal, receiveSignal, notifyMatrix, receiveMatrix, markMatrixRead, setMatrixTyping, joinMatrixRoom, deliver } from "./notify.js";
 import { SessionStore, ONE_HOUR_MS } from "./sessionStore.js";
 import {
   handleInbound,
@@ -28,15 +28,20 @@ import {
   type MatrixInboundHandlers,
 } from "./matrixInbound.js";
 import {
+  detectDatabaseClusters,
   detectDegradedDeployments,
   detectLogErrors,
   detectUnhealthyPods,
   fingerprint,
   type Incident,
 } from "./detector.js";
+import { planDatabaseRepair, type DatabaseRepairPlan } from "./databaseRepair.js";
+import { outageAround, outageOf } from "./outage.js";
+import { pendingVerification, verifyFix } from "./verify.js";
+import { composeUpdate } from "./summarize.js";
 import { kubectl, kubectlApply } from "./kubectl.js";
-import { isRepoFixAction, resourceKeyFor, toKubectlInvocations, type SuggestedAction } from "./action.js";
-import { conjugateDone, couldntPhrase, greeting } from "./notifyVoice.js";
+import { CNPG_CLUSTER_RESOURCE, isRepoFixAction, resourceKeyFor, toKubectlInvocations, type SuggestedAction } from "./action.js";
+import { conjugateDone, couldntPhrase } from "./notifyVoice.js";
 import type { RepoFixDeps } from "./repoFixDispatch.js";
 import { runThreadedDiagnosis } from "./threadedDiagnosis.js";
 import { runChatTurn } from "./chatTurn.js";
@@ -189,11 +194,12 @@ function itemsOf(raw: unknown): Record<string, unknown>[] {
   return Array.isArray(list?.items) ? (list.items as Record<string, unknown>[]) : [];
 }
 
-async function detectAll(cfg: Config, autofix: AutofixConfig): Promise<{ incidents: Incident[]; pods: Record<string, unknown>[]; deps: Record<string, unknown>[]; nodes: Record<string, unknown>[]; podsOk: boolean; depsOk: boolean; nodesOk: boolean; staleCordonMarkers: string[]; logScanned: boolean }> {
-  const [podsRes, depsRes, nodesRes] = await Promise.all([
+async function detectAll(cfg: Config, autofix: AutofixConfig): Promise<{ incidents: Incident[]; pods: Record<string, unknown>[]; deps: Record<string, unknown>[]; nodes: Record<string, unknown>[]; clusters: Record<string, unknown>[]; podsOk: boolean; depsOk: boolean; nodesOk: boolean; clustersOk: boolean; staleCordonMarkers: string[]; logScanned: boolean }> {
+  const [podsRes, depsRes, nodesRes, clustersRes] = await Promise.all([
     kubectl(["get", "pods", ...nsArgs(cfg), "-o", "json"]),
     kubectl(["get", "deployments", ...nsArgs(cfg), "-o", "json"]),
     kubectl(["get", "nodes", "-o", "json"]),
+    kubectl(["get", CNPG_CLUSTER_RESOURCE, ...nsArgs(cfg), "-o", "json"]),
   ]);
   const parsedPods = podsRes.code === 0 ? safeParse(podsRes.stdout) : { items: [] };
   const parsedDeps = depsRes.code === 0 ? safeParse(depsRes.stdout) : { items: [] };
@@ -202,6 +208,9 @@ async function detectAll(cfg: Config, autofix: AutofixConfig): Promise<{ inciden
   let incidents: Incident[] = [];
   if (podsRes.code === 0) incidents.push(...detectUnhealthyPods(parsedPods));
   if (depsRes.code === 0) incidents.push(...detectDegradedDeployments(parsedDeps));
+  const clustersOk = podsRes.code === 0 && clustersRes?.code === 0;
+  const clusters = clustersOk ? itemsOf(safeParse(clustersRes.stdout)) : [];
+  if (clustersOk) incidents.push(...detectDatabaseClusters({ items: clusters }, parsedPods));
   const nodes = nodesRes.code === 0 ? itemsOf(safeParse(nodesRes.stdout)) : [];
   const selfCordon = detectSelfCordonedNodes(nodes, Date.now());
   if (nodesRes.code === 0) incidents.push(...selfCordon.incidents);
@@ -228,12 +237,14 @@ async function detectAll(cfg: Config, autofix: AutofixConfig): Promise<{ inciden
       (podsRes.code !== 0 ? ` | pods stderr: ${podsRes.stderr.slice(0, 200)}` : ""),
   );
   // (namespace filtering moved to tick() so it uses the LIVE rc.limits.namespaces)
-  return { incidents, pods, deps, nodes, podsOk: podsRes.code === 0, depsOk: depsRes.code === 0, nodesOk: nodesRes.code === 0, staleCordonMarkers: selfCordon.stale, logScanned };
+  return { incidents, pods, deps, nodes, clusters, podsOk: podsRes.code === 0, depsOk: depsRes.code === 0, nodesOk: nodesRes.code === 0, clustersOk, staleCordonMarkers: selfCordon.stale, logScanned };
 }
 
 export interface LoopState {
   streaks: Map<string, number>;
   handled: Set<string>;
+  firstSeen: Map<string, number>;
+  outageNotified: Set<string>;
   /** Inbound Signal messages already processed, so none is answered twice. */
   seen: SeenTimestamps;
   /** Inbound Matrix events already processed, so none is answered twice. */
@@ -299,16 +310,22 @@ export async function tick(
       state = resolveIncident(state, fp, ts);
       loop.streaks.delete(fp);
       loop.handled.delete(fp);
+      loop.firstSeen.delete(fp);
+      loop.outageNotified.delete(fp);
     }
   }
   for (const i of incidents) {
     const fp = fingerprint(i);
     loop.streaks.set(fp, (loop.streaks.get(fp) ?? 0) + 1);
+    if (!loop.firstSeen.has(fp)) loop.firstSeen.set(fp, now);
   }
 
+  const repairPlans = new Map<string, DatabaseRepairPlan>(
+    incidents.map((i) => [fingerprint(i), planDatabaseRepair(i, detection.clusters, loop.firstSeen.get(fingerprint(i)) ?? now, now)]),
+  );
   const confirmed = incidents.filter((i) => {
     const fp = fingerprint(i);
-    return (loop.streaks.get(fp) ?? 0) >= rc.limits.confirmPolls && !loop.handled.has(fp);
+    return (loop.streaks.get(fp) ?? 0) >= rc.limits.confirmPolls && !loop.handled.has(fp) && repairPlans.get(fp)?.kind !== "wait";
   });
 
   // Note every confirmed incident in the rolling history (create as "flagged" if
@@ -339,6 +356,7 @@ export async function tick(
       if (detection.logScanned) checkedKinds.add("loggedError");
       if (detection.depsOk) checkedKinds.add("degradedDeployment");
       if (detection.nodesOk) checkedKinds.add("cordonedNode");
+      if (detection.clustersOk) checkedKinds.add("databaseNotReady");
       const recon = reconcileQueue(state.queue, presentNow, checkedKinds, now, cfg.queueTtlMs);
       if (recon.cleared.length > 0) {
         state = { ...state, queue: recon.kept };
@@ -356,6 +374,8 @@ export async function tick(
         log(`reconcile: auto-cleared ${recon.cleared.length} moot queued item(s)`);
       }
     }
+
+    if (detection.podsOk && detection.depsOk) state = checkFixes(state, cfg, loop, notifications, detection, present, now, ts);
 
     // Custom alert rules — deterministic, model-less, free-riding the fetch above.
     // Metric-threshold rules additionally need a per-node usage snapshot from the
@@ -418,9 +438,16 @@ export async function tick(
     // deterministic guardrails stay in Stage B below.
     const packets = await diagnoseConfirmed(
       {
-        diagnose: (incident) => incident.incidentKind === "cordonedNode"
-          ? Promise.resolve({ verdict: "actionable", verdictReason: "node is Ready again", actions: [selfUncordonAction(incident.name)], analysis: describe(incident), costUsd: 0, failed: false })
-          : runWorker(rc, [incident], eligibility.get(fingerprint(incident))?.repo ?? null),
+        diagnose: (incident) => {
+          const plan = repairPlans.get(fingerprint(incident));
+          if (incident.incidentKind === "cordonedNode") {
+            return Promise.resolve({ verdict: "actionable", verdictReason: "node is Ready again", actions: [selfUncordonAction(incident.name)], analysis: describe(incident), costUsd: 0, failed: false });
+          }
+          if (plan?.kind === "repair") {
+            return Promise.resolve({ verdict: "actionable", verdictReason: "failover is stalled behind the streaming readiness probe", actions: [plan.action], analysis: describe(incident), costUsd: 0, failed: false });
+          }
+          return runWorker(rc, [incident], eligibility.get(fingerprint(incident))?.repo ?? null, triedFixes(state, incident, now));
+        },
         limit: cfg.maxConcurrentDiagnoses,
       },
       confirmed,
@@ -474,6 +501,7 @@ export async function tick(
       if (packet.error) {
         // Fail closed: a worker THROW never results in an action.
         const msg = packet.error;
+        notifyUndiagnosedOutage(loop, notifications, incident, detection.deps, fp);
         state = workerAuthReport(state, msg);
         state = record(state, cfg, {
           at: ts, fingerprint: fp, incident: describe(incident), tier: "low",
@@ -488,6 +516,7 @@ export async function tick(
       if (packet.failed) {
         // The worker model call FAILED (provider/credential error) — NOT a triage.
         // Record low-noise (skipped) and never act; surface an auth lapse loudly.
+        notifyUndiagnosedOutage(loop, notifications, incident, detection.deps, fp);
         state = workerAuthReport(state, packet.verdictReason || analysis);
         state = record(state, cfg, {
           at: ts, fingerprint: fp, incident: describe(incident), tier: "low",
@@ -504,6 +533,15 @@ export async function tick(
       // as it did before triage existed. (The verdict still further gates an
       // `openFixPR` for any kind — handled per-action.)
       if (incident.incidentKind === "loggedError") {
+        const outage = outageAround(incident, detection.incidents, detection.pods, detection.deps);
+        if (packet.verdict === "acceptable" && outage) {
+          state = record(state, cfg, {
+            at: ts, fingerprint: fp, incident: describe(incident), tier: "low",
+            outcome: "skipped", detail: `not silenced, ${outage}: ${truncate(packet.verdictReason || analysis)}`,
+            analysis: truncate(analysis),
+          });
+          continue;
+        }
         if (packet.verdict === "acceptable") {
           // Benign/expected — auto-silence the fingerprint so it doesn't re-fire.
           if (!(state.autoSilenced ?? []).includes(fp)) newlySilenced++;
@@ -538,6 +576,8 @@ export async function tick(
           at: ts, fingerprint: fp, incident: describe(incident), tier: "low",
           outcome: "skipped", detail: truncate(analysis),
         });
+        const outage = outageOf(incident, detection.deps);
+        if (outage) notifications.push(`▸ ${capitalize(outage)} and I don't have a safe fix, so it needs you. What I found: ${truncate(packet.verdictReason || analysis, 300)}`);
         continue;
       }
 
@@ -550,7 +590,7 @@ export async function tick(
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
           tier: "ask", outcome: "queued", detail: reason, analysis: truncate(analysis),
         });
-        notifications.push(`▸ You'll need to run this one yourself in Rigel: ${action.label} (${describe(incident)})`);
+        notifications.push(`▸ You'll need to do this one yourself in Rigel: ${action.label}`);
         continue;
       }
       if (level === "off") {
@@ -620,7 +660,7 @@ export async function tick(
             at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
             tier: level, outcome: "queued", detail: "set to Ask me in Action levels", analysis: truncate(analysis),
           });
-          notifications.push(`▸ Waiting on your OK: ${action.label} — ${describe(incident)} (set to Ask me in Action levels)`);
+          notifications.push(`▸ Waiting on your OK: ${action.label} (set to Ask me in Action levels)`);
           continue;
         }
         if (level === "review") {
@@ -655,7 +695,7 @@ export async function tick(
               tier: level, verdict: "escalated", outcome: "queued",
               detail: `Opus escalated the fix (conf ${sup.verdict.confidence.toFixed(2)}): ${sup.verdict.reason}`, analysis: truncate(analysis),
             });
-            notifications.push(`▸ I'd like your OK to open a fix PR: ${action.label} — ${describe(incident)}`);
+            notifications.push(`▸ I'd like your OK to open a fix PR: ${action.label}`);
             continue;
           }
           log(`Opus approved fix PR (conf ${sup.verdict.confidence.toFixed(2)}): ${action.label}`);
@@ -666,7 +706,7 @@ export async function tick(
             at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
             tier: level, outcome: "queued", detail: autonomyQueueWhy, analysis: truncate(analysis),
           });
-          notifications.push(`▸ Waiting on your OK: ${action.label} — ${describe(incident)} (${autonomyQueueWhy})`);
+          notifications.push(`▸ Waiting on your OK: ${action.label} (${autonomyQueueWhy})`);
           continue;
         }
         const fixKey = resourceKeyFor(action);
@@ -711,7 +751,7 @@ export async function tick(
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
           command, tier: level, outcome: "queued", detail: "set to Ask me in Action levels", analysis: truncate(analysis),
         });
-        notifications.push(`▸ Waiting on your OK: ${action.label} — ${describe(incident)} (set to Ask me in Action levels)`);
+        notifications.push(`▸ Waiting on your OK: ${action.label} (set to Ask me in Action levels)`);
         continue;
       }
 
@@ -746,7 +786,7 @@ export async function tick(
             tier: level, verdict: "escalated", outcome: "queued",
             detail: `Opus escalated (conf ${sup.verdict.confidence.toFixed(2)}): ${sup.verdict.reason}`, analysis: truncate(analysis),
           });
-          notifications.push(`▸ I'd like your OK on this one: ${action.label} — ${describe(incident)}`);
+          notifications.push(`▸ I'd like your OK on this one: ${action.label}`);
           continue;
         }
         execVerdict = "approved";
@@ -762,7 +802,7 @@ export async function tick(
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
           command, tier: level, outcome: "queued", detail: autonomyQueueWhy, analysis: truncate(analysis),
         });
-        notifications.push(`▸ Waiting on your OK: ${action.label} — ${describe(incident)} (${autonomyQueueWhy})`);
+        notifications.push(`▸ Waiting on your OK: ${action.label} (${autonomyQueueWhy})`);
         continue;
       }
 
@@ -779,6 +819,14 @@ export async function tick(
       cb.record(fp, resourceKey, now);
       try {
         const result = await executeAction(action);
+        if (result.blocked) {
+          state = record(state, cfg, {
+            at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
+            tier: level, verdict: execVerdict, outcome: "skipped", detail: `blocked: ${result.blocked}`, analysis: truncate(analysis),
+          });
+          log(`blocked ${action.label}: ${result.blocked}`);
+          continue;
+        }
         let backupRef: string | undefined;
         if (result.backupYaml) {
           const key = `${ts}_${fp}`.replace(/[^A-Za-z0-9_.-]/g, "_");
@@ -790,11 +838,16 @@ export async function tick(
           outcome: result.success ? "success" : "failure", detail: truncate(result.output), backupRef, analysis: truncate(analysis),
         });
         log(`${result.success ? "✓" : "✗"} ${action.label} — ${result.commands.join(" && ")}`);
-        notifications.push(
-          result.success
-            ? `✓ ${conjugateDone(action.kind, action.label)} — ${describe(incident)}`
-            : `✗ ${couldntPhrase(action.label)} — ${describe(incident)}`,
-        );
+        notifications.push(result.success ? `✓ ${conjugateDone(action.kind, action.label)}` : `✗ ${couldntPhrase(action.label)}`);
+        if (result.success) {
+          state = {
+            ...state,
+            verifications: [
+              ...(state.verifications ?? []),
+              pendingVerification(action, { atMs: now, fingerprint: fp, incident: describe(incident), incidents: detection.incidents, pods: detection.pods }),
+            ],
+          };
+        }
       } catch (e) {
         state = record(state, cfg, {
           at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
@@ -842,14 +895,12 @@ export async function tick(
   // Scheduled digests bypass the kill-switch, so they fire on schedule even while
   // remediation is paused; send-state persists in the SAME durable write below.
   state = await evaluateDigests(rc, state, detection, now);
+  if (rc.enabled) state = await sendUpdates(rc, state, notifications, ts);
   await writeState(cfg.stateConfigMap, cfg.stateNamespace, state);
 
   if (rc.enabled) {
     // GC reconciled fix resources AFTER the durable state write (idempotent deletes).
     for (const name of fixGc) await gcFixResources(cfg, name);
-
-    // Best-effort outbound notification for what happened this tick.
-    flushNotifications(rc, notifications);
 
     // Signal: answer any inbound diagnosis questions / approval commands whenever
     // the channel is configured — no separate opt-in. Never throws — failures stay
@@ -978,7 +1029,7 @@ async function handleSignalInbound(
 
   const handlers: InboundHandlers = {
     receive: (apiUrl, number) => receiveSignal(apiUrl, number),
-    reply: (to, text) => notifySignal(rc.signalApiUrl!, rc.signalNumber!, [to], text),
+    reply: async (to, text) => { await notifySignal(rc.signalApiUrl!, rc.signalNumber!, [to], text); },
     ...buildMessageHandler(cfg, rc, cb, loop, loop.sessions),
   };
 
@@ -1007,7 +1058,7 @@ async function handleMatrixInboundIO(
   }
   const handlers: MatrixInboundHandlers = {
     sync: (since) => receiveMatrix(m.homeserverUrl!, m.accessToken!, since),
-    reply: (roomId, text) => notifyMatrix(m.homeserverUrl!, m.accessToken!, roomId, text),
+    reply: async (roomId, text) => { await notifyMatrix(m.homeserverUrl!, m.accessToken!, roomId, text); },
     markRead: (roomId, eventId) => markMatrixRead(m.homeserverUrl!, m.accessToken!, roomId, eventId),
     setTyping: (roomId, typing) => setMatrixTyping(m.homeserverUrl!, m.accessToken!, roomId, m.userId ?? "", typing),
     join: (roomId) => joinMatrixRoom(m.homeserverUrl!, m.accessToken!, roomId),
@@ -1068,7 +1119,7 @@ function holdForBreaker(
     at: ts, fingerprint: fp, incident: describe(incident), proposal: action.label,
     command, tier: level, outcome: "queued", detail: reason, analysis: truncate(analysis),
   });
-  return { state: next, notification: `▸ Waiting on your OK: ${action.label} — ${describe(incident)} (${why})` };
+  return { state: next, notification: `▸ Waiting on your OK: ${action.label} (${why})` };
 }
 
 /** Surface a loud report when the worker provider's credential is failing (an
@@ -1148,12 +1199,85 @@ function truncate(s: string, max = 2000): string {
   return s.length > max ? s.slice(0, max) + "…" : s;
 }
 
-/** Best-effort flush of this tick's notifications to every channel that is both
- *  runtime-complete and allowed by the notify allowlist. */
-function flushNotifications(rc: RuntimeConfig, notifications: string[]): void {
-  if (notifications.length === 0) return;
-  const text = `${greeting(notifications)}\n${notifications.join("\n")}`;
-  for (const ch of notifyTargets(rc)) void sendToChannel(rc, ch, text);
+const DELIVERY_PREFIX = "⚠️ I can't reach you";
+const MAX_MISSED = 5;
+
+async function sendUpdates(rc: RuntimeConfig, state: AssistantState, notifications: string[], ts: string): Promise<AssistantState> {
+  const outage = state.delivery;
+  if (notifications.length === 0 && !outage) return state;
+  const fresh = notifications.length > 0 ? await composeUpdate(rc, notifications) : null;
+  const missed = outage?.missed ?? [];
+  const text = [fresh, ...(missed.length > 0 ? [`Earlier, while I couldn't reach you:\n${missed.join("\n\n")}`] : [])].filter(Boolean).join("\n\n");
+  const result = await deliver(rc, text);
+  const reportLines = (state.report ?? "").split("\n").filter((l) => l !== "" && !l.startsWith(DELIVERY_PREFIX));
+  if (result.delivered.length > 0) {
+    if (result.failed.length > 0) reportLines.push(`${DELIVERY_PREFIX} on ${result.failed.join(", ")}, so I used ${result.delivered.join(", ")} instead.`);
+    return { ...state, delivery: undefined, report: reportLines.join("\n") };
+  }
+  if (result.failed.length === 0) return state;
+  const nextMissed = [...(fresh ? [fresh] : []), ...missed].slice(0, MAX_MISSED);
+  log(`delivery failed on ${result.failed.join(", ")}; ${nextMissed.length} update(s) held`);
+  reportLines.push(`${DELIVERY_PREFIX} on ${result.failed.join(", ")}. What you missed: ${nextMissed.join(" ").replace(/\s+/g, " ")}`);
+  return {
+    ...state,
+    delivery: { since: outage?.since ?? ts, channels: result.failed, missed: nextMissed },
+    report: reportLines.join("\n"),
+  };
+}
+
+function checkFixes(
+  state: AssistantState,
+  cfg: Config,
+  loop: LoopState,
+  notifications: string[],
+  detection: { incidents: Incident[]; pods: Record<string, unknown>[]; deps: Record<string, unknown>[] },
+  present: ReadonlySet<string>,
+  now: number,
+  ts: string,
+): AssistantState {
+  const pending = state.verifications ?? [];
+  if (pending.length === 0) return state;
+  const view = { now, present, incidents: detection.incidents, pods: detection.pods, deps: detection.deps };
+  const keep: typeof pending = [];
+  let next = state;
+  for (const p of pending) {
+    const r = verifyFix(p, view);
+    if (r.status === "pending") {
+      keep.push(p);
+      continue;
+    }
+    if (r.status === "verified") {
+      next = record(next, cfg, { at: ts, fingerprint: p.fingerprint, incident: p.incident, proposal: p.label, tier: "low", outcome: "success", detail: "verified: it worked" });
+      notifications.push(`✓ Confirmed it worked: ${p.label}`);
+      continue;
+    }
+    next = record(next, cfg, { at: ts, fingerprint: p.fingerprint, incident: p.incident, proposal: p.label, tier: "low", outcome: "failure", detail: `didn't work: ${r.why}` });
+    next = { ...next, failedFixes: [{ atMs: now, namespace: p.action.namespace ?? "default", label: p.label, why: r.why }, ...(next.failedFixes ?? [])].slice(0, 20) };
+    loop.handled.delete(p.fingerprint);
+    notifications.push(`✗ That didn't fix it (${r.why}): ${p.label}. I'm trying something else.`);
+  }
+  return { ...next, verifications: keep };
+}
+
+const TRIED_WINDOW_MS = 6 * 3_600_000;
+
+function triedFixes(state: AssistantState, incident: Incident, now: number): string[] {
+  return (state.failedFixes ?? [])
+    .filter((f) => now - f.atMs < TRIED_WINDOW_MS && f.namespace === (incident.namespace || "default"))
+    .map((f) => `${f.label} (didn't work: ${f.why})`);
+}
+
+function notifyUndiagnosedOutage(loop: LoopState, notifications: string[], incident: Incident, deps: Record<string, unknown>[], fp: string): void {
+  const outage = outageOf(incident, deps);
+  if (!outage) return;
+  loop.handled.delete(fp);
+  if (loop.outageNotified.has(fp)) return;
+  loop.outageNotified.add(fp);
+  notifications.push(`▸ ${capitalize(outage)}. I couldn't work out the cause yet, so I'm retrying every few minutes.`);
+}
+
+function capitalize(s: string): string {
+  return s.length === 0 ? s : s[0]!.toUpperCase() + s.slice(1);
 }
 
 /** Fresh in-memory loop state for a run. Exported so tests can drive `tick`. */
@@ -1161,6 +1285,8 @@ export function createLoopState(): LoopState {
   return {
     streaks: new Map(),
     handled: new Set(),
+    firstSeen: new Map(),
+    outageNotified: new Set(),
     seen: new SeenTimestamps(),
     seenMatrix: new SeenEventIds(),
     sessions: new SessionStore(ONE_HOUR_MS, normalizeNumber),

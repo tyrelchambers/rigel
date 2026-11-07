@@ -106,11 +106,11 @@ test("manifest renders the ClusterRole from c.rbacPolicy and seeds that policy",
   expect(yaml).toContain(`rbacPolicy: ${JSON.stringify(serializePolicy(p))}`);
 });
 
-test("rbac(DEFAULT_POLICY) renders exactly 15 ClusterRole rules with no duplicate read", () => {
+test("rbac(DEFAULT_POLICY) renders exactly 17 ClusterRole rules with no duplicate read", () => {
   const yaml = rbac("default");
   const clusterRoleDoc = yaml.split("\n---\n").find((d) => /\bkind: ClusterRole\b/.test(d) && !/ClusterRoleBinding/.test(d))!;
   const ruleLines = clusterRoleDoc.split("\n").filter((l) => l.trim().startsWith("- apiGroups:"));
-  expect(ruleLines).toHaveLength(15);
+  expect(ruleLines).toHaveLength(17);
 });
 
 test("rbac() de-dups a stale stored policy that still holds baseline read cells", () => {
@@ -118,7 +118,7 @@ test("rbac() de-dups a stale stored policy that still holds baseline read cells"
   const yaml = rbac("default", stale);
   const doc = yaml.split("\n---\n").find((d) => /\bkind: ClusterRole\b/.test(d) && !/ClusterRoleBinding/.test(d))!;
   const ruleLines = doc.split("\n").filter((l) => l.trim().startsWith("- apiGroups:"));
-  expect(ruleLines).toHaveLength(15); // read cells collapse into the baseline, no extra rule
+  expect(ruleLines).toHaveLength(17); // read cells collapse into the baseline, no extra rule
 });
 
 test("every baseline read cell is actually granted by clusterRoleRules(DEFAULT_POLICY)", () => {

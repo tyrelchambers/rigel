@@ -2,21 +2,25 @@ import { chunkText } from "./signalInbound.js";
 import { applyNotifyAllowlist, type ChannelId } from "@rigel/k8s/src/channels.js";
 import type { RuntimeConfig } from "./runtimeConfig.js";
 
+const SEND_TIMEOUT_MS = 15_000;
+
 /**
  * Best-effort outbound notification when the agent acts or queues something.
  * Posts a Slack/Mattermost-compatible {text} JSON body to the configured
  * webhook URL. Never throws — notification failure must not affect
  * remediation.
  */
-export async function notifyWebhook(url: string, text: string): Promise<void> {
+export async function notifyWebhook(url: string, text: string): Promise<boolean> {
   try {
-    await fetch(url, {
+    const res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ text }),
+      signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
     });
+    return res.ok;
   } catch {
-    // swallow — notifications are best-effort
+    return false;
   }
 }
 
@@ -26,18 +30,22 @@ export async function notifyWebhook(url: string, text: string): Promise<void> {
  * each message at 2000 chars, so chunk there rather than at chunkText's
  * default. Never throws — notification failure must not affect remediation.
  */
-export async function notifyDiscord(url: string, text: string): Promise<void> {
+export async function notifyDiscord(url: string, text: string): Promise<boolean> {
+  let ok = true;
   for (const chunk of chunkText(text, 2000)) {
     try {
-      await fetch(url, {
+      const res = await fetch(url, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ content: chunk }),
+        signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
       });
+      ok &&= res.ok;
     } catch {
-      // swallow — notifications are best-effort
+      ok = false;
     }
   }
+  return ok;
 }
 
 /**
@@ -50,16 +58,18 @@ export async function notifySignal(
   sender: string,
   recipients: string[],
   text: string,
-): Promise<void> {
-  if (recipients.length === 0) return;
+): Promise<boolean> {
+  if (recipients.length === 0) return false;
   try {
-    await fetch(`${apiUrl.replace(/\/+$/, "")}/v2/send`, {
+    const res = await fetch(`${apiUrl.replace(/\/+$/, "")}/v2/send`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ message: text, number: sender, recipients }),
+      signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
     });
+    return res.ok;
   } catch {
-    // swallow — notifications are best-effort
+    return false;
   }
 }
 
@@ -88,23 +98,27 @@ export async function notifyMatrix(
   accessToken: string,
   roomId: string,
   text: string,
-): Promise<void> {
+): Promise<boolean> {
   const base = homeserver.replace(/\/+$/, "");
+  let ok = true;
   for (const chunk of chunkText(text)) {
     const txnId = `rigel-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     try {
-      await fetch(
+      const res = await fetch(
         `${base}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.room.message/${encodeURIComponent(txnId)}`,
         {
           method: "PUT",
           headers: { "content-type": "application/json", authorization: `Bearer ${accessToken}` },
           body: JSON.stringify({ msgtype: "m.text", body: chunk }),
+          signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
         },
       );
+      ok &&= res.ok;
     } catch {
-      // swallow — notifications are best-effort
+      ok = false;
     }
   }
+  return ok;
 }
 
 /**
@@ -222,8 +236,8 @@ function isChannelConfigured(rc: RuntimeConfig, channel: ChannelId): boolean {
 
 /** Dispatch `text` to one channel (best-effort). Shared by the broadcast path
  *  (flushNotifications) and digests (single-channel targeting). */
-export async function sendToChannel(rc: RuntimeConfig, channel: ChannelId, text: string): Promise<void> {
-  if (!isChannelConfigured(rc, channel)) return; // not configured → silently skip (best-effort)
+export async function sendToChannel(rc: RuntimeConfig, channel: ChannelId, text: string): Promise<boolean> {
+  if (!isChannelConfigured(rc, channel)) return false;
   switch (channel) {
     case "webhook": return notifyWebhook(rc.webhookUrl!, text);
     case "signal": return notifySignal(rc.signalApiUrl!, rc.signalNumber!, rc.signalRecipients, text);
@@ -244,4 +258,21 @@ function runtimeCompleteChannels(rc: RuntimeConfig): ChannelId[] {
  *  channels, filtered by the notify allowlist (null = legacy broadcast-all). */
 export function notifyTargets(rc: RuntimeConfig): ChannelId[] {
   return applyNotifyAllowlist(runtimeCompleteChannels(rc), rc.notifyAllowlist);
+}
+
+export interface DeliveryResult {
+  delivered: ChannelId[];
+  failed: ChannelId[];
+}
+
+export async function deliver(rc: RuntimeConfig, text: string): Promise<DeliveryResult> {
+  const result: DeliveryResult = { delivered: [], failed: [] };
+  const send = async (channels: ChannelId[]) => {
+    const oks = await Promise.all(channels.map((ch) => sendToChannel(rc, ch, text)));
+    channels.forEach((ch, i) => (oks[i] ? result.delivered : result.failed).push(ch));
+  };
+  const targets = notifyTargets(rc);
+  await send(targets);
+  if (result.delivered.length === 0) await send(runtimeCompleteChannels(rc).filter((ch) => !targets.includes(ch)));
+  return result;
 }

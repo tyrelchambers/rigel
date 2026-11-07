@@ -7,7 +7,7 @@
  */
 import { scanLogsForErrors } from "./logScan.js";
 
-export type IncidentKind = "unhealthyPod" | "degradedDeployment" | "loggedError" | "cordonedNode";
+export type IncidentKind = "unhealthyPod" | "degradedDeployment" | "loggedError" | "cordonedNode" | "databaseNotReady";
 
 export interface Incident {
   incidentKind: IncidentKind;
@@ -133,6 +133,42 @@ export function detectDegradedDeployments(raw: unknown): Incident[] {
         name,
         reason: "Degraded",
         detail: `${ready}/${desired} ready`,
+      });
+    }
+  }
+  return incidents;
+}
+
+export function isPodReady(pod: Record<string, any>): boolean {
+  if (pod.metadata?.deletionTimestamp) return false;
+  const conditions: Record<string, any>[] = pod.status?.conditions ?? [];
+  return conditions.some((c) => c.type === "Ready" && c.status === "True");
+}
+
+export function detectDatabaseClusters(clustersRaw: unknown, podsRaw: unknown): Incident[] {
+  const pods = items(podsRaw);
+  const incidents: Incident[] = [];
+  for (const cluster of items(clustersRaw)) {
+    const name: string = cluster.metadata?.name ?? "?";
+    const namespace: string = cluster.metadata?.namespace ?? "default";
+    const wanted: number = cluster.spec?.instances ?? 1;
+    const instances = pods.filter((p) =>
+      p.metadata?.namespace === namespace &&
+      p.metadata?.labels?.["cnpg.io/cluster"] === name &&
+      p.metadata?.labels?.["cnpg.io/instanceName"],
+    );
+    const primary: string | undefined = cluster.status?.currentPrimary;
+    const primaryPod = instances.find((p) => p.metadata?.name === primary);
+    const ready = instances.filter(isPodReady).length;
+    if (!primaryPod || !isPodReady(primaryPod)) {
+      incidents.push({
+        incidentKind: "databaseNotReady", namespace, name, reason: "NoPrimary",
+        detail: `primary ${primary ?? "unknown"} is ${primaryPod ? "not ready" : "missing"}, ${ready}/${wanted} instances ready`,
+      });
+    } else if (ready < wanted) {
+      incidents.push({
+        incidentKind: "databaseNotReady", namespace, name, reason: "Degraded",
+        detail: `${ready}/${wanted} instances ready`,
       });
     }
   }

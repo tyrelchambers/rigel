@@ -1,6 +1,6 @@
 // agent/src/notify.test.ts
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { notifyMatrix, receiveMatrix, markMatrixRead, setMatrixTyping, notifyDiscord, sendToChannel, notifyTargets } from "./notify.js";
+import { notifyMatrix, receiveMatrix, markMatrixRead, setMatrixTyping, notifyDiscord, sendToChannel, notifyTargets, deliver } from "./notify.js";
 import type { RuntimeConfig } from "./runtimeConfig.js";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -49,7 +49,7 @@ describe("notifyMatrix", () => {
 
   test("never throws when fetch rejects", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("network"); }));
-    await expect(notifyMatrix("https://hs", "tok", "!r", "hi")).resolves.toBeUndefined();
+    await expect(notifyMatrix("https://hs", "tok", "!r", "hi")).resolves.toBe(false);
   });
 });
 
@@ -152,7 +152,7 @@ describe("notifyDiscord", () => {
 
   test("never throws when fetch rejects", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("network"); }));
-    await expect(notifyDiscord("https://discord.example/webhook", "hi")).resolves.toBeUndefined();
+    await expect(notifyDiscord("https://discord.example/webhook", "hi")).resolves.toBe(false);
   });
 });
 
@@ -256,5 +256,35 @@ describe("notifyTargets", () => {
   test("empty allowlist broadcasts to nothing even when channels are configured", () => {
     const targets = notifyTargets(rc({ webhookUrl: "https://hook", notifyAllowlist: [] }));
     expect(targets).toEqual([]);
+  });
+});
+
+describe("deliver", () => {
+  const byHost = (statuses: Record<string, number>) =>
+    vi.fn(async (url: string) => new Response("{}", { status: statuses[new URL(url).host] ?? 200 }));
+
+  test("a non-2xx Matrix send reports as not delivered", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 500 })));
+    await expect(notifyMatrix("https://hs", "tok", "!r", "hi")).resolves.toBe(false);
+  });
+
+  test("sends only to the allowlisted channels when they work", async () => {
+    const fetchMock = byHost({});
+    vi.stubGlobal("fetch", fetchMock);
+    const r = await deliver(rc({ webhookUrl: "https://hook", discordWebhookUrl: "https://discord", notifyAllowlist: ["webhook"] }), "hi");
+    expect(r).toEqual({ delivered: ["webhook"], failed: [] });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("tries every other configured channel when the chosen ones all fail", async () => {
+    vi.stubGlobal("fetch", byHost({ hook: 500 }));
+    const r = await deliver(rc({ webhookUrl: "https://hook", discordWebhookUrl: "https://discord", notifyAllowlist: ["webhook"] }), "hi");
+    expect(r).toEqual({ delivered: ["discord"], failed: ["webhook"] });
+  });
+
+  test("reports every failure when nothing gets through", async () => {
+    vi.stubGlobal("fetch", byHost({ hook: 500, discord: 502 }));
+    const r = await deliver(rc({ webhookUrl: "https://hook", discordWebhookUrl: "https://discord", notifyAllowlist: ["webhook"] }), "hi");
+    expect(r).toEqual({ delivered: [], failed: ["webhook", "discord"] });
   });
 });

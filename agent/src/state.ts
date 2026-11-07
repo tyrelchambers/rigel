@@ -1,3 +1,4 @@
+import type { PendingVerification } from "./verify.js";
 import type { ActionLevel } from "@rigel/k8s/src/actionLevels.js";
 import { kubectl, type KubectlResult } from "./kubectl.js";
 import type { SuggestedAction } from "./action.js";
@@ -212,6 +213,22 @@ export interface AssistantState {
   /** Tokens of desktop fix-PR approvals already acted on, so a marker left in
    *  assistant-config never dispatches twice. Capped, newest-first. */
   approvedFixTokens?: string[];
+  verifications?: PendingVerification[];
+  failedFixes?: FailedFix[];
+  delivery?: DeliveryOutage;
+}
+
+export interface FailedFix {
+  atMs: number;
+  namespace: string;
+  label: string;
+  why: string;
+}
+
+export interface DeliveryOutage {
+  since: string;
+  channels: string[];
+  missed: string[];
 }
 
 /** Cap on the rolling incident history, and the max age before pruning. */
