@@ -139,9 +139,11 @@ const PRERELEASE_MARKERS = [
  * numeric version (`latest`, `stable`, `main`, empty). Mirrors Swift
  * `ReleaseVersion.init?(tag:)`.
  */
+const COMMIT_HASH_TAG = /^(?=[0-9a-f]*[a-f])[0-9a-f]{7,64}$/;
+
 export function parseReleaseVersion(tag: string): ReleaseVersion | null {
   let s = tag.trim().toLowerCase();
-  if (s.length === 0) return null;
+  if (s.length === 0 || COMMIT_HASH_TAG.test(s)) return null;
   if (s.startsWith("v")) s = s.slice(1);
 
   // Separate the numeric core (leading run of digits/dots) from the suffix.

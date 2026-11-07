@@ -115,6 +115,13 @@ describe("parseReleaseVersion", () => {
     });
   });
 
+  test("commit-hash tags are not versions", () => {
+    expect(parseReleaseVersion("21075f5b3a175bd9c6ae4a39c790f8a90c40a34d")).toBeNull();
+    expect(parseReleaseVersion("08903abbe0e42e9d6b86d8f41599dcf9bc91e262")).toBeNull();
+    expect(parseReleaseVersion("5ad02b5")).toBeNull();
+    expect(parseReleaseVersion("20240101")).toEqual({ components: [20240101], isPrerelease: false });
+  });
+
   test("leading non-digit (no numeric core) → null", () => {
     expect(parseReleaseVersion("alpine")).toBeNull();
   });
